@@ -1,0 +1,499 @@
+openapi: 3.1.0
+info:
+  title: Manmu API
+  version: 0.1.0
+servers:
+  - url: http://localhost:8080
+paths:
+  /healthz:
+    get:
+      summary: Health check
+      responses:
+        "200":
+          description: API process is alive
+  /readyz:
+    get:
+      summary: Readiness check
+      responses:
+        "200":
+          description: API dependencies are ready
+  /api/v1/meta/capabilities:
+    get:
+      summary: List enabled API capabilities
+      responses:
+        "200":
+          description: Capability list
+  /api/v1/projects:
+    get:
+      summary: List projects
+      responses:
+        "200":
+          description: Project list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Project"
+    post:
+      summary: Create project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/projects/{projectId}:
+    get:
+      summary: Get project
+      parameters:
+        - $ref: "#/components/parameters/ProjectID"
+      responses:
+        "200":
+          description: Project detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  project:
+                    $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/projects/{projectId}/episodes:
+    get:
+      summary: List project episodes
+      parameters:
+        - $ref: "#/components/parameters/ProjectID"
+      responses:
+        "200":
+          description: Episode list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episodes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Episode"
+    post:
+      summary: Create project episode
+      parameters:
+        - $ref: "#/components/parameters/ProjectID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateEpisodeRequest"
+      responses:
+        "201":
+          description: Created episode
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episode:
+                    $ref: "#/components/schemas/Episode"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}:
+    get:
+      summary: Get episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Episode detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  episode:
+                    $ref: "#/components/schemas/Episode"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/story-analysis/start:
+    post:
+      summary: Start story analysis workflow for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "202":
+          description: Story analysis workflow accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflow_run:
+                    $ref: "#/components/schemas/WorkflowRun"
+                  generation_job:
+                    $ref: "#/components/schemas/GenerationJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/workflow-runs/{workflowRunId}:
+    get:
+      summary: Get workflow run
+      parameters:
+        - $ref: "#/components/parameters/WorkflowRunID"
+      responses:
+        "200":
+          description: Workflow run detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  workflow_run:
+                    $ref: "#/components/schemas/WorkflowRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/generation-jobs:
+    get:
+      summary: List generation jobs
+      responses:
+        "200":
+          description: Generation job list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generation_jobs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/GenerationJob"
+  /api/v1/generation-jobs/{jobId}:
+    get:
+      summary: Get generation job
+      parameters:
+        - $ref: "#/components/parameters/JobID"
+      responses:
+        "200":
+          description: Generation job detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generation_job:
+                    $ref: "#/components/schemas/GenerationJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/timeline:
+    get:
+      summary: Get episode timeline
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Timeline detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeline:
+                    $ref: "#/components/schemas/Timeline"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Save episode timeline
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveTimelineRequest"
+      responses:
+        "200":
+          description: Saved timeline
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  timeline:
+                    $ref: "#/components/schemas/Timeline"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/events/stream:
+    get:
+      summary: Stream server-sent workflow and job events
+      responses:
+        "200":
+          description: SSE stream
+components:
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIErrorEnvelope"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/APIErrorEnvelope"
+  parameters:
+    ProjectID:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+    EpisodeID:
+      name: episodeId
+      in: path
+      required: true
+      schema:
+        type: string
+    WorkflowRunID:
+      name: workflowRunId
+      in: path
+      required: true
+      schema:
+        type: string
+    JobID:
+      name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    APIErrorEnvelope:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    CreateProjectRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+    CreateEpisodeRequest:
+      type: object
+      required:
+        - title
+      properties:
+        number:
+          type: integer
+          minimum: 1
+          description: Optional; omitted or zero chooses the next episode number.
+        title:
+          type: string
+          minLength: 1
+    Project:
+      type: object
+      required:
+        - id
+        - organization_id
+        - name
+        - description
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        organization_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+          enum: [draft, active, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Episode:
+      type: object
+      required:
+        - id
+        - project_id
+        - number
+        - title
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        number:
+          type: integer
+        title:
+          type: string
+        status:
+          type: string
+          enum: [draft, planning, generating, editing, exported, archived]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    WorkflowRun:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        status:
+          type: string
+          enum: [draft, running, waiting_approval, succeeded, failed, canceled]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    GenerationJob:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - workflow_run_id
+        - provider
+        - model
+        - task_type
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        workflow_run_id:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        task_type:
+          type: string
+        status:
+          type: string
+          enum:
+            - draft
+            - preflight
+            - queued
+            - submitting
+            - submitted
+            - polling
+            - downloading
+            - postprocessing
+            - needs_review
+            - succeeded
+            - blocked
+            - failed
+            - timed_out
+            - canceling
+            - canceled
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Timeline:
+      type: object
+      required:
+        - id
+        - episode_id
+        - status
+        - version
+        - duration_ms
+        - tracks
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        episode_id:
+          type: string
+        status:
+          type: string
+          enum: [draft, saved, exporting, exported]
+        version:
+          type: integer
+        duration_ms:
+          type: integer
+        tracks:
+          type: array
+          items:
+            type: object
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    SaveTimelineRequest:
+      type: object
+      properties:
+        duration_ms:
+          type: integer
+          minimum: 0

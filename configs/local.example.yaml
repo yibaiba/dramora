@@ -1,0 +1,8 @@
+env: local
+http_addr: ":8080"
+read_header_timeout: 5s
+shutdown_timeout: 10s
+database_url: postgres://manmu:manmu@localhost:5432/manmu?sslmode=disable
+default_organization_id: 00000000-0000-0000-0000-000000000001
+worker_queues:
+  - default

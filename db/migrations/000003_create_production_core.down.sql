@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS exports;
+DROP TABLE IF EXISTS timeline_clips;
+DROP TABLE IF EXISTS timeline_tracks;
+DROP TABLE IF EXISTS timelines;
+DROP TABLE IF EXISTS generation_job_events;
+DROP TABLE IF EXISTS generation_jobs;
+DROP TABLE IF EXISTS workflow_node_runs;
+DROP TABLE IF EXISTS workflow_runs;
+DROP TABLE IF EXISTS artifact_edges;
+DROP TABLE IF EXISTS assets;
