@@ -38,6 +38,14 @@ Hooks are the only frontend entrypoint for server state. Components call hooks f
 
 ---
 
+## Examples
+
+- `apps/studio/src/api/hooks.ts` keeps list queries such as `useProjects`, `useEpisodes`, and `useStoryboardShots` behind stable TanStack Query keys.
+- `apps/studio/src/api/hooks.ts` mutation hooks such as `useSeedApprovalGates`, `useGenerateShotPromptPack`, and `useStartEpisodeExport` invalidate affected query keys after success.
+- `apps/studio/src/api/client.ts` owns all route strings and fetch behavior; components import hooks from `src/api/hooks.ts` instead of calling the client directly.
+
+---
+
 ## Common Mistakes
 
 - Do not call `fetch` directly from React components.

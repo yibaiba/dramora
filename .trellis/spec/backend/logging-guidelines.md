@@ -42,6 +42,14 @@ Process loggers should include `env`.
 
 ---
 
+## Examples
+
+- `apps/api/main.go` creates a JSON `slog` handler, passes the logger into the app container/router, and logs config/container/server failures before exiting non-zero.
+- `apps/worker/main.go` uses the same JSON `slog` setup for worker startup/runtime failures and keeps job execution logging outside the process entrypoint.
+- `internal/httpapi/middleware.go` logs one structured `http request` event with `method`, `path`, `status`, `bytes`, `duration_ms`, and `request_id`.
+
+---
+
 ## What NOT to Log
 
 - Do not log provider API keys, database URLs, signed object URLs, prompts containing private user content, or generated media payloads.

@@ -56,6 +56,14 @@ Timeline editor draft state should stay component-local until the user explicitl
 
 ---
 
+## Examples
+
+- `apps/studio/src/main.tsx` configures a single `QueryClientProvider` for server state and disables window-focus refetch churn by default.
+- `apps/studio/src/state/studioStore.ts` stores only shared local UI state: selected project id and a small local event log.
+- `apps/studio/src/App.tsx` keeps temporary prompt/timeline/editor interaction state component-local and reads backend rows through hooks from `src/api/hooks.ts`.
+
+---
+
 ## Common Mistakes
 
 - Do not duplicate server responses into Zustand.

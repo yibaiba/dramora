@@ -47,6 +47,14 @@ Use Tailwind v4 via `@tailwindcss/vite` plus custom CSS tokens in `src/index.css
 
 ---
 
+## Examples
+
+- `apps/studio/src/App.tsx` uses Lucide imports for structural icons and passes them through `PanelTitle`, avoiding emoji-based UI chrome.
+- `apps/studio/src/App.tsx` panels use semantic `section` containers with `aria-labelledby` ids such as `storyboard-title` and explicit toolbar button text.
+- `apps/studio/src/index.css` owns Studio shell tokens, panel styling, focus-visible states, responsive layout, and 44px-friendly action controls.
+
+---
+
 ## Common Mistakes
 
 - Do not use emoji as structural icons.

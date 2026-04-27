@@ -35,6 +35,14 @@ import type { Project } from './api/types'
 
 ---
 
+## Examples
+
+- `apps/studio/src/api/types.ts` is the single frontend DTO source mirroring `api/openapi.yaml`.
+- `apps/studio/src/App.tsx` uses `import type` for React and API DTO types while importing hook/runtime values normally.
+- `apps/studio/src/api/client.ts` returns typed DTO promises from fetch wrappers so components do not cast API responses.
+
+---
+
 ## Forbidden Patterns
 
 - Do not use `any`.
