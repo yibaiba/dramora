@@ -60,3 +60,16 @@ func TestGenerationJobStatusTransition(t *testing.T) {
 		})
 	}
 }
+
+func TestApprovalGateStatusTransition(t *testing.T) {
+	t.Parallel()
+
+	if err := ApprovalGateStatusPending.ValidateTransition(ApprovalGateStatusApproved); err != nil {
+		t.Fatalf("expected pending -> approved to be valid: %v", err)
+	}
+
+	err := ApprovalGateStatusApproved.ValidateTransition(ApprovalGateStatusChangesRequested)
+	if !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("expected invalid transition, got %v", err)
+	}
+}

@@ -29,6 +29,22 @@ type generationJobResponse struct {
 	UpdatedAt     time.Time                  `json:"updated_at"`
 }
 
+type approvalGateResponse struct {
+	ID            string                    `json:"id"`
+	ProjectID     string                    `json:"project_id"`
+	EpisodeID     string                    `json:"episode_id"`
+	WorkflowRunID string                    `json:"workflow_run_id"`
+	GateType      string                    `json:"gate_type"`
+	SubjectType   string                    `json:"subject_type"`
+	SubjectID     string                    `json:"subject_id"`
+	Status        domain.ApprovalGateStatus `json:"status"`
+	ReviewedBy    string                    `json:"reviewed_by"`
+	ReviewNote    string                    `json:"review_note"`
+	ReviewedAt    time.Time                 `json:"reviewed_at"`
+	CreatedAt     time.Time                 `json:"created_at"`
+	UpdatedAt     time.Time                 `json:"updated_at"`
+}
+
 type storyAnalysisResponse struct {
 	ID              string                     `json:"id"`
 	ProjectID       string                     `json:"project_id"`
@@ -193,6 +209,24 @@ func generationJobDTO(job domain.GenerationJob) generationJobResponse {
 		CreatedAt:     job.CreatedAt,
 		UpdatedAt:     job.UpdatedAt,
 	}
+}
+
+func approvalGateDTO(gate domain.ApprovalGate) approvalGateResponse {
+	return approvalGateResponse{
+		ID: gate.ID, ProjectID: gate.ProjectID, EpisodeID: gate.EpisodeID,
+		WorkflowRunID: gate.WorkflowRunID, GateType: gate.GateType,
+		SubjectType: gate.SubjectType, SubjectID: gate.SubjectID,
+		Status: gate.Status, ReviewedBy: gate.ReviewedBy, ReviewNote: gate.ReviewNote,
+		ReviewedAt: gate.ReviewedAt, CreatedAt: gate.CreatedAt, UpdatedAt: gate.UpdatedAt,
+	}
+}
+
+func approvalGateDTOs(gates []domain.ApprovalGate) []approvalGateResponse {
+	responses := make([]approvalGateResponse, 0, len(gates))
+	for _, gate := range gates {
+		responses = append(responses, approvalGateDTO(gate))
+	}
+	return responses
 }
 
 func storyAnalysisDTO(analysis domain.StoryAnalysis) storyAnalysisResponse {

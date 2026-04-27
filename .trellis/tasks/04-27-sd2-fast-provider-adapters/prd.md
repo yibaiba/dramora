@@ -135,3 +135,4 @@ Recommended MVP sequence:
 - Added Seedance adapter request builder and hybrid fake/Ark submission boundary.
 - Studio shot cards can generate, display, and copy SD2 prompt packs.
 - Added `POST /api/v1/storyboard-shots/{shotId}/videos:generate` to queue a generation job from the current prompt pack.
+- Added MVP approval gates with seed/list/approve/request-changes routes and Studio approval board.

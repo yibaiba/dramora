@@ -2,6 +2,7 @@ import {
   Activity,
   BookOpenText,
   Boxes,
+  ShieldCheck,
   CircleDollarSign,
   Clapperboard,
   Film,
@@ -20,13 +21,17 @@ import {
   useCreateEpisode,
   useCreateProject,
   useEpisodeTimeline,
+  useApproveApprovalGate,
   useEpisodeAssets,
+  useEpisodeApprovalGates,
   useEpisodes,
   useGenerationJobs,
   useLockAsset,
   useProjects,
   useSaveEpisodeTimeline,
+  useRequestApprovalChanges,
   useGenerateShotPromptPack,
+  useSeedApprovalGates,
   useSeedEpisodeAssets,
   useSeedStoryboardShots,
   useSeedStoryMap,
@@ -41,6 +46,7 @@ import {
 import { useStudioStore } from './state/studioStore'
 import type {
   Episode,
+  ApprovalGate,
   Asset,
   GenerationJob,
   GenerationJobStatus,
@@ -123,6 +129,7 @@ function App() {
           <EpisodeCommandCenter project={selectedProject} episodes={selectedEpisodes} onLog={logEvent} />
           <StoryAnalysisPanel activeEpisode={activeEpisode} project={selectedProject} />
           <AgentBoard project={selectedProject} />
+          <ApprovalGatesPanel activeEpisode={activeEpisode} />
           <StoryboardKanban activeEpisode={activeEpisode} />
           <AssetLibrary activeEpisode={activeEpisode} />
           <TimelineEditor activeEpisode={activeEpisode} />
@@ -385,6 +392,97 @@ function AgentBoard({ project }: { project?: Project }) {
         ))}
       </div>
     </section>
+  )
+}
+
+function ApprovalGatesPanel({ activeEpisode }: { activeEpisode?: Episode }) {
+  const { data: gates = [], isLoading } = useEpisodeApprovalGates(activeEpisode?.id)
+  const seedApprovalGates = useSeedApprovalGates()
+  const approveGate = useApproveApprovalGate()
+  const requestChanges = useRequestApprovalChanges()
+
+  return (
+    <section className="panel approval-panel" aria-labelledby="approval-gates-title">
+      <PanelTitle
+        icon={ShieldCheck}
+        title="Approval gates"
+        subtitle={isLoading ? 'Loading human checkpoints' : 'Human-in-the-loop blockers'}
+        id="approval-gates-title"
+      />
+      <PanelToolbar>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || seedApprovalGates.isPending}
+          onClick={() => activeEpisode && seedApprovalGates.mutate(activeEpisode.id)}
+          type="button"
+        >
+          Seed gates
+        </button>
+      </PanelToolbar>
+      {!activeEpisode ? (
+        <EmptyState title="No episode selected" text="Create an episode before seeding human approval gates." />
+      ) : gates.length === 0 ? (
+        <EmptyState title="No gates yet" text="Seed gates after story analysis, C/S/P map, storyboard, or timeline artifacts exist." />
+      ) : (
+        <div className="approval-gate-list" aria-label="Approval gates">
+          {gates.map((gate) => (
+            <ApprovalGateCard
+              approvePending={approveGate.isPending}
+              gate={gate}
+              key={gate.id}
+              onApprove={() => approveGate.mutate({ episodeId: gate.episode_id, gateId: gate.id })}
+              onRequestChanges={() => requestChanges.mutate({ episodeId: gate.episode_id, gateId: gate.id })}
+              requestChangesPending={requestChanges.isPending}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ApprovalGateCard({
+  approvePending,
+  gate,
+  onApprove,
+  onRequestChanges,
+  requestChangesPending,
+}: {
+  approvePending: boolean
+  gate: ApprovalGate
+  onApprove: () => void
+  onRequestChanges: () => void
+  requestChangesPending: boolean
+}) {
+  const isPending = gate.status === 'pending'
+
+  return (
+    <article className={`approval-gate-card ${gate.status}`}>
+      <div>
+        <strong>{gate.gate_type.replaceAll('_', ' ')}</strong>
+        <span>
+          {gate.subject_type} · {gate.status.replaceAll('_', ' ')}
+        </span>
+      </div>
+      <div className="approval-gate-actions">
+        <button
+          className="secondary-action"
+          disabled={!isPending || approvePending}
+          onClick={onApprove}
+          type="button"
+        >
+          Approve
+        </button>
+        <button
+          className="secondary-action"
+          disabled={!isPending || requestChangesPending}
+          onClick={onRequestChanges}
+          type="button"
+        >
+          Request changes
+        </button>
+      </div>
+    </article>
   )
 }
 

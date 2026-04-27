@@ -43,6 +43,44 @@ WHERE id = $1::uuid
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, created_at, updated_at;
 
+-- name: ListApprovalGates :many
+SELECT id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id::text, ''),
+       gate_type, subject_type, subject_id::text, status, reviewed_by, review_note,
+       COALESCE(reviewed_at, '0001-01-01T00:00:00Z'::timestamptz), created_at, updated_at
+FROM approval_gates
+WHERE episode_id = $1::uuid
+ORDER BY created_at, gate_type, id;
+
+-- name: GetApprovalGate :one
+SELECT id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id::text, ''),
+       gate_type, subject_type, subject_id::text, status, reviewed_by, review_note,
+       COALESCE(reviewed_at, '0001-01-01T00:00:00Z'::timestamptz), created_at, updated_at
+FROM approval_gates
+WHERE id = $1::uuid;
+
+-- name: UpsertApprovalGate :one
+INSERT INTO approval_gates (
+    id, project_id, episode_id, workflow_run_id, gate_type, subject_type, subject_id, status
+)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::uuid, $8)
+ON CONFLICT (episode_id, gate_type, subject_type, subject_id) DO UPDATE
+SET updated_at = approval_gates.updated_at
+RETURNING id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id::text, ''),
+       gate_type, subject_type, subject_id::text, status, reviewed_by, review_note,
+       COALESCE(reviewed_at, '0001-01-01T00:00:00Z'::timestamptz), created_at, updated_at;
+
+-- name: ReviewApprovalGate :one
+UPDATE approval_gates
+SET status = $2,
+    reviewed_by = $3,
+    review_note = $4,
+    reviewed_at = now(),
+    updated_at = now()
+WHERE id = $1::uuid
+RETURNING id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id::text, ''),
+       gate_type, subject_type, subject_id::text, status, reviewed_by, review_note,
+       COALESCE(reviewed_at, '0001-01-01T00:00:00Z'::timestamptz), created_at, updated_at;
+
 -- name: CreateStoryAnalysis :one
 INSERT INTO story_analyses (
     id, project_id, episode_id, workflow_run_id, generation_job_id, version,

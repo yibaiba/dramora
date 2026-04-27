@@ -17,6 +17,7 @@ export type GenerationJobStatus =
   | 'canceling'
   | 'canceled'
 export type AssetStatus = 'draft' | 'generating' | 'ready' | 'failed' | 'archived'
+export type ApprovalGateStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'canceled'
 
 export type Project = {
   id: string
@@ -56,6 +57,22 @@ export type WorkflowRun = {
   project_id: string
   episode_id: string
   status: 'draft' | 'running' | 'waiting_approval' | 'succeeded' | 'failed' | 'canceled'
+  created_at: string
+  updated_at: string
+}
+
+export type ApprovalGate = {
+  id: string
+  project_id: string
+  episode_id: string
+  workflow_run_id: string
+  gate_type: string
+  subject_type: string
+  subject_id: string
+  status: ApprovalGateStatus
+  reviewed_by: string
+  review_note: string
+  reviewed_at: string
   created_at: string
   updated_at: string
 }
@@ -230,4 +247,9 @@ export type SaveTimelineClipRequest = {
 export type CreateEpisodeRequest = {
   title: string
   number?: number
+}
+
+export type ApprovalGateReviewRequest = {
+  reviewed_by?: string
+  review_note?: string
 }

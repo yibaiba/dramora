@@ -69,6 +69,11 @@ curl -sS http://127.0.0.1:8080/api/v1/generation-jobs
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-analysis/start
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-analyses
 curl -sS http://127.0.0.1:8080/api/v1/story-analyses/{analysisId}
+curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/approval-gates:seed
+curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/approval-gates
+curl -sS -X POST http://127.0.0.1:8080/api/v1/approval-gates/{gateId}:approve \
+  -H 'content-type: application/json' \
+  -d '{"reviewed_by":"studio","review_note":"approved"}'
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-map:seed
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-map
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/storyboard-shots:seed
@@ -88,7 +93,7 @@ curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/exports
 curl -sS http://127.0.0.1:8080/api/v1/exports/{exportId}
 ```
 
-Core production migrations now include story analysis artifacts, character/scene/prop maps, storyboard shot cards, SD2 prompt packs, assets, artifact lineage, workflow runs, workflow node runs, generation jobs/events, timelines/tracks/clips, and exports.
+Core production migrations now include story analysis artifacts, human approval gates, character/scene/prop maps, storyboard shot cards, SD2 prompt packs, assets, artifact lineage, workflow runs, workflow node runs, generation jobs/events, timelines/tracks/clips, and exports.
 
 ## Studio frontend
 

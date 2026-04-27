@@ -24,6 +24,22 @@ type GenerationJob struct {
 	UpdatedAt     time.Time
 }
 
+type ApprovalGate struct {
+	ID            string
+	ProjectID     string
+	EpisodeID     string
+	WorkflowRunID string
+	GateType      string
+	SubjectType   string
+	SubjectID     string
+	Status        ApprovalGateStatus
+	ReviewedBy    string
+	ReviewNote    string
+	ReviewedAt    time.Time
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
+}
+
 type StoryAnalysisStatus string
 
 const (

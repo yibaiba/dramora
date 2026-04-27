@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEpisode,
   createProject,
+  approveApprovalGate,
   generateShotPromptPack,
   getExport,
   getEpisodeTimeline,
@@ -10,15 +11,18 @@ import {
   getStoryMap,
   listEpisodeAssets,
   listEpisodes,
+  listApprovalGates,
   listGenerationJobs,
   listProjects,
   listStoryAnalyses,
   listStoryboardShots,
   lockAsset,
   saveEpisodeTimeline,
+  seedApprovalGates,
   seedEpisodeAssets,
   seedStoryboardShots,
   seedStoryMap,
+  requestApprovalChanges,
   startShotVideoGeneration,
   startEpisodeExport,
   startStoryAnalysis,
@@ -94,6 +98,39 @@ export function useStoryAnalysis(analysisId?: string) {
     enabled: Boolean(analysisId),
     queryFn: () => getStoryAnalysis(analysisId ?? ''),
     queryKey: ['story-analysis', analysisId],
+  })
+}
+
+export function useEpisodeApprovalGates(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => listApprovalGates(episodeId ?? ''),
+    queryKey: ['approval-gates', episodeId],
+  })
+}
+
+export function useSeedApprovalGates() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => seedApprovalGates(episodeId),
+    onSuccess: (_gates, episodeId) => queryClient.invalidateQueries({ queryKey: ['approval-gates', episodeId] }),
+  })
+}
+
+export function useApproveApprovalGate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ gateId }: { episodeId: string; gateId: string }) => approveApprovalGate(gateId, {}),
+    onSuccess: (gate) => queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] }),
+  })
+}
+
+export function useRequestApprovalChanges() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ gateId }: { episodeId: string; gateId: string }) =>
+      requestApprovalChanges(gateId, { review_note: 'Changes requested from Studio approval board.' }),
+    onSuccess: (gate) => queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] }),
   })
 }
 

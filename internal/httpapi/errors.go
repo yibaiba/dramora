@@ -29,6 +29,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+	case errors.Is(err, domain.ErrInvalidTransition):
+		writeError(w, http.StatusConflict, "invalid_transition", err.Error())
 	case errors.Is(err, domain.ErrNotFound):
 		writeError(w, http.StatusNotFound, "not_found", "resource not found")
 	default:

@@ -260,7 +260,8 @@ h1 {
 
 .project-panel,
 .command-panel,
-.analysis-panel {
+.analysis-panel,
+.approval-panel {
   grid-column: span 3;
 }
 
@@ -335,6 +336,7 @@ h1 {
 .project-list,
 .episode-list,
 .agent-list,
+.approval-gate-list,
 .analysis-metrics,
 .analysis-tags,
 .panel-toolbar,
@@ -348,6 +350,7 @@ h1 {
 .project-row,
 .episode-row,
 .agent-step,
+.approval-gate-card,
 .analysis-card,
 .story-map-card,
 .shot-card,
@@ -408,6 +411,44 @@ h1 {
 .agent-step {
   display: flex;
   justify-content: space-between;
+}
+
+.approval-gate-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.approval-gate-card div:first-child {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.approval-gate-card strong {
+  color: #f8fafc;
+  text-transform: capitalize;
+}
+
+.approval-gate-card span {
+  color: #cbd5e1;
+  font-size: 0.86rem;
+  text-transform: capitalize;
+}
+
+.approval-gate-card.approved {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.approval-gate-card.changes_requested,
+.approval-gate-card.rejected {
+  border-color: rgba(249, 115, 22, 0.34);
+  background: rgba(249, 115, 22, 0.08);
+}
+
+.approval-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .agent-step div {
@@ -795,6 +836,7 @@ h1 {
   .project-panel,
   .command-panel,
   .analysis-panel,
+  .approval-panel,
   .timeline-panel {
     grid-column: span 1;
   }

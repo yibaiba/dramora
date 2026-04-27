@@ -18,6 +18,10 @@ type ProductionRepository interface {
 	GetGenerationJob(ctx context.Context, generationJobID string) (domain.GenerationJob, error)
 	CreateGenerationJob(ctx context.Context, params CreateGenerationJobParams) (domain.GenerationJob, error)
 	AdvanceGenerationJobStatus(ctx context.Context, params AdvanceGenerationJobStatusParams) (domain.GenerationJob, error)
+	ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error)
+	GetApprovalGate(ctx context.Context, gateID string) (domain.ApprovalGate, error)
+	SaveApprovalGate(ctx context.Context, params SaveApprovalGateParams) (domain.ApprovalGate, error)
+	ReviewApprovalGate(ctx context.Context, params ReviewApprovalGateParams) (domain.ApprovalGate, error)
 	CompleteStoryAnalysisJob(ctx context.Context, params CompleteStoryAnalysisJobParams) (StoryAnalysisCompletion, error)
 	CreateStoryAnalysis(ctx context.Context, params CreateStoryAnalysisParams) (domain.StoryAnalysis, error)
 	ListStoryAnalyses(ctx context.Context, episodeID string) ([]domain.StoryAnalysis, error)
@@ -75,6 +79,24 @@ type AdvanceGenerationJobStatusParams struct {
 	From         domain.GenerationJobStatus
 	To           domain.GenerationJobStatus
 	EventMessage string
+}
+
+type SaveApprovalGateParams struct {
+	ID            string
+	ProjectID     string
+	EpisodeID     string
+	WorkflowRunID string
+	GateType      string
+	SubjectType   string
+	SubjectID     string
+	Status        domain.ApprovalGateStatus
+}
+
+type ReviewApprovalGateParams struct {
+	ID         string
+	Status     domain.ApprovalGateStatus
+	ReviewedBy string
+	ReviewNote string
 }
 
 type CreateStoryAnalysisParams struct {

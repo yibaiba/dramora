@@ -324,6 +324,47 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 		t.Fatalf("expected timeline 200, got %d: %s", timelineResp.Code, timelineResp.Body.String())
 	}
 
+	gatesResp := httptest.NewRecorder()
+	gatesReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/approval-gates:seed", nil)
+	router.ServeHTTP(gatesResp, gatesReq)
+	if gatesResp.Code != http.StatusCreated {
+		t.Fatalf("expected approval gates 201, got %d: %s", gatesResp.Code, gatesResp.Body.String())
+	}
+	var gatesPayload struct {
+		ApprovalGates []approvalGateResponse `json:"approval_gates"`
+	}
+	decodeBody(t, gatesResp, &gatesPayload)
+	if len(gatesPayload.ApprovalGates) < 6 {
+		t.Fatalf("expected seeded approval gates, got %+v", gatesPayload.ApprovalGates)
+	}
+	approveResp := httptest.NewRecorder()
+	approveReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/approval-gates/"+gatesPayload.ApprovalGates[0].ID+":approve",
+		body(`{"reviewed_by":"director","review_note":"approved"}`),
+	)
+	router.ServeHTTP(approveResp, approveReq)
+	if approveResp.Code != http.StatusOK {
+		t.Fatalf("expected approve 200, got %d: %s", approveResp.Code, approveResp.Body.String())
+	}
+	var approvedPayload struct {
+		ApprovalGate approvalGateResponse `json:"approval_gate"`
+	}
+	decodeBody(t, approveResp, &approvedPayload)
+	if approvedPayload.ApprovalGate.Status != "approved" {
+		t.Fatalf("expected approved gate, got %q", approvedPayload.ApprovalGate.Status)
+	}
+	changesResp := httptest.NewRecorder()
+	changesReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/approval-gates/"+gatesPayload.ApprovalGates[1].ID+":request-changes",
+		body(`{"review_note":"revise continuity"}`),
+	)
+	router.ServeHTTP(changesResp, changesReq)
+	if changesResp.Code != http.StatusOK {
+		t.Fatalf("expected request changes 200, got %d: %s", changesResp.Code, changesResp.Body.String())
+	}
+
 	exportResp := httptest.NewRecorder()
 	exportReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/exports", nil)
 	router.ServeHTTP(exportResp, exportReq)

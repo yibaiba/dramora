@@ -70,10 +70,11 @@ const (
 	AssetStatusFailed     AssetStatus = "failed"
 	AssetStatusArchived   AssetStatus = "archived"
 
-	ApprovalGateStatusPending  ApprovalGateStatus = "pending"
-	ApprovalGateStatusApproved ApprovalGateStatus = "approved"
-	ApprovalGateStatusRejected ApprovalGateStatus = "rejected"
-	ApprovalGateStatusCanceled ApprovalGateStatus = "canceled"
+	ApprovalGateStatusPending          ApprovalGateStatus = "pending"
+	ApprovalGateStatusApproved         ApprovalGateStatus = "approved"
+	ApprovalGateStatusRejected         ApprovalGateStatus = "rejected"
+	ApprovalGateStatusChangesRequested ApprovalGateStatus = "changes_requested"
+	ApprovalGateStatusCanceled         ApprovalGateStatus = "canceled"
 
 	TimelineStatusDraft     TimelineStatus = "draft"
 	TimelineStatusSaved     TimelineStatus = "saved"
@@ -103,6 +104,17 @@ func (s GenerationJobStatus) CanTransitionTo(next GenerationJobStatus) bool {
 }
 
 func (s GenerationJobStatus) ValidateTransition(next GenerationJobStatus) error {
+	if s.CanTransitionTo(next) {
+		return nil
+	}
+	return invalidTransition(string(s), string(next))
+}
+
+func (s ApprovalGateStatus) CanTransitionTo(next ApprovalGateStatus) bool {
+	return canTransition(approvalGateTransitions, string(s), string(next))
+}
+
+func (s ApprovalGateStatus) ValidateTransition(next ApprovalGateStatus) error {
 	if s.CanTransitionTo(next) {
 		return nil
 	}

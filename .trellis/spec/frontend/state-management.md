@@ -37,6 +37,7 @@ Current query keys:
 ['generation-jobs']
 ['story-analyses', episodeId]
 ['story-analysis', analysisId]
+['approval-gates', episodeId]
 ['story-map', episodeId]
 ['storyboard-shots', episodeId]
 ['shot-prompt-pack', shotId]

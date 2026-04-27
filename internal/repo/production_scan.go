@@ -52,6 +52,40 @@ func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 	return job, nil
 }
 
+func scanApprovalGates(rows rowsScanner) ([]domain.ApprovalGate, error) {
+	gates := make([]domain.ApprovalGate, 0)
+	for rows.Next() {
+		gate, err := scanApprovalGate(rows)
+		if err != nil {
+			return nil, err
+		}
+		gates = append(gates, gate)
+	}
+	return gates, rows.Err()
+}
+
+func scanApprovalGate(row rowScanner) (domain.ApprovalGate, error) {
+	var gate domain.ApprovalGate
+	if err := row.Scan(
+		&gate.ID,
+		&gate.ProjectID,
+		&gate.EpisodeID,
+		&gate.WorkflowRunID,
+		&gate.GateType,
+		&gate.SubjectType,
+		&gate.SubjectID,
+		&gate.Status,
+		&gate.ReviewedBy,
+		&gate.ReviewNote,
+		&gate.ReviewedAt,
+		&gate.CreatedAt,
+		&gate.UpdatedAt,
+	); err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	return gate, nil
+}
+
 func scanStoryAnalyses(rows rowsScanner) ([]domain.StoryAnalysis, error) {
 	analyses := make([]domain.StoryAnalysis, 0)
 	for rows.Next() {

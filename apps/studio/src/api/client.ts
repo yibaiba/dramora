@@ -2,6 +2,8 @@ import type {
   CreateEpisodeRequest,
   CreateProjectRequest,
   Episode,
+  ApprovalGate,
+  ApprovalGateReviewRequest,
   Asset,
   Export,
   GenerationJob,
@@ -81,6 +83,38 @@ export async function startStoryAnalysis(episodeId: string): Promise<StartStoryA
 export async function listStoryAnalyses(episodeId: string): Promise<StoryAnalysis[]> {
   const payload = await fetchJSON<{ story_analyses: StoryAnalysis[] }>(`/api/v1/episodes/${episodeId}/story-analyses`)
   return payload.story_analyses
+}
+
+export async function listApprovalGates(episodeId: string): Promise<ApprovalGate[]> {
+  const payload = await fetchJSON<{ approval_gates: ApprovalGate[] }>(`/api/v1/episodes/${episodeId}/approval-gates`)
+  return payload.approval_gates
+}
+
+export async function seedApprovalGates(episodeId: string): Promise<ApprovalGate[]> {
+  const payload = await fetchJSON<{ approval_gates: ApprovalGate[] }>(
+    `/api/v1/episodes/${episodeId}/approval-gates:seed`,
+    { method: 'POST' },
+  )
+  return payload.approval_gates
+}
+
+export async function approveApprovalGate(gateId: string, request: ApprovalGateReviewRequest): Promise<ApprovalGate> {
+  const payload = await fetchJSON<{ approval_gate: ApprovalGate }>(`/api/v1/approval-gates/${gateId}:approve`, {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.approval_gate
+}
+
+export async function requestApprovalChanges(gateId: string, request: ApprovalGateReviewRequest): Promise<ApprovalGate> {
+  const payload = await fetchJSON<{ approval_gate: ApprovalGate }>(
+    `/api/v1/approval-gates/${gateId}:request-changes`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.approval_gate
 }
 
 export async function getStoryAnalysis(analysisId: string): Promise<StoryAnalysis> {

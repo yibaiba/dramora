@@ -75,6 +75,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - `db/queries/*.sql` is the sqlc source of truth even when hand-written pgx repositories exist.
 - Media payloads must be object URIs in `assets.uri`, never base64 blobs.
 - MVP asset candidate locking uses `assets.status = 'ready'`; draft candidates remain `assets.status = 'draft'`.
+- Human approval gates are stored in `approval_gates` as first-class blockers before expensive generation/export phases.
 - SD2/Seedance prompt packs are stored in `shot_prompt_packs` as the source-of-truth prompt artifact before video generation jobs are submitted.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
@@ -96,6 +97,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
 | Asset candidates are seeded | create idempotent episode-scoped assets from C/S/P map rows with object-style URIs. |
 | Asset candidate is locked | update the asset status to `ready` and return the updated asset. |
+| Approval gates are seeded | create idempotent episode-scoped gates for existing story, C/S/P map, storyboard, and timeline artifacts. |
 | Shot prompt pack is generated | upsert one `shot_prompt_packs` row by `(shot_id, preset)` with JSONB time slices, reference bindings, and provider params. |
 | Timeline graph is saved | upsert timeline metadata, then replace tracks/clips in a repository transaction. |
 
@@ -115,6 +117,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
 - Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.
+- Approval gate routes should test seed, approve, and request-changes behavior through the HTTP layer.
 - Prompt pack routes should test SD2 preset, image-to-video task type, and `@image2` reference binding when multiple assets are locked.
 
 #### 7. Wrong vs Correct
@@ -134,6 +137,91 @@ project, err := api.projectService.GetProject(r.Context(), projectID)
 ```
 
 Handlers call services; services call repositories; repositories own SQL.
+
+---
+
+### Scenario: Human approval gates
+
+#### 1. Scope / Trigger
+
+- Trigger: Manmu needs explicit human-in-the-loop blockers before storyboard/video/timeline/export phases.
+- Applies when adding approval gate tables, route contracts, service review logic, Studio approval UI, or workflow gating behavior.
+
+#### 2. Signatures
+
+Database migration:
+
+```text
+db/migrations/000007_create_approval_gates.up.sql
+```
+
+Frontend-facing API:
+
+```text
+GET  /api/v1/episodes/{episodeId}/approval-gates
+POST /api/v1/episodes/{episodeId}/approval-gates:seed
+POST /api/v1/approval-gates/{gateId}:approve
+POST /api/v1/approval-gates/{gateId}:request-changes
+```
+
+Repository/service signatures:
+
+```go
+ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error)
+SaveApprovalGate(ctx context.Context, params repo.SaveApprovalGateParams) (domain.ApprovalGate, error)
+ReviewApprovalGate(ctx context.Context, params repo.ReviewApprovalGateParams) (domain.ApprovalGate, error)
+SeedEpisodeApprovalGates(ctx context.Context, episode domain.Episode) ([]domain.ApprovalGate, error)
+ApproveApprovalGate(ctx context.Context, gateID string, reviewedBy string, reviewNote string) (domain.ApprovalGate, error)
+RequestApprovalChanges(ctx context.Context, gateID string, reviewedBy string, reviewNote string) (domain.ApprovalGate, error)
+```
+
+#### 3. Contracts
+
+- `approval_gates` rows are durable blockers, not comments or UI-only state.
+- One gate is unique by `(episode_id, gate_type, subject_type, subject_id)` so reseeding does not duplicate gates.
+- MVP gate types are `story_direction`, `character_lock`, `scene_lock`, `prop_lock`, `storyboard_approval`, `final_timeline`, and `export_approval`.
+- Gate statuses use `pending`, `approved`, `rejected`, `changes_requested`, and `canceled`.
+- Review routes may accept optional `reviewed_by` and `review_note`; blank reviewer defaults to `studio`.
+- Frontend state uses `['approval-gates', episodeId]`; do not copy approval rows into Zustand.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Missing/blank `episodeId` or `gateId` | Service returns `domain.ErrInvalidInput`; HTTP maps to 400 `invalid_request`. |
+| Episode or gate does not exist | Repository/service returns `domain.ErrNotFound`; HTTP maps to 404 `not_found`. |
+| Gate is reseeded for the same subject | Return the existing row; do not insert duplicates. |
+| Pending gate is approved | Transition to `approved`, set `reviewed_by`, `review_note`, and `reviewed_at`. |
+| Approved gate is reviewed again | Return `domain.ErrInvalidTransition`; HTTP maps to 409 `invalid_transition`. |
+
+#### 5. Good/Base/Bad Cases
+
+- Good: `POST /episodes/{episodeId}/approval-gates:seed` creates gates from existing story analysis, C/S/P map, storyboard, and timeline artifacts.
+- Base: an episode with only story analysis creates a `story_direction` gate.
+- Bad: the Studio marks a gate approved locally without persisting through `POST /approval-gates/{gateId}:approve`.
+
+#### 6. Tests Required
+
+- Domain status test must assert valid pending → approved and invalid terminal-state transitions.
+- HTTP route test should cover artifact chain → seed gates → approve one gate → request changes on another.
+- OpenAPI, `db/queries/*.sql`, Studio DTOs/client/hooks, and state-management spec must change in the same slice as route changes.
+- Run the GET/POST-only route scan before finalizing because approval routes are frontend-facing actions.
+
+#### 7. Wrong vs Correct
+
+##### Wrong
+
+```ts
+setLocalGates((gates) => gates.map((gate) => ({ ...gate, status: 'approved' })))
+```
+
+##### Correct
+
+```ts
+approveApprovalGate(gateId, { reviewed_by: 'studio' })
+```
+
+Approval decisions are auditable backend state and must flow through service/repository persistence.
 
 ---
 

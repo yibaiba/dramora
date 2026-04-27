@@ -188,6 +188,94 @@ paths:
                     $ref: "#/components/schemas/StoryAnalysis"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/approval-gates:
+    get:
+      summary: List human approval gates for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Approval gate list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovalGate"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/approval-gates:seed:
+    post:
+      summary: Seed human approval gates from current episode artifacts
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "201":
+          description: Seeded approval gates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovalGate"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/approval-gates/{gateId}:approve:
+    post:
+      summary: Approve a pending human gate
+      parameters:
+        - $ref: "#/components/parameters/GateID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalGateReviewRequest"
+      responses:
+        "200":
+          description: Approved approval gate
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gate:
+                    $ref: "#/components/schemas/ApprovalGate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/approval-gates/{gateId}:request-changes:
+    post:
+      summary: Request changes for a pending human gate
+      parameters:
+        - $ref: "#/components/parameters/GateID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalGateReviewRequest"
+      responses:
+        "200":
+          description: Approval gate with changes requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gate:
+                    $ref: "#/components/schemas/ApprovalGate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/story-map:
     get:
       summary: Get character, scene, and prop maps for an episode
@@ -547,6 +635,12 @@ components:
       required: true
       schema:
         type: string
+    GateID:
+      name: gateId
+      in: path
+      required: true
+      schema:
+        type: string
     ShotID:
       name: shotId
       in: path
@@ -597,6 +691,15 @@ components:
         title:
           type: string
           minLength: 1
+    ApprovalGateReviewRequest:
+      type: object
+      properties:
+        reviewed_by:
+          type: string
+          description: Optional reviewer display name; defaults to studio.
+        review_note:
+          type: string
+          description: Optional human review note.
     Project:
       type: object
       required:
@@ -724,6 +827,61 @@ components:
             - timed_out
             - canceling
             - canceled
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ApprovalGate:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - workflow_run_id
+        - gate_type
+        - subject_type
+        - subject_id
+        - status
+        - reviewed_by
+        - review_note
+        - reviewed_at
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        workflow_run_id:
+          type: string
+        gate_type:
+          type: string
+          enum:
+            - story_direction
+            - character_lock
+            - scene_lock
+            - prop_lock
+            - storyboard_approval
+            - final_timeline
+            - export_approval
+        subject_type:
+          type: string
+        subject_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected, changes_requested, canceled]
+        reviewed_by:
+          type: string
+        review_note:
+          type: string
+        reviewed_at:
+          type: string
+          format: date-time
         created_at:
           type: string
           format: date-time

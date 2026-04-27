@@ -73,6 +73,19 @@ var generationJobTransitions = map[string][]string{
 	},
 }
 
+var approvalGateTransitions = map[string][]string{
+	string(ApprovalGateStatusPending): {
+		string(ApprovalGateStatusApproved),
+		string(ApprovalGateStatusRejected),
+		string(ApprovalGateStatusChangesRequested),
+		string(ApprovalGateStatusCanceled),
+	},
+	string(ApprovalGateStatusChangesRequested): {
+		string(ApprovalGateStatusPending),
+		string(ApprovalGateStatusCanceled),
+	},
+}
+
 func canTransition(transitions map[string][]string, current string, next string) bool {
 	if current == next {
 		return true

@@ -14,6 +14,7 @@ type MemoryProductionRepository struct {
 	runs      map[string]domain.WorkflowRun
 	jobs      map[string]domain.GenerationJob
 	jobKeys   map[string]string
+	gates     map[string]domain.ApprovalGate
 	analyses  map[string]domain.StoryAnalysis
 	timelines map[string]domain.Timeline
 	chars     map[string]domain.Character
@@ -30,6 +31,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		runs:      make(map[string]domain.WorkflowRun),
 		jobs:      make(map[string]domain.GenerationJob),
 		jobKeys:   make(map[string]string),
+		gates:     make(map[string]domain.ApprovalGate),
 		analyses:  make(map[string]domain.StoryAnalysis),
 		timelines: make(map[string]domain.Timeline),
 		chars:     make(map[string]domain.Character),
@@ -182,6 +184,93 @@ func (r *MemoryProductionRepository) AdvanceGenerationJobStatus(
 	job.UpdatedAt = time.Now().UTC()
 	r.jobs[job.ID] = job
 	return job, nil
+}
+
+func (r *MemoryProductionRepository) ListApprovalGates(
+	_ context.Context,
+	episodeID string,
+) ([]domain.ApprovalGate, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	gates := make([]domain.ApprovalGate, 0)
+	for _, gate := range r.gates {
+		if gate.EpisodeID == episodeID {
+			gates = append(gates, gate)
+		}
+	}
+	sort.Slice(gates, func(i int, j int) bool {
+		if gates[i].CreatedAt.Equal(gates[j].CreatedAt) {
+			return gates[i].GateType < gates[j].GateType
+		}
+		return gates[i].CreatedAt.Before(gates[j].CreatedAt)
+	})
+	return gates, nil
+}
+
+func (r *MemoryProductionRepository) GetApprovalGate(
+	_ context.Context,
+	gateID string,
+) (domain.ApprovalGate, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	gate, ok := r.gates[gateID]
+	if !ok {
+		return domain.ApprovalGate{}, domain.ErrNotFound
+	}
+	return gate, nil
+}
+
+func (r *MemoryProductionRepository) SaveApprovalGate(
+	_ context.Context,
+	params SaveApprovalGateParams,
+) (domain.ApprovalGate, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, gate := range r.gates {
+		if approvalGateMatches(gate, params) {
+			return gate, nil
+		}
+	}
+	now := time.Now().UTC()
+	gate := domain.ApprovalGate{
+		ID: params.ID, ProjectID: params.ProjectID, EpisodeID: params.EpisodeID,
+		WorkflowRunID: params.WorkflowRunID, GateType: params.GateType,
+		SubjectType: params.SubjectType, SubjectID: params.SubjectID,
+		Status: params.Status, CreatedAt: now, UpdatedAt: now,
+	}
+	r.gates[gate.ID] = gate
+	return gate, nil
+}
+
+func (r *MemoryProductionRepository) ReviewApprovalGate(
+	_ context.Context,
+	params ReviewApprovalGateParams,
+) (domain.ApprovalGate, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	gate, ok := r.gates[params.ID]
+	if !ok {
+		return domain.ApprovalGate{}, domain.ErrNotFound
+	}
+	now := time.Now().UTC()
+	gate.Status = params.Status
+	gate.ReviewedBy = params.ReviewedBy
+	gate.ReviewNote = params.ReviewNote
+	gate.ReviewedAt = now
+	gate.UpdatedAt = now
+	r.gates[gate.ID] = gate
+	return gate, nil
+}
+
+func approvalGateMatches(gate domain.ApprovalGate, params SaveApprovalGateParams) bool {
+	return gate.EpisodeID == params.EpisodeID &&
+		gate.GateType == params.GateType &&
+		gate.SubjectType == params.SubjectType &&
+		gate.SubjectID == params.SubjectID
 }
 
 func (r *MemoryProductionRepository) CompleteStoryAnalysisJob(
