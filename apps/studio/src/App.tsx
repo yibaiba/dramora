@@ -43,6 +43,7 @@ import {
   useSaveEpisodeTimeline,
   useSeedApprovalGates,
   useSeedEpisodeAssets,
+  useSeedEpisodeProduction,
   useSeedStoryboardShots,
   useSeedStoryMap,
   useShotPromptPack,
@@ -640,6 +641,7 @@ function StoryboardWorkspace({
 }) {
   const seedStoryMap = useSeedStoryMap()
   const seedAssets = useSeedEpisodeAssets()
+  const seedProduction = useSeedEpisodeProduction()
   const seedStoryboard = useSeedStoryboardShots()
   const startStoryAnalysis = useStartStoryAnalysis()
   const { data: storyMap } = useStoryMap(activeEpisode?.id)
@@ -665,6 +667,7 @@ function StoryboardWorkspace({
         <div className="board-actions">
           <ActionButton disabled={!activeEpisode || startStoryAnalysis.isPending} icon={BookOpenText} label={`故事解析 ${analyses.length}`} onClick={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)} />
           <ActionButton disabled={!activeEpisode || !hasAnalysis || seedStoryMap.isPending} disabledReason={!hasAnalysis ? '先完成故事解析，worker 会自动写入角色、场景和道具种子。' : undefined} icon={Layers3} label={storyMapReady ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !hasAnalysis || seedProduction.isPending} disabledReason={!hasAnalysis ? '先完成故事解析，然后可一键生成资产图谱、候选资产、分镜卡和人审关卡。' : undefined} icon={Zap} label={seedProduction.isPending ? '生产中...' : '一键生产分镜包'} onClick={() => activeEpisode && seedProduction.mutate(activeEpisode.id)} />
           <ActionButton disabled={!activeEpisode || !storyMapReady || seedAssets.isPending} disabledReason={!storyMapReady ? '资产图谱生成后才能创建候选角色、场景和道具资产。' : undefined} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
           <ActionButton disabled={!activeEpisode || !hasAnalysis || !storyMapReady || seedStoryboard.isPending} disabledReason={!storyMapReady ? '需要故事解析和非空资产图谱后才能生成分镜卡。' : undefined} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
           <ActionButton icon={ListFilter} label={onlyNeedsWork ? `待处理 ${gates.length}` : `审批点 ${gates.length}`} onClick={onToggleNeedsWork} />
@@ -1303,7 +1306,7 @@ function productionHint({
 }): string {
   if (!activeEpisode) return '先创建项目和剧集。'
   if (!hasAnalysis) return '下一步：启动故事解析。'
-  if (!storyMapReady) return '下一步：生成资产图谱。'
+  if (!storyMapReady) return '下一步：一键生产资产图谱、候选资产和分镜卡。'
   return '下一步：生成候选资产和分镜卡。'
 }
 

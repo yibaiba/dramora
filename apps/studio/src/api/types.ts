@@ -217,6 +217,13 @@ export type Asset = {
   updated_at: string
 }
 
+export type SeedEpisodeProductionResponse = {
+  approval_gates: ApprovalGate[]
+  assets: Asset[]
+  story_map: StoryMap
+  storyboard_shots: StoryboardShot[]
+}
+
 export type Export = {
   id: string
   timeline_id: string

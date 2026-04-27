@@ -438,6 +438,48 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	}
 }
 
+func TestSeedEpisodeProductionRoute(t *testing.T) {
+	t.Parallel()
+
+	router, productionService := testRouterWithProductionService()
+	episode := createTestEpisode(t, router)
+	startReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/story-analysis/start", nil)
+	startResp := httptest.NewRecorder()
+	router.ServeHTTP(startResp, startReq)
+	if startResp.Code != http.StatusAccepted {
+		t.Fatalf("expected start 202, got %d: %s", startResp.Code, startResp.Body.String())
+	}
+	if _, err := productionService.ProcessQueuedGenerationJobs(startReq.Context(), jobs.DefaultExecutionLimit); err != nil {
+		t.Fatalf("process story analysis job: %v", err)
+	}
+
+	seedResp := httptest.NewRecorder()
+	seedReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/production:seed", nil)
+	router.ServeHTTP(seedResp, seedReq)
+	if seedResp.Code != http.StatusCreated {
+		t.Fatalf("expected production seed 201, got %d: %s", seedResp.Code, seedResp.Body.String())
+	}
+	var payload struct {
+		ApprovalGates   []approvalGateResponse   `json:"approval_gates"`
+		Assets          []assetResponse          `json:"assets"`
+		StoryMap        storyMapResponse         `json:"story_map"`
+		StoryboardShots []storyboardShotResponse `json:"storyboard_shots"`
+	}
+	decodeBody(t, seedResp, &payload)
+	if len(payload.StoryMap.Characters) == 0 || len(payload.StoryMap.Scenes) == 0 {
+		t.Fatalf("expected production seed to create story map, got %+v", payload.StoryMap)
+	}
+	if len(payload.Assets) == 0 {
+		t.Fatal("expected production seed to create asset candidates")
+	}
+	if len(payload.StoryboardShots) == 0 {
+		t.Fatal("expected production seed to create storyboard shots")
+	}
+	if len(payload.ApprovalGates) == 0 {
+		t.Fatal("expected production seed to create approval gates")
+	}
+}
+
 func createTestEpisode(t *testing.T, router http.Handler) episodeResponse {
 	t.Helper()
 

@@ -8,6 +8,7 @@ import type {
   Export,
   GenerationJob,
   Project,
+  SeedEpisodeProductionResponse,
   SaveTimelineRequest,
   SaveShotPromptPackRequest,
   ShotPromptPack,
@@ -200,6 +201,12 @@ export async function seedEpisodeAssets(episodeId: string): Promise<Asset[]> {
     method: 'POST',
   })
   return payload.assets
+}
+
+export async function seedEpisodeProduction(episodeId: string): Promise<SeedEpisodeProductionResponse> {
+  return fetchJSON<SeedEpisodeProductionResponse>(`/api/v1/episodes/${episodeId}/production:seed`, {
+    method: 'POST',
+  })
 }
 
 export async function lockAsset(assetId: string): Promise<Asset> {

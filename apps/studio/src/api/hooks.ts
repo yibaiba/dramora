@@ -21,6 +21,7 @@ import {
   saveShotPromptPack,
   seedApprovalGates,
   seedEpisodeAssets,
+  seedEpisodeProduction,
   seedStoryboardShots,
   seedStoryMap,
   requestApprovalChanges,
@@ -234,6 +235,19 @@ export function useSeedEpisodeAssets() {
   return useMutation({
     mutationFn: (episodeId: string) => seedEpisodeAssets(episodeId),
     onSuccess: (_assets, episodeId) => queryClient.invalidateQueries({ queryKey: ['assets', episodeId] }),
+  })
+}
+
+export function useSeedEpisodeProduction() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => seedEpisodeProduction(episodeId),
+    onSuccess: (_result, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['approval-gates', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['assets', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['story-map', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] })
+    },
   })
 }
 

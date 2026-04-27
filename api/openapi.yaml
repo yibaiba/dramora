@@ -226,6 +226,35 @@ paths:
                       $ref: "#/components/schemas/ApprovalGate"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/production:seed:
+    post:
+      summary: Seed story map, assets, storyboard, and approval gates in one production command
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "201":
+          description: Seeded production artifacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gates:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApprovalGate"
+                  assets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+                  story_map:
+                    $ref: "#/components/schemas/StoryMap"
+                  storyboard_shots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoryboardShot"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/approval-gates/{gateId}:approve:
     post:
       summary: Approve a pending human gate

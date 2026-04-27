@@ -301,6 +301,57 @@ The correct form keeps route strings in `src/api/client.ts`, server state behind
 
 ---
 
+## Scenario: One-click episode production seed command
+
+### 1. Scope / Trigger
+
+- Trigger: Studio needs to continue from a completed story analysis into story map, candidate assets, storyboard cards, and human gates with one command.
+- Applies when changing production pipeline routes, aggregate service orchestration, OpenAPI schemas, route tests, or Studio API hooks.
+
+### 2. Signatures
+
+Frontend-facing API:
+
+```text
+POST /api/v1/episodes/{episodeId}/production:seed
+```
+
+Service signature:
+
+```go
+ProductionService.SeedEpisodeProduction(ctx, episode) (SeedEpisodeProductionResult, error)
+```
+
+### 3. Contracts
+
+- The command requires a completed story analysis for the episode; it must not silently create fake analysis data.
+- The service composes existing production use cases in order: story map, episode assets, storyboard shots, approval gates.
+- The response envelope returns `{ "story_map": StoryMap, "assets": Asset[], "storyboard_shots": StoryboardShot[], "approval_gates": ApprovalGate[] }`.
+- Studio client code must expose the route through `src/api/client.ts` and `src/api/hooks.ts`, invalidating all affected query keys after success.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Missing episode id or unknown episode | Return JSON not-found/invalid error through existing handler helpers. |
+| No completed story analysis | Return not found from the story-map seed step; do not fabricate seeds. |
+| Partial step failure | Return the real error; do not report success-shaped partial output. |
+| OpenAPI/client/hook route mismatch | Treat as contract drift; update all layers before validation. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: after story-analysis worker completion, Studio calls `POST /episodes/{episodeId}/production:seed` and refreshes story map, assets, storyboard shots, and approval gates.
+- Base: editors may still use the individual seed commands for step-by-step debugging.
+- Bad: adding a frontend-only "success" state without backend artifacts, or using `PATCH`/`PUT` for the aggregate command.
+
+### 6. Tests Required
+
+- HTTP route test must complete a story-analysis job, call `production:seed`, and assert non-empty story map, assets, storyboard shots, and approval gates.
+- Frontend validation must run `npm run lint` and `npm run build` after adding DTO/client/hook types.
+- Route convention scan must confirm no frontend-facing `PUT`, `PATCH`, or `DELETE`.
+
+---
+
 ## Examples
 
 - `apps/api/main.go`: thin process entrypoint.
