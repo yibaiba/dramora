@@ -18,12 +18,17 @@ func main() {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	container, err := app.NewContainer(context.Background(), cfg, logger)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	container, err := app.NewContainer(ctx, cfg, logger)
 	if err != nil {
 		logger.Error("create container", "error", err)
 		os.Exit(1)
 	}
 	defer container.Close()
+	stopWorker := app.StartInlineWorker(ctx, cfg, container.Logger, container.ProductionService)
+	defer stopWorker()
 
 	router := httpapi.NewRouter(httpapi.RouterConfig{
 		Logger:            container.Logger,

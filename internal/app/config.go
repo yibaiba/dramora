@@ -17,6 +17,7 @@ type Config struct {
 	ShutdownTimeout       time.Duration
 	DatabaseURL           string
 	DefaultOrganizationID string
+	InlineWorker          bool
 	WorkerQueues          []string
 }
 
@@ -31,13 +32,20 @@ func LoadConfig() (Config, error) {
 		return Config{}, err
 	}
 
+	env := envString("MANMU_ENV", "local")
+	inlineWorker, err := envBool("MANMU_INLINE_WORKER", env == "local")
+	if err != nil {
+		return Config{}, err
+	}
+
 	return Config{
-		Env:                   envString("MANMU_ENV", "local"),
+		Env:                   env,
 		HTTPAddr:              envString("MANMU_HTTP_ADDR", ":8080"),
 		ReadHeaderTimeout:     readHeaderTimeout,
 		ShutdownTimeout:       shutdownTimeout,
 		DatabaseURL:           os.Getenv("MANMU_DATABASE_URL"),
 		DefaultOrganizationID: envString("MANMU_DEFAULT_ORGANIZATION_ID", "00000000-0000-0000-0000-000000000001"),
+		InlineWorker:          inlineWorker,
 		WorkerQueues:          envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
 	}, nil
 }
@@ -68,6 +76,21 @@ func envCSV(key string, fallback []string) []string {
 		return fallback
 	}
 	return values
+}
+
+func envBool(key string, fallback bool) (bool, error) {
+	raw := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if raw == "" {
+		return fallback, nil
+	}
+	switch raw {
+	case "1", "true", "t", "yes", "y", "on":
+		return true, nil
+	case "0", "false", "f", "no", "n", "off":
+		return false, nil
+	default:
+		return false, fmt.Errorf("parse %s bool: %q", key, raw)
+	}
 }
 
 func envDuration(key string, fallback time.Duration) (time.Duration, error) {

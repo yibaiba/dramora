@@ -23,6 +23,8 @@ Run the API:
 go run ./apps/api
 ```
 
+In local mode, the API also runs an inline worker by default so Studio can auto-complete queued story analysis and export jobs. Set `MANMU_INLINE_WORKER=false` to disable that behavior, or set it to `true` outside local mode when you intentionally want one process to run both API and worker loops.
+
 Run the worker:
 
 ```bash

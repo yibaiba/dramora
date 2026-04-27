@@ -617,13 +617,41 @@ p {
 .flow-step {
   display: grid;
   gap: 0.15rem;
+  position: relative;
   padding: 0.55rem;
   border-radius: 0.7rem;
   background: rgba(15, 23, 42, 0.45);
 }
 
-.flow-step.ready {
+.flow-step::before {
+  content: "";
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: var(--subtle);
+}
+
+.flow-step.done {
   background: linear-gradient(135deg, rgba(16, 185, 129, 0.16), rgba(124, 58, 237, 0.08));
+}
+
+.flow-step.done::before {
+  background: var(--emerald);
+  box-shadow: 0 0 18px rgba(16, 185, 129, 0.48);
+}
+
+.flow-step.active {
+  border: 1px solid rgba(56, 189, 248, 0.24);
+  background: linear-gradient(135deg, rgba(56, 189, 248, 0.14), rgba(124, 58, 237, 0.08));
+}
+
+.flow-step.active::before {
+  background: var(--cyan);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.48);
+}
+
+.flow-step.waiting {
+  opacity: 0.7;
 }
 
 .flow-step strong,
@@ -639,11 +667,29 @@ p {
 }
 
 .job-rail {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  overflow: hidden;
+}
+
+.job-rail-header {
+  display: grid;
+  gap: 0.14rem;
+}
+
+.job-pill-row {
   display: flex;
   gap: 0.45rem;
   align-items: center;
-  padding: 0.55rem 0.7rem;
+  min-width: 0;
   overflow: hidden;
+}
+
+.job-empty {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .job-pill {
@@ -706,6 +752,13 @@ p {
 .ghost-action:hover {
   border-color: rgba(124, 58, 237, 0.36);
   background: rgba(124, 58, 237, 0.12);
+}
+
+.ghost-action:disabled {
+  cursor: not-allowed;
+  color: var(--subtle);
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.28);
 }
 
 .shot-grid {

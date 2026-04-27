@@ -89,6 +89,7 @@ Environment keys:
 | `MANMU_SHUTDOWN_TIMEOUT` | No | `10s` | Graceful shutdown timeout; duration or integer seconds. |
 | `MANMU_DATABASE_URL` | No | empty | PostgreSQL URL. Empty uses in-memory repositories for local smoke tests. |
 | `MANMU_DEFAULT_ORGANIZATION_ID` | No | `00000000-0000-0000-0000-000000000001` | Default org used before auth/multitenancy UI exists. |
+| `MANMU_INLINE_WORKER` | No | `true` when `MANMU_ENV=local`, otherwise `false` | Run the worker loop inside the API process so local Studio actions auto-complete queued jobs. |
 | `MANMU_WORKER_QUEUES` | No | `default` | Comma-separated worker queues. |
 
 ### 4. Validation & Error Matrix
@@ -97,6 +98,7 @@ Environment keys:
 | --- | --- |
 | Invalid duration env var | `LoadConfig` returns an error and app exits non-zero. |
 | Empty CSV worker queue env | fallback to `default`. |
+| Invalid `MANMU_INLINE_WORKER` boolean | `LoadConfig` returns an error and app exits non-zero. |
 | Missing database URL | API uses in-memory repositories; do not claim PostgreSQL persistence in that mode. |
 | Domain package needs HTTP/SQL/provider import | reject; move code to `httpapi`, `repo`, or `provider`. |
 | New route lacks OpenAPI entry | update `api/openapi.yaml` in the same change. |

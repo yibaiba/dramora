@@ -85,6 +85,7 @@ type StudioShot = {
 
 type InspectorTab = 'details' | 'prompt' | 'references' | 'notes'
 type ViewMode = 'grid' | 'compact'
+type FlowStepState = 'done' | 'active' | 'waiting'
 type ShotDraft = {
   description: string
   durationMS: number
@@ -648,6 +649,7 @@ function StoryboardWorkspace({
   const { data: jobs = [] } = useGenerationJobs()
   const storyMapReady = hasStoryMapItems(storyMap)
   const hasAnalysis = analyses.length > 0
+  const nextProductionHint = productionHint({ activeEpisode, hasAnalysis, storyMapReady })
   const episodeJobs = useMemo(
     () => jobs.filter((job) => job.episode_id === activeEpisode?.id).slice(0, 5),
     [activeEpisode?.id, jobs],
@@ -662,9 +664,9 @@ function StoryboardWorkspace({
         </div>
         <div className="board-actions">
           <ActionButton disabled={!activeEpisode || startStoryAnalysis.isPending} icon={BookOpenText} label={`故事解析 ${analyses.length}`} onClick={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || !hasAnalysis || seedStoryMap.isPending} icon={Layers3} label={storyMapReady ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || !storyMapReady || seedAssets.isPending} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || !hasAnalysis || !storyMapReady || seedStoryboard.isPending} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !hasAnalysis || seedStoryMap.isPending} disabledReason={!hasAnalysis ? '先完成故事解析，worker 会自动写入角色、场景和道具种子。' : undefined} icon={Layers3} label={storyMapReady ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !storyMapReady || seedAssets.isPending} disabledReason={!storyMapReady ? '资产图谱生成后才能创建候选角色、场景和道具资产。' : undefined} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !hasAnalysis || !storyMapReady || seedStoryboard.isPending} disabledReason={!storyMapReady ? '需要故事解析和非空资产图谱后才能生成分镜卡。' : undefined} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
           <ActionButton icon={ListFilter} label={onlyNeedsWork ? `待处理 ${gates.length}` : `审批点 ${gates.length}`} onClick={onToggleNeedsWork} />
           <div className="view-toggle" aria-label="切换分镜视图">
             <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => onViewModeChange('grid')} type="button">宫格</button>
@@ -682,6 +684,7 @@ function StoryboardWorkspace({
         assetsCount={assets.length}
         gatesCount={gates.length}
         jobs={episodeJobs}
+        nextHint={nextProductionHint}
         shotsCount={displayShots.filter((shot) => Boolean(shot.id)).length}
         storyMapReady={storyMapReady}
       />
@@ -696,9 +699,21 @@ function StoryboardWorkspace({
   )
 }
 
-function ActionButton({ disabled, icon: Icon, label, onClick }: { disabled?: boolean; icon: typeof Activity; label: string; onClick: () => void }) {
+function ActionButton({
+  disabled,
+  disabledReason,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  disabled?: boolean
+  disabledReason?: string
+  icon: typeof Activity
+  label: string
+  onClick: () => void
+}) {
   return (
-    <button className="ghost-action" disabled={disabled} onClick={onClick} type="button">
+    <button className="ghost-action" disabled={disabled} onClick={onClick} title={disabledReason} type="button">
       <Icon aria-hidden="true" />
       {label}
     </button>
@@ -710,6 +725,7 @@ function ProductionFlowPanel({
   assetsCount,
   gatesCount,
   jobs,
+  nextHint,
   shotsCount,
   storyMapReady,
 }: {
@@ -717,37 +733,37 @@ function ProductionFlowPanel({
   assetsCount: number
   gatesCount: number
   jobs: GenerationJob[]
+  nextHint: string
   shotsCount: number
   storyMapReady: boolean
 }) {
-  const steps = [
-    { label: '故事解析', ready: analysesCount > 0, value: `${analysesCount} 份` },
-    { label: '资产图谱', ready: storyMapReady, value: storyMapReady ? '已生成' : '待生成' },
-    { label: '候选资产', ready: assetsCount > 0, value: `${assetsCount} 个` },
-    { label: '分镜卡', ready: shotsCount > 0, value: `${shotsCount} 镜` },
-    { label: '人审关卡', ready: gatesCount > 0, value: `${gatesCount} 个` },
-  ]
+  const steps = productionSteps({ analysesCount, assetsCount, gatesCount, shotsCount, storyMapReady })
   return (
     <section className="production-flow" aria-label="真实生产流程状态">
       <div className="flow-steps">
         {steps.map((step) => (
-          <div className={step.ready ? 'flow-step ready' : 'flow-step'} key={step.label}>
+          <div className={`flow-step ${step.state}`} key={step.label}>
             <strong>{step.label}</strong>
             <span>{step.value}</span>
           </div>
         ))}
       </div>
       <div className="job-rail" aria-label="当前剧集生成队列">
-        <strong>生成队列</strong>
-        {jobs.length === 0 ? (
-          <span>暂无任务，先启动故事解析或镜头生成。</span>
-        ) : (
-          jobs.map((job) => (
-            <span className={`job-pill ${job.status}`} key={job.id}>
-              {job.task_type} · {jobStatusLabel(job.status)}
-            </span>
-          ))
-        )}
+        <div className="job-rail-header">
+          <strong>生成队列</strong>
+          <span>{nextHint}</span>
+        </div>
+        <div className="job-pill-row">
+          {jobs.length === 0 ? (
+            <span className="job-empty">暂无任务，启动故事解析后 worker 会自动推进。</span>
+          ) : (
+            jobs.map((job) => (
+              <span className={`job-pill ${job.status}`} key={job.id}>
+                {jobTaskLabel(job.task_type)} · {jobStatusLabel(job.status)}
+              </span>
+            ))
+          )}
+        </div>
       </div>
     </section>
   )
@@ -1274,6 +1290,62 @@ function shotDraftValue(shot: StudioShot, draft?: ShotDraft): ShotDraft {
 function hasStoryMapItems(storyMap?: StoryMap): boolean {
   if (!storyMap) return false
   return storyMap.characters.length + storyMap.scenes.length + storyMap.props.length > 0
+}
+
+function productionHint({
+  activeEpisode,
+  hasAnalysis,
+  storyMapReady,
+}: {
+  activeEpisode?: Episode
+  hasAnalysis: boolean
+  storyMapReady: boolean
+}): string {
+  if (!activeEpisode) return '先创建项目和剧集。'
+  if (!hasAnalysis) return '下一步：启动故事解析。'
+  if (!storyMapReady) return '下一步：生成资产图谱。'
+  return '下一步：生成候选资产和分镜卡。'
+}
+
+function productionSteps({
+  analysesCount,
+  assetsCount,
+  gatesCount,
+  shotsCount,
+  storyMapReady,
+}: {
+  analysesCount: number
+  assetsCount: number
+  gatesCount: number
+  shotsCount: number
+  storyMapReady: boolean
+}): Array<{ label: string; state: FlowStepState; value: string }> {
+  const hasAnalysis = analysesCount > 0
+  const hasAssets = assetsCount > 0
+  const hasShots = shotsCount > 0
+  return [
+    { label: '故事解析', state: hasAnalysis ? 'done' : 'active', value: hasAnalysis ? `${analysesCount} 份` : '等待 worker' },
+    { label: '资产图谱', state: stepState(storyMapReady, hasAnalysis), value: storyMapReady ? '已生成' : '待生成' },
+    { label: '候选资产', state: stepState(hasAssets, storyMapReady), value: `${assetsCount} 个` },
+    { label: '分镜卡', state: stepState(hasShots, storyMapReady), value: `${shotsCount} 镜` },
+    { label: '人审关卡', state: stepState(gatesCount > 0, hasShots), value: `${gatesCount} 个` },
+  ]
+}
+
+function stepState(done: boolean, unlocked: boolean): FlowStepState {
+  if (done) return 'done'
+  return unlocked ? 'active' : 'waiting'
+}
+
+function jobTaskLabel(taskType: string): string {
+  const labels: Record<string, string> = {
+    export: '导出',
+    story_analysis: '故事解析',
+    text_to_video: '文生视频',
+    image_to_video: '图生视频',
+    first_last_frame_to_video: '首尾帧视频',
+  }
+  return labels[taskType] ?? taskType.replaceAll('_', ' ')
 }
 
 function jobStatusLabel(status: GenerationJob['status']): string {
