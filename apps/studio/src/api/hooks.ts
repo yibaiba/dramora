@@ -6,12 +6,15 @@ import {
   getEpisodeTimeline,
   getStoryAnalysis,
   getStoryMap,
+  listEpisodeAssets,
   listEpisodes,
   listGenerationJobs,
   listProjects,
   listStoryAnalyses,
   listStoryboardShots,
+  lockAsset,
   saveEpisodeTimeline,
+  seedEpisodeAssets,
   seedStoryboardShots,
   seedStoryMap,
   startEpisodeExport,
@@ -120,6 +123,30 @@ export function useSeedStoryboardShots() {
   return useMutation({
     mutationFn: (episodeId: string) => seedStoryboardShots(episodeId),
     onSuccess: (_shots, episodeId) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] }),
+  })
+}
+
+export function useEpisodeAssets(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => listEpisodeAssets(episodeId ?? ''),
+    queryKey: ['assets', episodeId],
+  })
+}
+
+export function useSeedEpisodeAssets() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => seedEpisodeAssets(episodeId),
+    onSuccess: (_assets, episodeId) => queryClient.invalidateQueries({ queryKey: ['assets', episodeId] }),
+  })
+}
+
+export function useLockAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ assetId }: { assetId: string; episodeId: string }) => lockAsset(assetId),
+    onSuccess: (_asset, variables) => queryClient.invalidateQueries({ queryKey: ['assets', variables.episodeId] }),
   })
 }
 

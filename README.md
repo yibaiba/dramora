@@ -70,6 +70,9 @@ curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-map:see
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/story-map
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/storyboard-shots:seed
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/storyboard-shots
+curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/assets:seed
+curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/assets
+curl -sS -X POST http://127.0.0.1:8080/api/v1/assets/{assetId}:lock
 curl -sS http://127.0.0.1:8080/api/v1/workflow-runs/{workflowRunId}
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/timeline
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/timeline \

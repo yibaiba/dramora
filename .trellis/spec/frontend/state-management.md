@@ -39,6 +39,7 @@ Current query keys:
 ['story-analysis', analysisId]
 ['story-map', episodeId]
 ['storyboard-shots', episodeId]
+['assets', episodeId]
 ['timeline', episodeId]
 ['export', exportId]
 ```

@@ -134,6 +134,39 @@ FROM props
 WHERE episode_id = $1::uuid
 ORDER BY code;
 
+-- name: CreateAsset :one
+WITH existing AS (
+    SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose, uri, status, created_at, updated_at
+    FROM assets
+    WHERE episode_id = $3::uuid
+      AND kind = $4
+      AND purpose = $5
+      AND uri = $6
+),
+inserted AS (
+    INSERT INTO assets (id, project_id, episode_id, kind, purpose, uri, status)
+    SELECT $1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7
+    WHERE NOT EXISTS (SELECT 1 FROM existing)
+    RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose, uri, status, created_at, updated_at
+)
+SELECT * FROM inserted
+UNION ALL
+SELECT * FROM existing
+LIMIT 1;
+
+-- name: ListEpisodeAssets :many
+SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose, uri, status, created_at, updated_at
+FROM assets
+WHERE episode_id = $1::uuid
+ORDER BY kind, purpose, created_at;
+
+-- name: LockAsset :one
+UPDATE assets
+SET status = $2,
+    updated_at = now()
+WHERE id = $1::uuid
+RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose, uri, status, created_at, updated_at;
+
 -- name: ListStoryboardShots :many
 SELECT id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
        COALESCE(scene_id::text, ''), code, title, description, prompt, position, duration_ms, created_at, updated_at

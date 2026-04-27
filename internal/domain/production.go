@@ -48,6 +48,18 @@ type StoryAnalysis struct {
 	UpdatedAt       time.Time
 }
 
+type Asset struct {
+	ID        string
+	ProjectID string
+	EpisodeID string
+	Kind      string
+	Purpose   string
+	URI       string
+	Status    AssetStatus
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
 type Timeline struct {
 	ID         string
 	EpisodeID  string

@@ -19,6 +19,7 @@ type MemoryProductionRepository struct {
 	scenes    map[string]domain.Scene
 	props     map[string]domain.Prop
 	shots     map[string]domain.StoryboardShot
+	assets    map[string]domain.Asset
 	exports   map[string]domain.Export
 }
 
@@ -32,6 +33,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		scenes:    make(map[string]domain.Scene),
 		props:     make(map[string]domain.Prop),
 		shots:     make(map[string]domain.StoryboardShot),
+		assets:    make(map[string]domain.Asset),
 		exports:   make(map[string]domain.Export),
 	}
 }
@@ -368,6 +370,65 @@ func (r *MemoryProductionRepository) nextStoryAnalysisVersion(episodeID string) 
 		}
 	}
 	return next
+}
+
+func (r *MemoryProductionRepository) CreateAsset(
+	_ context.Context,
+	params CreateAssetParams,
+) (domain.Asset, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, existing := range r.assets {
+		if existing.EpisodeID == params.EpisodeID &&
+			existing.Kind == params.Kind &&
+			existing.Purpose == params.Purpose &&
+			existing.URI == params.URI {
+			return existing, nil
+		}
+	}
+
+	now := time.Now().UTC()
+	asset := domain.Asset{
+		ID: params.ID, ProjectID: params.ProjectID, EpisodeID: params.EpisodeID,
+		Kind: params.Kind, Purpose: params.Purpose, URI: params.URI, Status: params.Status,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	r.assets[asset.ID] = asset
+	return asset, nil
+}
+
+func (r *MemoryProductionRepository) ListAssetsByEpisode(_ context.Context, episodeID string) ([]domain.Asset, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	assets := make([]domain.Asset, 0)
+	for _, asset := range r.assets {
+		if asset.EpisodeID == episodeID {
+			assets = append(assets, asset)
+		}
+	}
+	sort.Slice(assets, func(i int, j int) bool {
+		if assets[i].Kind == assets[j].Kind {
+			return assets[i].Purpose < assets[j].Purpose
+		}
+		return assets[i].Kind < assets[j].Kind
+	})
+	return assets, nil
+}
+
+func (r *MemoryProductionRepository) LockAsset(_ context.Context, assetID string) (domain.Asset, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	asset, ok := r.assets[assetID]
+	if !ok {
+		return domain.Asset{}, domain.ErrNotFound
+	}
+	asset.Status = domain.AssetStatusReady
+	asset.UpdatedAt = time.Now().UTC()
+	r.assets[assetID] = asset
+	return asset, nil
 }
 
 func (r *MemoryProductionRepository) GetEpisodeTimeline(

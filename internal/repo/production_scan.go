@@ -183,6 +183,25 @@ func scanProp(row rowScanner) (domain.Prop, error) {
 	return item, err
 }
 
+func scanAssets(rows rowsScanner) ([]domain.Asset, error) {
+	items := make([]domain.Asset, 0)
+	for rows.Next() {
+		item, err := scanAsset(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanAsset(row rowScanner) (domain.Asset, error) {
+	var item domain.Asset
+	err := row.Scan(&item.ID, &item.ProjectID, &item.EpisodeID, &item.Kind,
+		&item.Purpose, &item.URI, &item.Status, &item.CreatedAt, &item.UpdatedAt)
+	return item, err
+}
+
 func scanStoryboardShots(rows rowsScanner) ([]domain.StoryboardShot, error) {
 	items := make([]domain.StoryboardShot, 0)
 	for rows.Next() {

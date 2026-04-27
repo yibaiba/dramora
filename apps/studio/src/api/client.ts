@@ -2,6 +2,7 @@ import type {
   CreateEpisodeRequest,
   CreateProjectRequest,
   Episode,
+  Asset,
   Export,
   GenerationJob,
   Project,
@@ -111,6 +112,25 @@ export async function seedStoryboardShots(episodeId: string): Promise<Storyboard
     { method: 'POST' },
   )
   return payload.storyboard_shots
+}
+
+export async function listEpisodeAssets(episodeId: string): Promise<Asset[]> {
+  const payload = await fetchJSON<{ assets: Asset[] }>(`/api/v1/episodes/${episodeId}/assets`)
+  return payload.assets
+}
+
+export async function seedEpisodeAssets(episodeId: string): Promise<Asset[]> {
+  const payload = await fetchJSON<{ assets: Asset[] }>(`/api/v1/episodes/${episodeId}/assets:seed`, {
+    method: 'POST',
+  })
+  return payload.assets
+}
+
+export async function lockAsset(assetId: string): Promise<Asset> {
+  const payload = await fetchJSON<{ asset: Asset }>(`/api/v1/assets/${assetId}:lock`, {
+    method: 'POST',
+  })
+  return payload.asset
 }
 
 export async function saveEpisodeTimeline(episodeId: string, request: SaveTimelineRequest): Promise<Timeline> {

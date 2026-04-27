@@ -548,6 +548,10 @@ h1 {
   gap: 0.65rem;
 }
 
+.asset-card small {
+  overflow-wrap: anywhere;
+}
+
 .asset-preview {
   min-height: 4.5rem;
   border-radius: 0.75rem;

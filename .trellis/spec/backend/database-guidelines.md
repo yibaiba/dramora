@@ -73,6 +73,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
   `00000000-0000-0000-0000-000000000001`.
 - `db/queries/*.sql` is the sqlc source of truth even when hand-written pgx repositories exist.
 - Media payloads must be object URIs in `assets.uri`, never base64 blobs.
+- MVP asset candidate locking uses `assets.status = 'ready'`; draft candidates remain `assets.status = 'draft'`.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
 
@@ -91,6 +92,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
 | Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
 | Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
+| Asset candidates are seeded | create idempotent episode-scoped assets from C/S/P map rows with object-style URIs. |
+| Asset candidate is locked | update the asset status to `ready` and return the updated asset. |
 | Timeline graph is saved | upsert timeline metadata, then replace tracks/clips in a repository transaction. |
 
 #### 5. Good/Base/Bad Cases
@@ -108,7 +111,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Timeline save routes should test save-then-read behavior through the HTTP layer.
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
-- Core map/storyboard/timeline/export routes should test the end-to-end seed/save/start route chain through the HTTP layer.
+- Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.
 
 #### 7. Wrong vs Correct
 

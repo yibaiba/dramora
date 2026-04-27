@@ -16,6 +16,7 @@ export type GenerationJobStatus =
   | 'timed_out'
   | 'canceling'
   | 'canceled'
+export type AssetStatus = 'draft' | 'generating' | 'ready' | 'failed' | 'archived'
 
 export type Project = {
   id: string
@@ -136,6 +137,18 @@ export type StoryboardShot = {
   prompt: string
   position: number
   duration_ms: number
+  created_at: string
+  updated_at: string
+}
+
+export type Asset = {
+  id: string
+  project_id: string
+  episode_id: string
+  kind: string
+  purpose: string
+  uri: string
+  status: AssetStatus
   created_at: string
   updated_at: string
 }

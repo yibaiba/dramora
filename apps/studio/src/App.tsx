@@ -20,10 +20,13 @@ import {
   useCreateEpisode,
   useCreateProject,
   useEpisodeTimeline,
+  useEpisodeAssets,
   useEpisodes,
   useGenerationJobs,
+  useLockAsset,
   useProjects,
   useSaveEpisodeTimeline,
+  useSeedEpisodeAssets,
   useSeedStoryboardShots,
   useSeedStoryMap,
   useStoryAnalyses,
@@ -35,6 +38,7 @@ import {
 import { useStudioStore } from './state/studioStore'
 import type {
   Episode,
+  Asset,
   GenerationJob,
   GenerationJobStatus,
   Project,
@@ -553,7 +557,9 @@ function ShotCard({ shot }: { shot: StoryboardShot }) {
 
 function AssetLibrary({ activeEpisode }: { activeEpisode?: Episode }) {
   const { data: storyMap, isLoading } = useStoryMap(activeEpisode?.id)
+  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
   const seedStoryMap = useSeedStoryMap()
+  const seedAssets = useSeedEpisodeAssets()
 
   return (
     <section className="panel" aria-labelledby="asset-library-title">
@@ -572,8 +578,17 @@ function AssetLibrary({ activeEpisode }: { activeEpisode?: Episode }) {
         >
           Seed C/S/P map
         </button>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || seedAssets.isPending}
+          onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)}
+          type="button"
+        >
+          Seed asset candidates
+        </button>
       </PanelToolbar>
       <StoryMapGrid activeEpisode={activeEpisode} storyMap={storyMap} />
+      <AssetCandidateGrid activeEpisode={activeEpisode} assets={assets} />
     </section>
   )
 }
@@ -607,6 +622,37 @@ function StoryMapColumn({ emptyText, items, title }: { emptyText: string; items:
           <strong>{item.code}</strong>
           <span>{item.name}</span>
           <small>{item.description}</small>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function AssetCandidateGrid({ activeEpisode, assets }: { activeEpisode?: Episode; assets: Asset[] }) {
+  const lockAsset = useLockAsset()
+
+  if (!activeEpisode) return null
+  if (assets.length === 0) {
+    return <EmptyState title="No asset candidates" text="Seed asset candidates after the C/S/P map is ready." />
+  }
+
+  return (
+    <div className="asset-grid" aria-label="Asset candidates">
+      {assets.map((asset) => (
+        <article className="asset-card" key={asset.id}>
+          <div className="asset-preview" />
+          <span>
+            {asset.kind} · {asset.purpose}
+          </span>
+          <small>{asset.status === 'ready' ? 'locked reference' : asset.uri}</small>
+          <button
+            className="secondary-action"
+            disabled={asset.status === 'ready' || lockAsset.isPending}
+            onClick={() => lockAsset.mutate({ assetId: asset.id, episodeId: activeEpisode.id })}
+            type="button"
+          >
+            {asset.status === 'ready' ? 'Locked' : 'Lock'}
+          </button>
         </article>
       ))}
     </div>

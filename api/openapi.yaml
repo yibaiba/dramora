@@ -260,6 +260,61 @@ paths:
                       $ref: "#/components/schemas/StoryboardShot"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/assets:
+    get:
+      summary: List asset candidates for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Episode asset candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/assets:seed:
+    post:
+      summary: Seed asset candidates from the episode C/S/P map
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "201":
+          description: Seeded asset candidates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  assets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Asset"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/assets/{assetId}:lock:
+    post:
+      summary: Lock an asset candidate as ready reference material
+      parameters:
+        - $ref: "#/components/parameters/AssetID"
+      responses:
+        "200":
+          description: Locked asset
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset:
+                    $ref: "#/components/schemas/Asset"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/workflow-runs/{workflowRunId}:
     get:
       summary: Get workflow run
@@ -431,6 +486,12 @@ components:
         type: string
     AnalysisID:
       name: analysisId
+      in: path
+      required: true
+      schema:
+        type: string
+    AssetID:
+      name: assetId
       in: path
       required: true
       schema:
@@ -728,6 +789,40 @@ components:
           type: integer
         duration_ms:
           type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Asset:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - kind
+        - purpose
+        - uri
+        - status
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        kind:
+          type: string
+        purpose:
+          type: string
+        uri:
+          type: string
+        status:
+          type: string
+          enum: [draft, generating, ready, failed, archived]
         created_at:
           type: string
           format: date-time

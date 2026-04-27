@@ -92,6 +92,18 @@ type storyboardShotResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type assetResponse struct {
+	ID        string             `json:"id"`
+	ProjectID string             `json:"project_id"`
+	EpisodeID string             `json:"episode_id"`
+	Kind      string             `json:"kind"`
+	Purpose   string             `json:"purpose"`
+	URI       string             `json:"uri"`
+	Status    domain.AssetStatus `json:"status"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
+}
+
 type timelineTrackResponse struct {
 	ID        string                 `json:"id"`
 	Kind      string                 `json:"kind"`
@@ -236,6 +248,22 @@ func storyboardShotDTOs(items []domain.StoryboardShot) []storyboardShotResponse 
 		})
 	}
 	return responses
+}
+
+func assetDTOs(items []domain.Asset) []assetResponse {
+	responses := make([]assetResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, assetDTO(item))
+	}
+	return responses
+}
+
+func assetDTO(item domain.Asset) assetResponse {
+	return assetResponse{
+		ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+		Kind: item.Kind, Purpose: item.Purpose, URI: item.URI, Status: item.Status,
+		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+	}
 }
 
 func timelineTrackDTOs(items []domain.TimelineTrack) []timelineTrackResponse {

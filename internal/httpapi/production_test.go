@@ -202,6 +202,34 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 		t.Fatalf("expected seeded story map, got %+v", storyMapPayload.StoryMap)
 	}
 
+	assetsResp := httptest.NewRecorder()
+	assetsReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/assets:seed", nil)
+	router.ServeHTTP(assetsResp, assetsReq)
+	if assetsResp.Code != http.StatusCreated {
+		t.Fatalf("expected assets 201, got %d: %s", assetsResp.Code, assetsResp.Body.String())
+	}
+	var assetsPayload struct {
+		Assets []assetResponse `json:"assets"`
+	}
+	decodeBody(t, assetsResp, &assetsPayload)
+	if len(assetsPayload.Assets) == 0 {
+		t.Fatal("expected seeded asset candidates")
+	}
+
+	lockResp := httptest.NewRecorder()
+	lockReq := httptest.NewRequest(http.MethodPost, "/api/v1/assets/"+assetsPayload.Assets[0].ID+":lock", nil)
+	router.ServeHTTP(lockResp, lockReq)
+	if lockResp.Code != http.StatusOK {
+		t.Fatalf("expected lock 200, got %d: %s", lockResp.Code, lockResp.Body.String())
+	}
+	var lockedPayload struct {
+		Asset assetResponse `json:"asset"`
+	}
+	decodeBody(t, lockResp, &lockedPayload)
+	if lockedPayload.Asset.Status != "ready" {
+		t.Fatalf("expected locked asset ready, got %q", lockedPayload.Asset.Status)
+	}
+
 	shotResp := httptest.NewRecorder()
 	shotReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/storyboard-shots:seed", nil)
 	router.ServeHTTP(shotResp, shotReq)

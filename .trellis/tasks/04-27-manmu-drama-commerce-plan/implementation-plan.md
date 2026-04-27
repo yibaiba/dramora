@@ -399,6 +399,27 @@ Verified:
 - `cd apps/studio && npm run lint -- --quiet`
 - `cd apps/studio && npm run build`
 
+Asset candidate and lock slice status: complete.
+
+Implemented:
+
+- Added `domain.Asset` read model using existing `assets` table and `AssetStatus`.
+- Added episode asset candidate seed/list and asset lock repository/service/API flow:
+  - `GET /api/v1/episodes/{episodeId}/assets`
+  - `POST /api/v1/episodes/{episodeId}/assets:seed`
+  - `POST /api/v1/assets/{assetId}:lock`
+- Seeded asset candidates from the current C/S/P map with deterministic object-style `manmu://` URIs.
+- Lock action marks selected candidates as `ready` for MVP reference locking.
+- Synced OpenAPI, sqlc query source, README route examples, Studio DTOs/client/hooks, and Asset Library UI.
+
+Verified:
+
+- `GOTOOLCHAIN=local go test ./...`
+- `GOTOOLCHAIN=local go build ./...`
+- `cd apps/studio && npm run lint -- --quiet`
+- `cd apps/studio && npm run build`
+- GET/POST-only API contract scan.
+
 ## Validation plan
 
 Slice 1:

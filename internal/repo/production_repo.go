@@ -25,6 +25,9 @@ type ProductionRepository interface {
 	GetStoryMap(ctx context.Context, episodeID string) (StoryMap, error)
 	SaveStoryboardShots(ctx context.Context, params SaveStoryboardShotsParams) ([]domain.StoryboardShot, error)
 	ListStoryboardShots(ctx context.Context, episodeID string) ([]domain.StoryboardShot, error)
+	CreateAsset(ctx context.Context, params CreateAssetParams) (domain.Asset, error)
+	ListAssetsByEpisode(ctx context.Context, episodeID string) ([]domain.Asset, error)
+	LockAsset(ctx context.Context, assetID string) (domain.Asset, error)
 	GetEpisodeTimeline(ctx context.Context, episodeID string) (domain.Timeline, error)
 	SaveEpisodeTimeline(ctx context.Context, params SaveEpisodeTimelineParams) (domain.Timeline, error)
 	SaveEpisodeTimelineGraph(ctx context.Context, params SaveEpisodeTimelineGraphParams) (domain.Timeline, error)
@@ -117,6 +120,16 @@ type SaveStoryboardShotParams struct {
 	Prompt          string
 	Position        int
 	DurationMS      int
+}
+
+type CreateAssetParams struct {
+	ID        string
+	ProjectID string
+	EpisodeID string
+	Kind      string
+	Purpose   string
+	URI       string
+	Status    domain.AssetStatus
 }
 
 type SaveEpisodeTimelineParams struct {
