@@ -57,6 +57,55 @@ func (s *ProductionService) ListStoryboardShots(
 	return s.production.ListStoryboardShots(ctx, episodeID)
 }
 
+type UpdateStoryboardShotInput struct {
+	Title       string
+	Description string
+	Prompt      string
+	DurationMS  int
+}
+
+func (s *ProductionService) UpdateStoryboardShot(
+	ctx context.Context,
+	shotID string,
+	input UpdateStoryboardShotInput,
+) (domain.StoryboardShot, error) {
+	if strings.TrimSpace(shotID) == "" {
+		return domain.StoryboardShot{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
+	}
+	if strings.TrimSpace(input.Title) == "" {
+		return domain.StoryboardShot{}, fmt.Errorf("%w: title is required", domain.ErrInvalidInput)
+	}
+	if strings.TrimSpace(input.Prompt) == "" {
+		return domain.StoryboardShot{}, fmt.Errorf("%w: prompt is required", domain.ErrInvalidInput)
+	}
+	if input.DurationMS <= 0 {
+		return domain.StoryboardShot{}, fmt.Errorf("%w: duration must be positive", domain.ErrInvalidInput)
+	}
+	shot, err := s.production.GetStoryboardShot(ctx, shotID)
+	if err != nil {
+		return domain.StoryboardShot{}, err
+	}
+	shots, err := s.production.SaveStoryboardShots(ctx, repo.SaveStoryboardShotsParams{
+		Shots: []repo.SaveStoryboardShotParams{{
+			ID:              shot.ID,
+			ProjectID:       shot.ProjectID,
+			EpisodeID:       shot.EpisodeID,
+			StoryAnalysisID: shot.StoryAnalysisID,
+			SceneID:         shot.SceneID,
+			Code:            shot.Code,
+			Title:           strings.TrimSpace(input.Title),
+			Description:     strings.TrimSpace(input.Description),
+			Prompt:          strings.TrimSpace(input.Prompt),
+			Position:        shot.Position,
+			DurationMS:      input.DurationMS,
+		}},
+	})
+	if err != nil {
+		return domain.StoryboardShot{}, err
+	}
+	return shots[0], nil
+}
+
 func storyMapSeedParams(
 	episode domain.Episode,
 	analysis domain.StoryAnalysis,

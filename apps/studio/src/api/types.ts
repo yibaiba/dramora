@@ -159,6 +159,13 @@ export type StoryboardShot = {
   updated_at: string
 }
 
+export type UpdateStoryboardShotRequest = {
+  title: string
+  description?: string
+  prompt: string
+  duration_ms: number
+}
+
 export type PromptTimeSlice = {
   start_ms: number
   end_ms: number
@@ -192,6 +199,10 @@ export type ShotPromptPack = {
   params: Record<string, string | number | boolean>
   created_at: string
   updated_at: string
+}
+
+export type SaveShotPromptPackRequest = {
+  direct_prompt: string
 }
 
 export type Asset = {

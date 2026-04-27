@@ -18,6 +18,7 @@ import {
   listStoryboardShots,
   lockAsset,
   saveEpisodeTimeline,
+  saveShotPromptPack,
   seedApprovalGates,
   seedEpisodeAssets,
   seedStoryboardShots,
@@ -26,8 +27,16 @@ import {
   startShotVideoGeneration,
   startEpisodeExport,
   startStoryAnalysis,
+  updateStoryboardShot,
 } from './client'
-import type { CreateEpisodeRequest, CreateProjectRequest, Export, SaveTimelineRequest } from './types'
+import type {
+  CreateEpisodeRequest,
+  CreateProjectRequest,
+  Export,
+  SaveShotPromptPackRequest,
+  SaveTimelineRequest,
+  UpdateStoryboardShotRequest,
+} from './types'
 
 export function useProjects() {
   return useQuery({
@@ -166,6 +175,15 @@ export function useSeedStoryboardShots() {
   })
 }
 
+export function useUpdateStoryboardShot() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ request, shotId }: { request: UpdateStoryboardShotRequest; shotId: string }) =>
+      updateStoryboardShot(shotId, request),
+    onSuccess: (shot) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', shot.episode_id] }),
+  })
+}
+
 export function useShotPromptPack(shotId?: string) {
   return useQuery({
     enabled: Boolean(shotId),
@@ -180,6 +198,18 @@ export function useGenerateShotPromptPack() {
   return useMutation({
     mutationFn: (shotId: string) => generateShotPromptPack(shotId),
     onSuccess: (pack) => queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] }),
+  })
+}
+
+export function useSaveShotPromptPack() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ request, shotId }: { request: SaveShotPromptPackRequest; shotId: string }) =>
+      saveShotPromptPack(shotId, request),
+    onSuccess: (pack) => {
+      queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] })
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+    },
   })
 }
 

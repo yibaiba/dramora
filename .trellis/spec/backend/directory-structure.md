@@ -215,6 +215,90 @@ The correct form preserves the project convention while still expressing a state
 
 ---
 
+## Scenario: Storyboard edit and prompt save command contracts
+
+### 1. Scope / Trigger
+
+- Trigger: Studio lets editors persist storyboard shot card changes and edited SD2 direct prompts.
+- Applies when changing storyboard shot routes, prompt pack routes, OpenAPI schemas, service methods, or Studio API hooks.
+
+### 2. Signatures
+
+Frontend-facing API:
+
+```text
+POST /api/v1/storyboard-shots/{shotId}:update
+POST /api/v1/storyboard-shots/{shotId}/prompt-pack:save
+```
+
+Service signatures:
+
+```go
+ProductionService.UpdateStoryboardShot(ctx, shotID, UpdateStoryboardShotInput) (domain.StoryboardShot, error)
+ProductionService.SaveShotPromptPack(ctx, shotID, SaveShotPromptPackInput) (domain.ShotPromptPack, error)
+```
+
+### 3. Contracts
+
+- `UpdateStoryboardShotRequest` fields:
+  - `title` string, required, non-blank.
+  - `description` string, optional.
+  - `prompt` string, required, non-blank.
+  - `duration_ms` integer, required, positive.
+- `SaveShotPromptPackRequest` fields:
+  - `direct_prompt` string, required, non-blank.
+- `POST ...:update` returns `{ "storyboard_shot": StoryboardShot }`.
+- `POST .../prompt-pack:save` returns `{ "prompt_pack": ShotPromptPack }`.
+- Prompt-pack save must preserve provider/model/preset/task type/negative prompt/time slices/reference bindings/params when a pack already exists. If no pack exists, build the default pack from the shot before replacing `direct_prompt`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Blank `shotId` | Return invalid input from service and JSON error from handler. |
+| Blank shot `title` or `prompt` | Return invalid input; do not persist partial shot edits. |
+| Non-positive `duration_ms` | Return invalid input. |
+| Blank `direct_prompt` | Return invalid input; do not create an empty prompt pack. |
+| Unknown shot id | Return not found. |
+| OpenAPI/client/hook route mismatch | Treat as contract drift; update all layers before validation. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: editor saves title, description, prompt, and duration through `POST /api/v1/storyboard-shots/{shotId}:update`; the response updates `['storyboard-shots', episodeId]`.
+- Base: editor saves only a changed `direct_prompt`; the backend returns the full prompt pack with preserved model metadata.
+- Bad: adding `PATCH /api/v1/storyboard-shots/{shotId}` or saving edited prompts only in React local state while showing success.
+
+### 6. Tests Required
+
+- HTTP route test must update a seeded shot and assert changed title/description/prompt/duration in the response.
+- HTTP route test must save an edited prompt pack and assert `direct_prompt` changed.
+- Frontend validation must run `npm run lint` and `npm run build` after adding DTO/client/hook types.
+- Route convention scan must confirm no frontend-facing `PUT`, `PATCH`, or `DELETE`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+await fetch(`/api/v1/storyboard-shots/${shotId}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ title }),
+})
+```
+
+#### Correct
+
+```ts
+useUpdateStoryboardShot().mutate({
+  shotId,
+  request: { title, description, prompt, duration_ms },
+})
+```
+
+The correct form keeps route strings in `src/api/client.ts`, server state behind `src/api/hooks.ts`, and mutation semantics on command-style `POST` routes.
+
+---
+
 ## Examples
 
 - `apps/api/main.go`: thin process entrypoint.

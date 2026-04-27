@@ -262,6 +262,23 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	if len(shotPayload.StoryboardShots) == 0 {
 		t.Fatal("expected seeded storyboard shots")
 	}
+	updateShotResp := httptest.NewRecorder()
+	updateShotReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+":update",
+		body(`{"title":"开场云海重构","description":"强化主角登场动机","prompt":"电影感云海，少年立于天门之前","duration_ms":4200}`),
+	)
+	router.ServeHTTP(updateShotResp, updateShotReq)
+	if updateShotResp.Code != http.StatusOK {
+		t.Fatalf("expected shot update 200, got %d: %s", updateShotResp.Code, updateShotResp.Body.String())
+	}
+	var updatedShotPayload struct {
+		StoryboardShot storyboardShotResponse `json:"storyboard_shot"`
+	}
+	decodeBody(t, updateShotResp, &updatedShotPayload)
+	if updatedShotPayload.StoryboardShot.Title != "开场云海重构" || updatedShotPayload.StoryboardShot.DurationMS != 4200 {
+		t.Fatalf("expected updated shot fields, got %+v", updatedShotPayload.StoryboardShot)
+	}
 
 	promptResp := httptest.NewRecorder()
 	promptReq := httptest.NewRequest(
@@ -285,6 +302,23 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	}
 	if len(promptPayload.PromptPack.ReferenceBindings) < 2 || promptPayload.PromptPack.ReferenceBindings[1].Token != "@image2" {
 		t.Fatalf("expected image references including @image2, got %+v", promptPayload.PromptPack.ReferenceBindings)
+	}
+	savePromptResp := httptest.NewRecorder()
+	savePromptReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+"/prompt-pack:save",
+		body(`{"direct_prompt":"保留角色一致性，增加云海纵深和逆光轮廓"}`),
+	)
+	router.ServeHTTP(savePromptResp, savePromptReq)
+	if savePromptResp.Code != http.StatusOK {
+		t.Fatalf("expected prompt save 200, got %d: %s", savePromptResp.Code, savePromptResp.Body.String())
+	}
+	var savedPromptPayload struct {
+		PromptPack shotPromptPackResponse `json:"prompt_pack"`
+	}
+	decodeBody(t, savePromptResp, &savedPromptPayload)
+	if savedPromptPayload.PromptPack.DirectPrompt != "保留角色一致性，增加云海纵深和逆光轮廓" {
+		t.Fatalf("expected saved direct prompt, got %q", savedPromptPayload.PromptPack.DirectPrompt)
 	}
 	videoResp := httptest.NewRecorder()
 	videoReq := httptest.NewRequest(

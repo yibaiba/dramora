@@ -37,7 +37,9 @@ import {
   useEpisodeTimeline,
   useExport,
   useGenerateShotPromptPack,
+  useGenerationJobs,
   useProjects,
+  useSaveShotPromptPack,
   useSaveEpisodeTimeline,
   useSeedApprovalGates,
   useSeedEpisodeAssets,
@@ -50,15 +52,18 @@ import {
   useStoryAnalyses,
   useStoryboardShots,
   useStoryMap,
+  useUpdateStoryboardShot,
 } from './api/hooks'
 import { useStudioStore } from './state/studioStore'
 import type {
   ApprovalGate,
   Asset,
   Episode,
+  GenerationJob,
   Project,
   SaveTimelineRequest,
   ShotPromptPack,
+  StoryMap,
   StoryboardShot,
 } from './api/types'
 
@@ -80,6 +85,11 @@ type StudioShot = {
 
 type InspectorTab = 'details' | 'prompt' | 'references' | 'notes'
 type ViewMode = 'grid' | 'compact'
+type ShotDraft = {
+  description: string
+  durationMS: number
+  title: string
+}
 
 const navItems = [
   { icon: Home, label: '工作台' },
@@ -225,8 +235,15 @@ function App() {
   const { selectedProjectId, selectProject } = useStudioStore()
   const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId) ?? projects[0], [projects, selectedProjectId])
   const { data: episodes = [] } = useEpisodes(selectedProject?.id)
-  const activeEpisode = episodes[0]
+  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string>()
+  const activeEpisode = useMemo(
+    () => episodes.find((episode) => episode.id === selectedEpisodeId) ?? episodes[0],
+    [episodes, selectedEpisodeId],
+  )
+  const { data: activeStoryMap } = useStoryMap(activeEpisode?.id)
+  const { data: activeAnalyses = [] } = useStoryAnalyses(activeEpisode?.id)
   const { data: storyboardShots = [] } = useStoryboardShots(activeEpisode?.id)
+  const canSeedStoryboard = activeAnalyses.length > 0 && hasStoryMapItems(activeStoryMap)
   const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details')
   const [localShots, setLocalShots] = useState<StudioShot[]>([])
   const [notes, setNotes] = useState<Record<string, string>>({})
@@ -234,7 +251,10 @@ function App() {
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedShotKey, setSelectedShotKey] = useState<string>()
+  const [shotDrafts, setShotDrafts] = useState<Record<string, ShotDraft>>({})
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const savePromptPack = useSaveShotPromptPack()
+  const updateStoryboardShot = useUpdateStoryboardShot()
   const displayShots = useMemo(() => [...mapDisplayShots(storyboardShots), ...localShots], [localShots, storyboardShots])
   const filteredShots = useMemo(() => {
     const searchedShots = filterShots(displayShots, searchQuery)
@@ -263,6 +283,43 @@ function App() {
     if (!selectedProjectId && selectedProject) selectProject(selectedProject.id)
   }, [selectProject, selectedProject, selectedProjectId])
 
+  const updateLocalShot = (shotKey: string, values: Partial<StudioShot>) => {
+    setLocalShots((shots) => shots.map((shot) => (shot.key === shotKey ? { ...shot, ...values } : shot)))
+  }
+
+  const saveSelectedShot = () => {
+    const draft = shotDraftValue(selectedShot, shotDrafts[selectedShot.key])
+    const prompt = promptDrafts[selectedShot.key] ?? selectedShot.prompt
+    if (!selectedShot.id) {
+      updateLocalShot(selectedShot.key, {
+        description: draft.description,
+        durationMS: draft.durationMS,
+        prompt,
+        title: draft.title,
+        sceneName: draft.title,
+      })
+      return
+    }
+    updateStoryboardShot.mutate({
+      request: {
+        description: draft.description,
+        duration_ms: draft.durationMS,
+        prompt,
+        title: draft.title,
+      },
+      shotId: selectedShot.id,
+    })
+  }
+
+  const saveSelectedPrompt = () => {
+    const directPrompt = promptDrafts[selectedShot.key] ?? selectedShot.prompt
+    if (!selectedShot.id) {
+      updateLocalShot(selectedShot.key, { prompt: directPrompt })
+      return
+    }
+    savePromptPack.mutate({ request: { direct_prompt: directPrompt }, shotId: selectedShot.id })
+  }
+
   return (
     <main className="cinema-shell">
       <StudioSidebar
@@ -273,10 +330,12 @@ function App() {
       />
       <StudioStage
         activeEpisode={activeEpisode}
+        canSeedStoryboard={canSeedStoryboard}
         displayShots={filteredShots}
         episodes={episodes}
         onAddLocalShot={addLocalShot}
         onSearchChange={setSearchQuery}
+        onSelectEpisode={setSelectedEpisodeId}
         onSelectShot={setSelectedShotKey}
         onToggleNeedsWork={() => setOnlyNeedsWork((value) => !value)}
         onViewModeChange={setViewMode}
@@ -296,9 +355,15 @@ function App() {
         onSelectNext={() => selectRelativeShot(1)}
         onSelectPrevious={() => selectRelativeShot(-1)}
         onPromptDraftChange={(value) => setPromptDrafts((current) => ({ ...current, [selectedShot.key]: value }))}
+        onSavePrompt={saveSelectedPrompt}
+        onSaveShot={saveSelectedShot}
+        onShotDraftChange={(draft) => setShotDrafts((current) => ({ ...current, [selectedShot.key]: draft }))}
         project={selectedProject}
         promptDraft={promptDrafts[selectedShot.key]}
+        savingPrompt={savePromptPack.isPending}
+        savingShot={updateStoryboardShot.isPending}
         selectedShot={selectedShot}
+        shotDraft={shotDrafts[selectedShot.key]}
       />
     </main>
   )
@@ -409,10 +474,12 @@ function ProjectSwitcher({
 
 function StudioStage({
   activeEpisode,
+  canSeedStoryboard,
   displayShots,
   episodes,
   onAddLocalShot,
   onSearchChange,
+  onSelectEpisode,
   onSelectShot,
   onToggleNeedsWork,
   onViewModeChange,
@@ -423,10 +490,12 @@ function StudioStage({
   viewMode,
 }: {
   activeEpisode?: Episode
+  canSeedStoryboard: boolean
   displayShots: StudioShot[]
   episodes: Episode[]
   onAddLocalShot: () => void
   onSearchChange: (query: string) => void
+  onSelectEpisode: (episodeId: string) => void
   onSelectShot: (shotKey: string) => void
   onToggleNeedsWork: () => void
   onViewModeChange: (mode: ViewMode) => void
@@ -440,8 +509,10 @@ function StudioStage({
     <section className="studio-stage" aria-label="分镜与剪辑工作区">
       <StudioTopBar
         activeEpisode={activeEpisode}
+        canSeedStoryboard={canSeedStoryboard}
         episodes={episodes}
         onSearchChange={onSearchChange}
+        onSelectEpisode={onSelectEpisode}
         project={project}
         searchQuery={searchQuery}
       />
@@ -464,14 +535,18 @@ function StudioStage({
 
 function StudioTopBar({
   activeEpisode,
+  canSeedStoryboard,
   episodes,
   onSearchChange,
+  onSelectEpisode,
   project,
   searchQuery,
 }: {
   activeEpisode?: Episode
+  canSeedStoryboard: boolean
   episodes: Episode[]
   onSearchChange: (query: string) => void
+  onSelectEpisode: (episodeId: string) => void
   project?: Project
   searchQuery: string
 }) {
@@ -480,7 +555,10 @@ function StudioTopBar({
   const [episodeTitle, setEpisodeTitle] = useState('')
   const submitEpisode = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    createEpisode.mutate({ title: episodeTitle }, { onSuccess: () => setEpisodeTitle('') })
+    createEpisode.mutate({ title: episodeTitle }, { onSuccess: (episode) => {
+      onSelectEpisode(episode.id)
+      setEpisodeTitle('')
+    } })
   }
 
   return (
@@ -490,11 +568,19 @@ function StudioTopBar({
         <span className="pro-badge">Pro</span>
         <small>刚刚自动保存</small>
       </div>
-      <div className="episode-pill">
+      <label className="episode-pill">
         <Clapperboard aria-hidden="true" />
-        <span>{activeEpisode ? `第 ${activeEpisode.number.toString().padStart(2, '0')} 集 · ${activeEpisode.title}` : '还没有剧集'}</span>
+        <span className="sr-only">当前剧集</span>
+        <select disabled={episodes.length === 0} onChange={(event) => onSelectEpisode(event.target.value)} value={activeEpisode?.id ?? ''}>
+          {episodes.length === 0 ? <option value="">还没有剧集</option> : null}
+          {episodes.map((episode) => (
+            <option key={episode.id} value={episode.id}>
+              第 {episode.number.toString().padStart(2, '0')} 集 · {episode.title}
+            </option>
+          ))}
+        </select>
         <ChevronDown aria-hidden="true" />
-      </div>
+      </label>
       <label className="search-box">
         <Search aria-hidden="true" />
         <span className="search-box-label">检索</span>
@@ -510,7 +596,7 @@ function StudioTopBar({
         <strong>¥ 12,450.00</strong>
         <small>68%</small>
       </div>
-      <button className="primary-generate" disabled={!activeEpisode || seedStoryboard.isPending} onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} type="button">
+      <button className="primary-generate" disabled={!activeEpisode || !canSeedStoryboard || seedStoryboard.isPending} onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} type="button">
         <Sparkles aria-hidden="true" />
         生成下一镜
       </button>
@@ -557,7 +643,15 @@ function StoryboardWorkspace({
   const startStoryAnalysis = useStartStoryAnalysis()
   const { data: storyMap } = useStoryMap(activeEpisode?.id)
   const { data: analyses = [] } = useStoryAnalyses(activeEpisode?.id)
+  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
   const { data: gates = [] } = useEpisodeApprovalGates(activeEpisode?.id)
+  const { data: jobs = [] } = useGenerationJobs()
+  const storyMapReady = hasStoryMapItems(storyMap)
+  const hasAnalysis = analyses.length > 0
+  const episodeJobs = useMemo(
+    () => jobs.filter((job) => job.episode_id === activeEpisode?.id).slice(0, 5),
+    [activeEpisode?.id, jobs],
+  )
 
   return (
     <section className="storyboard-workspace" aria-labelledby="storyboard-board-title">
@@ -568,9 +662,9 @@ function StoryboardWorkspace({
         </div>
         <div className="board-actions">
           <ActionButton disabled={!activeEpisode || startStoryAnalysis.isPending} icon={BookOpenText} label={`故事解析 ${analyses.length}`} onClick={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || seedStoryMap.isPending} icon={Layers3} label={storyMap ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || seedAssets.isPending} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
-          <ActionButton disabled={!activeEpisode || seedStoryboard.isPending} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !hasAnalysis || seedStoryMap.isPending} icon={Layers3} label={storyMapReady ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !storyMapReady || seedAssets.isPending} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || !hasAnalysis || !storyMapReady || seedStoryboard.isPending} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
           <ActionButton icon={ListFilter} label={onlyNeedsWork ? `待处理 ${gates.length}` : `审批点 ${gates.length}`} onClick={onToggleNeedsWork} />
           <div className="view-toggle" aria-label="切换分镜视图">
             <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => onViewModeChange('grid')} type="button">宫格</button>
@@ -583,6 +677,14 @@ function StoryboardWorkspace({
           正在展示演示分镜。创建项目和剧集后，故事解析、资产图谱、生成队列和导出动作会接入当前剧集。
         </div>
       ) : null}
+      <ProductionFlowPanel
+        analysesCount={analyses.length}
+        assetsCount={assets.length}
+        gatesCount={gates.length}
+        jobs={episodeJobs}
+        shotsCount={displayShots.filter((shot) => Boolean(shot.id)).length}
+        storyMapReady={storyMapReady}
+      />
       <ShotGrid
         displayShots={displayShots}
         onAddLocalShot={onAddLocalShot}
@@ -600,6 +702,54 @@ function ActionButton({ disabled, icon: Icon, label, onClick }: { disabled?: boo
       <Icon aria-hidden="true" />
       {label}
     </button>
+  )
+}
+
+function ProductionFlowPanel({
+  analysesCount,
+  assetsCount,
+  gatesCount,
+  jobs,
+  shotsCount,
+  storyMapReady,
+}: {
+  analysesCount: number
+  assetsCount: number
+  gatesCount: number
+  jobs: GenerationJob[]
+  shotsCount: number
+  storyMapReady: boolean
+}) {
+  const steps = [
+    { label: '故事解析', ready: analysesCount > 0, value: `${analysesCount} 份` },
+    { label: '资产图谱', ready: storyMapReady, value: storyMapReady ? '已生成' : '待生成' },
+    { label: '候选资产', ready: assetsCount > 0, value: `${assetsCount} 个` },
+    { label: '分镜卡', ready: shotsCount > 0, value: `${shotsCount} 镜` },
+    { label: '人审关卡', ready: gatesCount > 0, value: `${gatesCount} 个` },
+  ]
+  return (
+    <section className="production-flow" aria-label="真实生产流程状态">
+      <div className="flow-steps">
+        {steps.map((step) => (
+          <div className={step.ready ? 'flow-step ready' : 'flow-step'} key={step.label}>
+            <strong>{step.label}</strong>
+            <span>{step.value}</span>
+          </div>
+        ))}
+      </div>
+      <div className="job-rail" aria-label="当前剧集生成队列">
+        <strong>生成队列</strong>
+        {jobs.length === 0 ? (
+          <span>暂无任务，先启动故事解析或镜头生成。</span>
+        ) : (
+          jobs.map((job) => (
+            <span className={`job-pill ${job.status}`} key={job.id}>
+              {job.task_type} · {jobStatusLabel(job.status)}
+            </span>
+          ))
+        )}
+      </div>
+    </section>
   )
 }
 
@@ -680,11 +830,17 @@ function ShotInspector({
   onInspectorTabChange,
   onNoteChange,
   onPromptDraftChange,
+  onSavePrompt,
+  onSaveShot,
   onSelectNext,
   onSelectPrevious,
+  onShotDraftChange,
   project,
   promptDraft,
+  savingPrompt,
+  savingShot,
   selectedShot,
+  shotDraft,
 }: {
   activeEpisode?: Episode
   displayShots: StudioShot[]
@@ -693,11 +849,17 @@ function ShotInspector({
   onInspectorTabChange: (tab: InspectorTab) => void
   onNoteChange: (value: string) => void
   onPromptDraftChange: (value: string) => void
+  onSavePrompt: () => void
+  onSaveShot: () => void
   onSelectNext: () => void
   onSelectPrevious: () => void
+  onShotDraftChange: (draft: ShotDraft) => void
   project?: Project
   promptDraft?: string
+  savingPrompt: boolean
+  savingShot: boolean
   selectedShot: StudioShot
+  shotDraft?: ShotDraft
 }) {
   const { data: promptPack } = useShotPromptPack(selectedShot.id)
   const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
@@ -708,12 +870,22 @@ function ShotInspector({
     <aside className="shot-inspector" aria-label="当前镜头检查器">
       <InspectorHeader onSelectNext={onSelectNext} onSelectPrevious={onSelectPrevious} selectedShot={selectedShot} />
       <InspectorTabs activeTab={inspectorTab} onChange={onInspectorTabChange} />
-      {inspectorTab === 'details' ? <SceneTimingCard selectedShot={selectedShot} /> : null}
+      {inspectorTab === 'details' ? (
+        <SceneTimingCard
+          draft={shotDraftValue(selectedShot, shotDraft)}
+          onDraftChange={onShotDraftChange}
+          onSave={onSaveShot}
+          saving={savingShot}
+          selectedShot={selectedShot}
+        />
+      ) : null}
       {inspectorTab === 'prompt' ? (
         <PromptPackCard
           onPromptDraftChange={onPromptDraftChange}
+          onSavePrompt={onSavePrompt}
           pack={promptPack}
           promptDraft={promptDraft}
+          savingPrompt={savingPrompt}
           selectedShot={selectedShot}
         />
       ) : null}
@@ -765,10 +937,37 @@ function InspectorTabs({ activeTab, onChange }: { activeTab: InspectorTab; onCha
   )
 }
 
-function SceneTimingCard({ selectedShot }: { selectedShot: StudioShot }) {
+function SceneTimingCard({
+  draft,
+  onDraftChange,
+  onSave,
+  saving,
+  selectedShot,
+}: {
+  draft: ShotDraft
+  onDraftChange: (draft: ShotDraft) => void
+  onSave: () => void
+  saving: boolean
+  selectedShot: StudioShot
+}) {
   return (
     <section className="inspector-section" aria-labelledby="scene-timing-title">
-      <h2 id="scene-timing-title">场景与节奏</h2>
+      <div className="section-title-row">
+        <h2 id="scene-timing-title">场景与节奏</h2>
+        <button disabled={saving} onClick={onSave} type="button">保存镜头</button>
+      </div>
+      <label className="field-editor">
+        <span>镜头标题</span>
+        <input onChange={(event) => onDraftChange({ ...draft, title: event.target.value })} value={draft.title} />
+      </label>
+      <label className="field-editor">
+        <span>镜头说明</span>
+        <textarea onChange={(event) => onDraftChange({ ...draft, description: event.target.value })} value={draft.description} />
+      </label>
+      <label className="field-editor">
+        <span>时长 ms</span>
+        <input min={1} onChange={(event) => onDraftChange({ ...draft, durationMS: Number(event.target.value) })} type="number" value={draft.durationMS} />
+      </label>
       <dl className="detail-list">
         <div><dt>场景</dt><dd><span className="scene-chip">{selectedShot.sceneCode}</span> {selectedShot.sceneName}</dd></div>
         <div><dt>镜头时长</dt><dd>{formatDuration(selectedShot.durationMS)}</dd></div>
@@ -781,13 +980,17 @@ function SceneTimingCard({ selectedShot }: { selectedShot: StudioShot }) {
 
 function PromptPackCard({
   onPromptDraftChange,
+  onSavePrompt,
   pack,
   promptDraft,
+  savingPrompt,
   selectedShot,
 }: {
   onPromptDraftChange: (value: string) => void
+  onSavePrompt: () => void
   pack?: ShotPromptPack
   promptDraft?: string
+  savingPrompt: boolean
   selectedShot: StudioShot
 }) {
   const generatePromptPack = useGenerateShotPromptPack()
@@ -796,9 +999,12 @@ function PromptPackCard({
     <section className="inspector-section prompt-section" aria-labelledby="prompt-pack-title">
       <div className="section-title-row">
         <h2 id="prompt-pack-title">SD2 镜头提示词包</h2>
-        <button disabled={!selectedShot.id || generatePromptPack.isPending} onClick={() => selectedShot.id && generatePromptPack.mutate(selectedShot.id)} type="button">
-          重新生成
-        </button>
+        <div className="section-actions">
+          <button disabled={savingPrompt} onClick={onSavePrompt} type="button">保存提示词</button>
+          <button disabled={!selectedShot.id || generatePromptPack.isPending} onClick={() => selectedShot.id && generatePromptPack.mutate(selectedShot.id)} type="button">
+            重新生成
+          </button>
+        </div>
       </div>
       <label className="prompt-editor">
         <span>可编辑提示词</span>
@@ -1055,6 +1261,40 @@ function statusLabel(status: StudioShot['status']): string {
     queued: '排队中',
   }
   return labels[status]
+}
+
+function shotDraftValue(shot: StudioShot, draft?: ShotDraft): ShotDraft {
+  return draft ?? {
+    description: shot.description,
+    durationMS: shot.durationMS,
+    title: shot.title || shot.sceneName,
+  }
+}
+
+function hasStoryMapItems(storyMap?: StoryMap): boolean {
+  if (!storyMap) return false
+  return storyMap.characters.length + storyMap.scenes.length + storyMap.props.length > 0
+}
+
+function jobStatusLabel(status: GenerationJob['status']): string {
+  const labels: Record<GenerationJob['status'], string> = {
+    blocked: '已阻塞',
+    canceled: '已取消',
+    canceling: '取消中',
+    downloading: '下载中',
+    draft: '草稿',
+    failed: '失败',
+    needs_review: '待人审',
+    polling: '轮询中',
+    postprocessing: '后处理',
+    preflight: '预检中',
+    queued: '排队中',
+    submitting: '提交中',
+    submitted: '已提交',
+    succeeded: '已完成',
+    timed_out: '超时',
+  }
+  return labels[status] ?? status.replaceAll('_', ' ')
 }
 
 function exportStatusLabel(status: string): string {

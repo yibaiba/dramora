@@ -348,6 +348,31 @@ paths:
                       $ref: "#/components/schemas/StoryboardShot"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}:update:
+    post:
+      summary: Update editable storyboard shot fields
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateStoryboardShotRequest"
+      responses:
+        "200":
+          description: Updated storyboard shot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyboard_shot:
+                    $ref: "#/components/schemas/StoryboardShot"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/storyboard-shots/{shotId}/prompt-pack:
     get:
       summary: Get the latest provider-specific prompt pack for a storyboard shot
@@ -380,6 +405,31 @@ paths:
                 properties:
                   prompt_pack:
                     $ref: "#/components/schemas/ShotPromptPack"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}/prompt-pack:save:
+    post:
+      summary: Save an edited direct prompt for the shot prompt pack
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveShotPromptPackRequest"
+      responses:
+        "200":
+          description: Saved shot prompt pack
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompt_pack:
+                    $ref: "#/components/schemas/ShotPromptPack"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/storyboard-shots/{shotId}/videos:generate:
@@ -1010,6 +1060,21 @@ components:
         updated_at:
           type: string
           format: date-time
+    UpdateStoryboardShotRequest:
+      type: object
+      required: [title, prompt, duration_ms]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        prompt:
+          type: string
+          minLength: 1
+        duration_ms:
+          type: integer
+          minimum: 1
     ShotPromptPack:
       type: object
       required:
@@ -1067,6 +1132,13 @@ components:
         updated_at:
           type: string
           format: date-time
+    SaveShotPromptPackRequest:
+      type: object
+      required: [direct_prompt]
+      properties:
+        direct_prompt:
+          type: string
+          minLength: 1
     PromptTimeSlice:
       type: object
       required: [start_ms, end_ms, prompt, camera_work, shot_size, visual_focus]

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -47,6 +48,55 @@ func (s *ProductionService) GetShotPromptPack(
 		return domain.ShotPromptPack{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
 	}
 	return s.production.GetShotPromptPack(ctx, shotID)
+}
+
+type SaveShotPromptPackInput struct {
+	DirectPrompt string
+}
+
+func (s *ProductionService) SaveShotPromptPack(
+	ctx context.Context,
+	shotID string,
+	input SaveShotPromptPackInput,
+) (domain.ShotPromptPack, error) {
+	if strings.TrimSpace(shotID) == "" {
+		return domain.ShotPromptPack{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
+	}
+	directPrompt := strings.TrimSpace(input.DirectPrompt)
+	if directPrompt == "" {
+		return domain.ShotPromptPack{}, fmt.Errorf("%w: direct prompt is required", domain.ErrInvalidInput)
+	}
+	pack, err := s.production.GetShotPromptPack(ctx, shotID)
+	if err != nil {
+		if !errors.Is(err, domain.ErrNotFound) {
+			return domain.ShotPromptPack{}, err
+		}
+		shot, shotErr := s.production.GetStoryboardShot(ctx, shotID)
+		if shotErr != nil {
+			return domain.ShotPromptPack{}, shotErr
+		}
+		packParams, buildErr := buildShotPromptPackParams(shot, nil)
+		if buildErr != nil {
+			return domain.ShotPromptPack{}, buildErr
+		}
+		packParams.DirectPrompt = directPrompt
+		return s.production.SaveShotPromptPack(ctx, packParams)
+	}
+	return s.production.SaveShotPromptPack(ctx, repo.SaveShotPromptPackParams{
+		ID:                pack.ID,
+		ProjectID:         pack.ProjectID,
+		EpisodeID:         pack.EpisodeID,
+		ShotID:            pack.ShotID,
+		Provider:          pack.Provider,
+		Model:             pack.Model,
+		Preset:            pack.Preset,
+		TaskType:          pack.TaskType,
+		DirectPrompt:      directPrompt,
+		NegativePrompt:    pack.NegativePrompt,
+		TimeSlices:        pack.TimeSlices,
+		ReferenceBindings: pack.ReferenceBindings,
+		Params:            pack.Params,
+	})
 }
 
 func (s *ProductionService) StartShotVideoGeneration(

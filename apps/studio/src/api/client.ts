@@ -9,11 +9,13 @@ import type {
   GenerationJob,
   Project,
   SaveTimelineRequest,
+  SaveShotPromptPackRequest,
   ShotPromptPack,
   StartStoryAnalysisResponse,
   StoryAnalysis,
   StoryMap,
   StoryboardShot,
+  UpdateStoryboardShotRequest,
   Timeline,
 } from './types'
 
@@ -149,6 +151,14 @@ export async function seedStoryboardShots(episodeId: string): Promise<Storyboard
   return payload.storyboard_shots
 }
 
+export async function updateStoryboardShot(shotId: string, request: UpdateStoryboardShotRequest): Promise<StoryboardShot> {
+  const payload = await fetchJSON<{ storyboard_shot: StoryboardShot }>(`/api/v1/storyboard-shots/${shotId}:update`, {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.storyboard_shot
+}
+
 export async function getShotPromptPack(shotId: string): Promise<ShotPromptPack> {
   const payload = await fetchJSON<{ prompt_pack: ShotPromptPack }>(`/api/v1/storyboard-shots/${shotId}/prompt-pack`)
   return payload.prompt_pack
@@ -158,6 +168,17 @@ export async function generateShotPromptPack(shotId: string): Promise<ShotPrompt
   const payload = await fetchJSON<{ prompt_pack: ShotPromptPack }>(
     `/api/v1/storyboard-shots/${shotId}/prompt-pack:generate`,
     { method: 'POST' },
+  )
+  return payload.prompt_pack
+}
+
+export async function saveShotPromptPack(shotId: string, request: SaveShotPromptPackRequest): Promise<ShotPromptPack> {
+  const payload = await fetchJSON<{ prompt_pack: ShotPromptPack }>(
+    `/api/v1/storyboard-shots/${shotId}/prompt-pack:save`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
   )
   return payload.prompt_pack
 }
