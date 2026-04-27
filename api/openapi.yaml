@@ -294,6 +294,23 @@ paths:
                     $ref: "#/components/schemas/ShotPromptPack"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}/videos:generate:
+    post:
+      summary: Queue a video generation job from the shot prompt pack
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      responses:
+        "202":
+          description: Video generation job accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generation_job:
+                    $ref: "#/components/schemas/GenerationJob"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/assets:
     get:
       summary: List asset candidates for an episode

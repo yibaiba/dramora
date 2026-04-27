@@ -16,6 +16,16 @@ SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(work
 FROM generation_jobs
 WHERE id = $1::uuid;
 
+-- name: CreateGenerationJobWithParams :one
+INSERT INTO generation_jobs (
+    id, project_id, episode_id, workflow_run_id, request_key, provider, model, task_type, status, prompt, params
+)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb)
+ON CONFLICT (request_key) DO UPDATE
+SET updated_at = generation_jobs.updated_at
+RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
+       provider, model, task_type, status, created_at, updated_at;
+
 -- name: ListGenerationJobsByStatus :many
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, created_at, updated_at

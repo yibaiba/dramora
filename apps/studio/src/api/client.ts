@@ -128,6 +128,13 @@ export async function generateShotPromptPack(shotId: string): Promise<ShotPrompt
   return payload.prompt_pack
 }
 
+export async function startShotVideoGeneration(shotId: string): Promise<GenerationJob> {
+  const payload = await fetchJSON<{ generation_job: GenerationJob }>(`/api/v1/storyboard-shots/${shotId}/videos:generate`, {
+    method: 'POST',
+  })
+  return payload.generation_job
+}
+
 export async function listEpisodeAssets(episodeId: string): Promise<Asset[]> {
   const payload = await fetchJSON<{ assets: Asset[] }>(`/api/v1/episodes/${episodeId}/assets`)
   return payload.assets

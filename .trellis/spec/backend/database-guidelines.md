@@ -157,6 +157,7 @@ Frontend-facing API:
 ```text
 GET  /api/v1/storyboard-shots/{shotId}/prompt-pack
 POST /api/v1/storyboard-shots/{shotId}/prompt-pack:generate
+POST /api/v1/storyboard-shots/{shotId}/videos:generate
 ```
 
 Repository/service signatures:
@@ -165,6 +166,7 @@ Repository/service signatures:
 SaveShotPromptPack(ctx context.Context, params repo.SaveShotPromptPackParams) (domain.ShotPromptPack, error)
 GetShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error)
 GenerateShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error)
+StartShotVideoGeneration(ctx context.Context, shotID string) (domain.GenerationJob, error)
 ```
 
 #### 3. Contracts
@@ -175,6 +177,9 @@ GenerateShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPac
 - `reference_bindings` uses SD2-compatible tokens such as `@image1` and `@image2`; locked `assets.status = 'ready'` rows are eligible references.
 - The first locked image reference may be role `first_frame`; additional image refs should be role `reference_image`.
 - Prompt pack generation reads from existing shot and asset state; it must not synchronously call video generation providers from HTTP handlers.
+- `POST /videos:generate` requires an existing prompt pack, creates or returns one queued `generation_jobs` row, and enqueues `jobs.JobKindGenerationSubmit` only when the row was newly created.
+- Shot video job idempotency uses `request_key = "shot-video:{shotID}:{preset}"`; repeated requests for the same shot/preset must not create duplicate provider submissions.
+- The queued job copies `provider`, `model`, `task_type`, `prompt`, `reference_bindings`, and `time_slices` from the prompt pack so the worker has a stable source-of-truth payload.
 
 #### 4. Validation & Error Matrix
 
@@ -183,20 +188,24 @@ GenerateShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPac
 | Missing/blank `shotId` | Service returns `domain.ErrInvalidInput`; HTTP maps to 400 `invalid_request`. |
 | Shot does not exist | Repository returns `domain.ErrNotFound`; HTTP maps to 404 `not_found`. |
 | Prompt pack has not been generated | `GET /prompt-pack` returns 404, not an empty fake success. |
+| Video generation starts without a prompt pack | `POST /videos:generate` returns 404; do not auto-create a prompt pack in that handler. |
 | Multiple locked assets exist | Prompt pack includes deterministic `@image1`, `@image2`, ... bindings up to provider max. |
 | Prompt pack is regenerated | Upsert by `(shot_id, preset)` and update prompt JSONB/params without creating duplicates. |
+| Video generation is requested repeatedly | Return the existing generation job for the stable `request_key` instead of inserting duplicates. |
 | SQL JSON marshal/unmarshal fails | Return the error; do not silently drop prompt fields. |
 
 #### 5. Good/Base/Bad Cases
 
 - Good: `POST /storyboard-shots/{shotId}/prompt-pack:generate` stores an `sd2_fast` prompt pack with time slices, reference bindings, and provider params.
+- Good: `POST /storyboard-shots/{shotId}/videos:generate` returns `202` with a queued `generation_job` derived from the stored prompt pack.
 - Base: no locked assets still produces a text-to-video prompt pack with empty `reference_bindings`.
-- Bad: handler constructs SQL or calls Ark video generation synchronously while serving prompt-pack generation.
+- Bad: handler constructs SQL, auto-generates missing prompt packs implicitly, or calls Ark video generation synchronously while serving prompt/video routes.
 
 #### 6. Tests Required
 
 - HTTP route test should cover the seed story analysis → story map → asset lock → storyboard → prompt pack chain.
 - Assert generated prompt pack has `preset = "sd2_fast"`, `task_type = "image_to_video"` when references exist, and `@image2` when at least two assets are locked.
+- Assert `POST /videos:generate` returns `202`, provider `seedance`, task type matching the prompt pack, and a queued generation job.
 - Provider payload tests should cover request normalization separately in `internal/provider`; repository tests can remain memory-backed until PostgreSQL integration tests are introduced.
 - OpenAPI, `db/queries/*.sql`, Studio DTOs/client/hooks, and README examples must change in the same slice as route changes.
 
@@ -212,11 +221,11 @@ task, err := seedanceClient.GenerateVideo(r.Context(), prompt)
 ##### Correct
 
 ```go
-pack, err := api.productionService.GenerateShotPromptPack(r.Context(), shotID)
-writeJSON(w, http.StatusCreated, Envelope{"prompt_pack": shotPromptPackDTO(pack)})
+job, err := api.productionService.StartShotVideoGeneration(r.Context(), shotID)
+writeJSON(w, http.StatusAccepted, Envelope{"generation_job": generationJobDTO(job)})
 ```
 
-Prompt pack generation is a fast source-of-truth write; actual video submission belongs in asynchronous generation job execution.
+Prompt pack generation is a fast source-of-truth write; video generation routes only enqueue durable jobs, and actual provider submission belongs in asynchronous generation job execution.
 
 ---
 

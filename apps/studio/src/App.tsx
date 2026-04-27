@@ -34,6 +34,7 @@ import {
   useStoryAnalyses,
   useStoryboardShots,
   useStoryMap,
+  useStartShotVideoGeneration,
   useStartEpisodeExport,
   useStartStoryAnalysis,
 } from './api/hooks'
@@ -574,6 +575,7 @@ function ShotCard({ shot }: { shot: StoryboardShot }) {
 }
 
 function PromptPackPreview({ pack }: { pack: ShotPromptPack }) {
+  const startVideoGeneration = useStartShotVideoGeneration()
   const copyPrompt = () => {
     void navigator.clipboard.writeText(pack.direct_prompt)
   }
@@ -596,6 +598,15 @@ function PromptPackPreview({ pack }: { pack: ShotPromptPack }) {
       <button className="secondary-action" onClick={copyPrompt} type="button">
         Copy prompt
       </button>
+      <button
+        className="secondary-action"
+        disabled={startVideoGeneration.isPending}
+        onClick={() => startVideoGeneration.mutate(pack.shot_id)}
+        type="button"
+      >
+        Queue SD2 video
+      </button>
+      {startVideoGeneration.data ? <small>Job {startVideoGeneration.data.status}</small> : null}
     </div>
   )
 }

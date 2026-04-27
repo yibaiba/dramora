@@ -19,6 +19,7 @@ import {
   seedEpisodeAssets,
   seedStoryboardShots,
   seedStoryMap,
+  startShotVideoGeneration,
   startEpisodeExport,
   startStoryAnalysis,
 } from './client'
@@ -142,6 +143,14 @@ export function useGenerateShotPromptPack() {
   return useMutation({
     mutationFn: (shotId: string) => generateShotPromptPack(shotId),
     onSuccess: (pack) => queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] }),
+  })
+}
+
+export function useStartShotVideoGeneration() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (shotId: string) => startShotVideoGeneration(shotId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['generation-jobs'] }),
   })
 }
 

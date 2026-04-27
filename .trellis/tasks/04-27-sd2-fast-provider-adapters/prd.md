@@ -134,3 +134,4 @@ Recommended MVP sequence:
 - Added `sd2_fast` preset mapped to `doubao-seedance-1-0-pro-fast-251015`.
 - Added Seedance adapter request builder and hybrid fake/Ark submission boundary.
 - Studio shot cards can generate, display, and copy SD2 prompt packs.
+- Added `POST /api/v1/storyboard-shots/{shotId}/videos:generate` to queue a generation job from the current prompt pack.

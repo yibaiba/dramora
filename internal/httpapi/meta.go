@@ -13,6 +13,7 @@ func capabilitiesHandler(version string) http.HandlerFunc {
 				"generation_jobs",
 				"sd2_fast_prompt_packs",
 				"seedance_image_to_video",
+				"shot_video_generation_jobs",
 				"timeline",
 				"sse",
 			},

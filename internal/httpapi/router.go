@@ -50,6 +50,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/episodes/{episodeId}/storyboard-shots:seed", api.seedStoryboardShots)
 		r.Get("/storyboard-shots/{shotId}/prompt-pack", api.getShotPromptPack)
 		r.Post("/storyboard-shots/{shotId}/prompt-pack:generate", api.generateShotPromptPack)
+		r.Post("/storyboard-shots/{shotId}/videos:generate", api.startShotVideoGeneration)
 		r.Get("/episodes/{episodeId}/assets", api.listEpisodeAssets)
 		r.Post("/episodes/{episodeId}/assets:seed", api.seedEpisodeAssets)
 		r.Post("/episodes/{episodeId}/timeline", api.saveEpisodeTimeline)

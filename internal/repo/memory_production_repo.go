@@ -13,6 +13,7 @@ type MemoryProductionRepository struct {
 	mu        sync.RWMutex
 	runs      map[string]domain.WorkflowRun
 	jobs      map[string]domain.GenerationJob
+	jobKeys   map[string]string
 	analyses  map[string]domain.StoryAnalysis
 	timelines map[string]domain.Timeline
 	chars     map[string]domain.Character
@@ -28,6 +29,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 	return &MemoryProductionRepository{
 		runs:      make(map[string]domain.WorkflowRun),
 		jobs:      make(map[string]domain.GenerationJob),
+		jobKeys:   make(map[string]string),
 		analyses:  make(map[string]domain.StoryAnalysis),
 		timelines: make(map[string]domain.Timeline),
 		chars:     make(map[string]domain.Character),
@@ -70,6 +72,7 @@ func (r *MemoryProductionRepository) CreateStoryAnalysisRun(
 	}
 	r.runs[run.ID] = run
 	r.jobs[job.ID] = job
+	r.jobKeys[params.RequestKey] = job.ID
 	return StoryAnalysisRun{WorkflowRun: run, GenerationJob: job}, nil
 }
 
@@ -140,6 +143,27 @@ func (r *MemoryProductionRepository) GetGenerationJob(
 	if !ok {
 		return domain.GenerationJob{}, domain.ErrNotFound
 	}
+	return job, nil
+}
+
+func (r *MemoryProductionRepository) CreateGenerationJob(
+	_ context.Context,
+	params CreateGenerationJobParams,
+) (domain.GenerationJob, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if existingID := r.jobKeys[params.RequestKey]; existingID != "" {
+		return r.jobs[existingID], nil
+	}
+	now := time.Now().UTC()
+	job := domain.GenerationJob{
+		ID: params.ID, ProjectID: params.ProjectID, EpisodeID: params.EpisodeID,
+		WorkflowRunID: params.WorkflowRunID, Provider: params.Provider, Model: params.Model,
+		TaskType: params.TaskType, Status: params.Status, CreatedAt: now, UpdatedAt: now,
+	}
+	r.jobs[job.ID] = job
+	r.jobKeys[params.RequestKey] = job.ID
 	return job, nil
 }
 

@@ -275,6 +275,43 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	if len(promptPayload.PromptPack.ReferenceBindings) < 2 || promptPayload.PromptPack.ReferenceBindings[1].Token != "@image2" {
 		t.Fatalf("expected image references including @image2, got %+v", promptPayload.PromptPack.ReferenceBindings)
 	}
+	videoResp := httptest.NewRecorder()
+	videoReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+"/videos:generate",
+		nil,
+	)
+	router.ServeHTTP(videoResp, videoReq)
+	if videoResp.Code != http.StatusAccepted {
+		t.Fatalf("expected video generation 202, got %d: %s", videoResp.Code, videoResp.Body.String())
+	}
+	var videoPayload struct {
+		GenerationJob generationJobResponse `json:"generation_job"`
+	}
+	decodeBody(t, videoResp, &videoPayload)
+	if videoPayload.GenerationJob.Provider != "seedance" {
+		t.Fatalf("expected seedance provider, got %q", videoPayload.GenerationJob.Provider)
+	}
+	if videoPayload.GenerationJob.TaskType != "image_to_video" {
+		t.Fatalf("expected image-to-video job, got %q", videoPayload.GenerationJob.TaskType)
+	}
+	duplicateVideoResp := httptest.NewRecorder()
+	duplicateVideoReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+"/videos:generate",
+		nil,
+	)
+	router.ServeHTTP(duplicateVideoResp, duplicateVideoReq)
+	if duplicateVideoResp.Code != http.StatusAccepted {
+		t.Fatalf("expected duplicate video generation 202, got %d: %s", duplicateVideoResp.Code, duplicateVideoResp.Body.String())
+	}
+	var duplicateVideoPayload struct {
+		GenerationJob generationJobResponse `json:"generation_job"`
+	}
+	decodeBody(t, duplicateVideoResp, &duplicateVideoPayload)
+	if duplicateVideoPayload.GenerationJob.ID != videoPayload.GenerationJob.ID {
+		t.Fatalf("expected idempotent video job %q, got %q", videoPayload.GenerationJob.ID, duplicateVideoPayload.GenerationJob.ID)
+	}
 
 	timelineResp := httptest.NewRecorder()
 	timelineReq := httptest.NewRequest(

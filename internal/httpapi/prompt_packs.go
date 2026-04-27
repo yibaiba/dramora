@@ -23,3 +23,12 @@ func (api *api) getShotPromptPack(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, Envelope{"prompt_pack": shotPromptPackDTO(pack)})
 }
+
+func (api *api) startShotVideoGeneration(w http.ResponseWriter, r *http.Request) {
+	job, err := api.productionService.StartShotVideoGeneration(r.Context(), chi.URLParam(r, "shotId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, Envelope{"generation_job": generationJobDTO(job)})
+}

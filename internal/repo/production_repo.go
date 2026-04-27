@@ -16,6 +16,7 @@ type ProductionRepository interface {
 	ListGenerationJobs(ctx context.Context) ([]domain.GenerationJob, error)
 	ListGenerationJobsByStatus(ctx context.Context, status domain.GenerationJobStatus, limit int) ([]domain.GenerationJob, error)
 	GetGenerationJob(ctx context.Context, generationJobID string) (domain.GenerationJob, error)
+	CreateGenerationJob(ctx context.Context, params CreateGenerationJobParams) (domain.GenerationJob, error)
 	AdvanceGenerationJobStatus(ctx context.Context, params AdvanceGenerationJobStatusParams) (domain.GenerationJob, error)
 	CompleteStoryAnalysisJob(ctx context.Context, params CompleteStoryAnalysisJobParams) (StoryAnalysisCompletion, error)
 	CreateStoryAnalysis(ctx context.Context, params CreateStoryAnalysisParams) (domain.StoryAnalysis, error)
@@ -52,6 +53,21 @@ type CreateStoryAnalysisRunParams struct {
 type StoryAnalysisRun struct {
 	WorkflowRun   domain.WorkflowRun
 	GenerationJob domain.GenerationJob
+}
+
+type CreateGenerationJobParams struct {
+	ID            string
+	ProjectID     string
+	EpisodeID     string
+	WorkflowRunID string
+	RequestKey    string
+	Provider      string
+	Model         string
+	TaskType      string
+	Status        domain.GenerationJobStatus
+	Prompt        string
+	Params        map[string]any
+	EventMessage  string
 }
 
 type AdvanceGenerationJobStatusParams struct {

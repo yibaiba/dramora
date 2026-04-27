@@ -75,6 +75,7 @@ curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/storyboard-sh
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/storyboard-shots
 curl -sS -X POST http://127.0.0.1:8080/api/v1/storyboard-shots/{shotId}/prompt-pack:generate
 curl -sS http://127.0.0.1:8080/api/v1/storyboard-shots/{shotId}/prompt-pack
+curl -sS -X POST http://127.0.0.1:8080/api/v1/storyboard-shots/{shotId}/videos:generate
 curl -sS -X POST http://127.0.0.1:8080/api/v1/episodes/{episodeId}/assets:seed
 curl -sS http://127.0.0.1:8080/api/v1/episodes/{episodeId}/assets
 curl -sS -X POST http://127.0.0.1:8080/api/v1/assets/{assetId}:lock

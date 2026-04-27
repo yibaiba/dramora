@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/jobs"
 	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/repo"
 )
@@ -46,6 +47,62 @@ func (s *ProductionService) GetShotPromptPack(
 		return domain.ShotPromptPack{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
 	}
 	return s.production.GetShotPromptPack(ctx, shotID)
+}
+
+func (s *ProductionService) StartShotVideoGeneration(
+	ctx context.Context,
+	shotID string,
+) (domain.GenerationJob, error) {
+	if strings.TrimSpace(shotID) == "" {
+		return domain.GenerationJob{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
+	}
+	pack, err := s.production.GetShotPromptPack(ctx, shotID)
+	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	jobID, err := domain.NewID()
+	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	job, err := s.production.CreateGenerationJob(ctx, repo.CreateGenerationJobParams{
+		ID: jobID, ProjectID: pack.ProjectID, EpisodeID: pack.EpisodeID,
+		RequestKey:   "shot-video:" + pack.ShotID + ":" + pack.Preset,
+		Provider:     pack.Provider,
+		Model:        pack.Model,
+		TaskType:     pack.TaskType,
+		Status:       domain.GenerationJobStatusQueued,
+		Prompt:       pack.DirectPrompt,
+		Params:       generationJobParamsFromPromptPack(pack),
+		EventMessage: "shot video generation queued",
+	})
+	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	if job.ID != jobID {
+		return job, nil
+	}
+	if err := s.jobClient.Enqueue(ctx, jobs.Job{
+		ID:   job.ID,
+		Kind: jobs.JobKindGenerationSubmit,
+		Payload: map[string]any{
+			"generation_job_id": job.ID,
+			"prompt_pack_id":    pack.ID,
+			"shot_id":           pack.ShotID,
+		},
+	}); err != nil {
+		return domain.GenerationJob{}, err
+	}
+	return job, nil
+}
+
+func generationJobParamsFromPromptPack(pack domain.ShotPromptPack) map[string]any {
+	params := clonePromptParams(pack.Params)
+	params["prompt_pack_id"] = pack.ID
+	params["shot_id"] = pack.ShotID
+	params["preset"] = pack.Preset
+	params["reference_bindings"] = pack.ReferenceBindings
+	params["time_slices"] = pack.TimeSlices
+	return params
 }
 
 func buildShotPromptPackParams(
@@ -182,4 +239,15 @@ func nonEmptyStrings(values []string) []string {
 		}
 	}
 	return filtered
+}
+
+func clonePromptParams(values map[string]any) map[string]any {
+	if values == nil {
+		return map[string]any{}
+	}
+	cloned := make(map[string]any, len(values)+4)
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
