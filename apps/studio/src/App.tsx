@@ -2,1310 +2,1099 @@ import {
   Activity,
   BookOpenText,
   Boxes,
-  ShieldCheck,
-  CircleDollarSign,
+  ChevronDown,
   Clapperboard,
+  Download,
+  Eye,
   Film,
+  Home,
   Layers3,
   Library,
-  ListChecks,
+  ListFilter,
+  Lock,
+  Maximize2,
+  Music2,
   Play,
   Plus,
   Radio,
+  Scissors,
+  Search,
+  Settings,
   Sparkles,
-  WandSparkles,
+  Subtitles,
+  UserRound,
+  Zap,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import type { FormEvent } from 'react'
 import {
+  useApproveApprovalGate,
   useCreateEpisode,
   useCreateProject,
+  useEpisodeApprovalGates,
+  useEpisodeAssets,
+  useEpisodes,
   useEpisodeTimeline,
   useExport,
-  useApproveApprovalGate,
-  useEpisodeAssets,
-  useEpisodeApprovalGates,
-  useEpisodes,
-  useGenerationJobs,
-  useLockAsset,
+  useGenerateShotPromptPack,
   useProjects,
   useSaveEpisodeTimeline,
-  useRequestApprovalChanges,
-  useGenerateShotPromptPack,
   useSeedApprovalGates,
   useSeedEpisodeAssets,
   useSeedStoryboardShots,
   useSeedStoryMap,
   useShotPromptPack,
+  useStartEpisodeExport,
+  useStartShotVideoGeneration,
+  useStartStoryAnalysis,
   useStoryAnalyses,
   useStoryboardShots,
   useStoryMap,
-  useStartShotVideoGeneration,
-  useStartEpisodeExport,
-  useStartStoryAnalysis,
 } from './api/hooks'
 import { useStudioStore } from './state/studioStore'
 import type {
-  Episode,
   ApprovalGate,
   Asset,
-  Export,
-  GenerationJob,
-  GenerationJobStatus,
+  Episode,
   Project,
   SaveTimelineRequest,
   ShotPromptPack,
-  StoryAnalysis,
-  StoryMap,
-  StoryMapItem,
   StoryboardShot,
-  Timeline,
 } from './api/types'
 
-const productionSteps = [
-  { name: 'Producer', taskType: 'production_plan', detail: '目标、预算、审批点' },
-  { name: 'Story Analyst', taskType: 'story_analysis', detail: '故事分析与角色/场景/道具抽取' },
-  { name: 'Character Designer', taskType: 'character_design', detail: '人物卡、三视图、表情与姿势' },
-  { name: 'Scene Designer', taskType: 'scene_design', detail: '场景卡、氛围、光线与概念图' },
-  { name: 'Storyboard', taskType: 'storyboard', detail: '镜头卡、首尾帧与 prompt pack' },
-  { name: 'Continuity Supervisor', taskType: 'continuity_review', detail: '人物、服装、场景、道具连续性检查' },
+type StudioShot = {
+  code: string
+  description: string
+  durationMS: number
+  id?: string
+  key: string
+  progress: number
+  prompt: string
+  sceneCode: string
+  sceneName: string
+  status: 'prompt_ready' | 'generating' | 'queued' | 'approved' | 'draft'
+  tags: string[]
+  thumbnail: string
+  title: string
+}
+
+type InspectorTab = 'details' | 'prompt' | 'references' | 'notes'
+type ViewMode = 'grid' | 'compact'
+
+const navItems = [
+  { icon: Home, label: '工作台' },
+  { icon: BookOpenText, label: '故事中枢' },
+  { icon: UserRound, label: '角色资产' },
+  { icon: Layers3, label: '场景图谱' },
+  { icon: Boxes, label: '分镜台' },
+  { icon: Activity, label: '生成队列' },
+  { icon: Film, label: '剪辑时间线' },
+  { icon: Download, label: '导出中心' },
 ]
 
-type AgentStepStatus = 'ready' | 'queued' | 'running' | 'succeeded' | 'waiting' | 'blocked'
-
-type AgentStep = {
-  detail: string
-  jobCount: number
-  latestJob?: GenerationJob
-  name: string
-  status: AgentStepStatus
-  statusLabel: string
-}
-
-type TimelineDraft = {
-  duration_ms: number
-  tracks: TimelineDraftTrack[]
-}
-
-type TimelineDraftTrack = {
-  id: string
-  kind: string
-  name: string
-  position: number
-  clips: TimelineDraftClip[]
-}
-
-type TimelineDraftClip = {
-  id: string
-  asset_id?: string
-  kind: string
-  start_ms: number
-  duration_ms: number
-  trim_start_ms: number
-}
-
-const activeGenerationStatuses: GenerationJobStatus[] = [
-  'queued',
-  'submitting',
-  'submitted',
-  'polling',
-  'downloading',
-  'postprocessing',
+const demoShots: StudioShot[] = [
+  {
+    code: '01',
+    description: '开场建立镜，交代天门与主角位置。',
+    durationMS: 4200,
+    key: 'demo-01',
+    progress: 100,
+    prompt: '航拍视角，云海翻涌，远处天门洞开，金色朝阳洒落，少年独立山崖，衣袂飘扬，史诗感，国漫风格，细节丰富，光影戏剧化。',
+    sceneCode: 'SC01',
+    sceneName: '云海初现',
+    status: 'prompt_ready',
+    tags: ['云澜', '白璃', '长老'],
+    thumbnail: 'thumb-cloud',
+    title: '天门洞开',
+  },
+  {
+    code: '02',
+    description: '主角中近景，承接立誓情绪。',
+    durationMS: 3600,
+    key: 'demo-02',
+    progress: 72,
+    prompt: '中近景，少年云澜回头凝视远方，风吹乱发，眼神坚定，背景云雾和宗门剪影，电影级景深，稳定角色一致性。',
+    sceneCode: 'SC01',
+    sceneName: '少年立志',
+    status: 'generating',
+    tags: ['云澜'],
+    thumbnail: 'thumb-hero',
+    title: '少年立誓',
+  },
+  {
+    code: '03',
+    description: '女主登场镜，强调角色辨识度。',
+    durationMS: 4800,
+    key: 'demo-03',
+    progress: 0,
+    prompt: '白璃从桃花雨中出现，银白长发，轻甲飘带，镜头缓慢推进，柔光，高级国漫角色设计，保持面部一致性。',
+    sceneCode: 'SC01',
+    sceneName: '白璃登场',
+    status: 'queued',
+    tags: ['白璃'],
+    thumbnail: 'thumb-muse',
+    title: '白璃回眸',
+  },
+  {
+    code: '04',
+    description: '宗门环境大全景，用于世界观铺垫。',
+    durationMS: 5500,
+    key: 'demo-04',
+    progress: 100,
+    prompt: '宗门全景，云端建筑群漂浮在山巅，仙鹤穿过云层，大远景，恢弘构图，金紫色晚霞，电影级环境细节。',
+    sceneCode: 'SC02',
+    sceneName: '宗门全景',
+    status: 'prompt_ready',
+    tags: ['云澜', '长老', '弟子'],
+    thumbnail: 'thumb-temple',
+    title: '云端宗门',
+  },
+  {
+    code: '05',
+    description: '试炼动作镜，突出剑光和节奏。',
+    durationMS: 3900,
+    key: 'demo-05',
+    progress: 45,
+    prompt: '试炼场上剑光爆发，少年拔剑迎敌，蓝紫能量划破画面，快速推轨镜头，动势强烈，角色动作清晰。',
+    sceneCode: 'SC02',
+    sceneName: '试炼开始',
+    status: 'generating',
+    tags: ['云澜', '对手'],
+    thumbnail: 'thumb-battle',
+    title: '剑光破云',
+  },
+  {
+    code: '06',
+    description: '威胁登场镜，制造压迫感和悬念。',
+    durationMS: 5100,
+    key: 'demo-06',
+    progress: 0,
+    prompt: '黑色异兽从云雾中压境，巨大龙翼遮天，火光映照山门，低角度仰拍，压迫感，暗黑史诗氛围。',
+    sceneCode: 'SC03',
+    sceneName: '异兽现世',
+    status: 'queued',
+    tags: ['异兽'],
+    thumbnail: 'thumb-beast',
+    title: '黑龙压境',
+  },
 ]
 
-const blockedGenerationStatuses: GenerationJobStatus[] = ['blocked', 'failed', 'timed_out', 'canceling', 'canceled']
-
-const storyboardColumns = [
-  { title: 'Planned', count: 4, tone: 'blue' },
-  { title: 'Prompt ready', count: 0, tone: 'violet' },
-  { title: 'Generating', count: 0, tone: 'orange' },
-  { title: 'Review', count: 0, tone: 'green' },
+const demoReferences = [
+  { label: '@image1', thumbnail: 'thumb-cloud' },
+  { label: '@image2', thumbnail: 'thumb-hero' },
+  { label: '@image3', thumbnail: 'thumb-temple' },
+  { label: '@image4', thumbnail: 'thumb-muse' },
 ]
+
+function filterShots(shots: StudioShot[], query: string): StudioShot[] {
+  const keyword = query.trim().toLowerCase()
+  if (!keyword) return shots
+  return shots.filter((shot) =>
+    [
+      shot.code,
+      shot.description,
+      shot.prompt,
+      shot.sceneCode,
+      shot.sceneName,
+      shot.title,
+      ...shot.tags,
+    ].some((value) => value.toLowerCase().includes(keyword)),
+  )
+}
+
+function createLocalShot(position: number): StudioShot {
+  const code = position.toString().padStart(2, '0')
+  return {
+    code,
+    description: '本地草稿镜头，可先改写提示词和导演备注。',
+    durationMS: 4000,
+    key: `local-${Date.now()}`,
+    progress: 0,
+    prompt: '请在右侧提示词面板补充人物、场景、镜头运动、光影和风格约束。',
+    sceneCode: `SC${Math.max(1, Math.ceil(position / 3)).toString().padStart(2, '0')}`,
+    sceneName: '待定镜头',
+    status: 'draft',
+    tags: ['草稿'],
+    thumbnail: thumbnailByIndex(position),
+    title: `草稿镜头 ${code}`,
+  }
+}
 
 function App() {
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
-  const { selectedProjectId, selectProject, logEvent } = useStudioStore()
-  const selectedProject = useMemo(
-    () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
-    [projects, selectedProjectId],
+  const { selectedProjectId, selectProject } = useStudioStore()
+  const selectedProject = useMemo(() => projects.find((project) => project.id === selectedProjectId) ?? projects[0], [projects, selectedProjectId])
+  const { data: episodes = [] } = useEpisodes(selectedProject?.id)
+  const activeEpisode = episodes[0]
+  const { data: storyboardShots = [] } = useStoryboardShots(activeEpisode?.id)
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('details')
+  const [localShots, setLocalShots] = useState<StudioShot[]>([])
+  const [notes, setNotes] = useState<Record<string, string>>({})
+  const [onlyNeedsWork, setOnlyNeedsWork] = useState(false)
+  const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedShotKey, setSelectedShotKey] = useState<string>()
+  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const displayShots = useMemo(() => [...mapDisplayShots(storyboardShots), ...localShots], [localShots, storyboardShots])
+  const filteredShots = useMemo(() => {
+    const searchedShots = filterShots(displayShots, searchQuery)
+    if (!onlyNeedsWork) return searchedShots
+    return searchedShots.filter((shot) => ['draft', 'generating', 'queued'].includes(shot.status))
+  }, [displayShots, onlyNeedsWork, searchQuery])
+  const selectedShot = useMemo(
+    () => displayShots.find((shot) => shot.key === selectedShotKey) ?? filteredShots[0] ?? displayShots[0] ?? demoShots[0],
+    [displayShots, filteredShots, selectedShotKey],
   )
-  const { data: selectedEpisodes = [] } = useEpisodes(selectedProject?.id)
-  const activeEpisode = selectedEpisodes[0]
+  const selectRelativeShot = (offset: number) => {
+    const shotList = filteredShots.length > 0 ? filteredShots : displayShots
+    if (shotList.length === 0) return
+    const currentIndex = Math.max(0, shotList.findIndex((shot) => shot.key === selectedShot.key))
+    const nextIndex = (currentIndex + offset + shotList.length) % shotList.length
+    setSelectedShotKey(shotList[nextIndex].key)
+  }
+  const addLocalShot = () => {
+    const shot = createLocalShot(displayShots.length + 1)
+    setLocalShots((shots) => [...shots, shot])
+    setSelectedShotKey(shot.key)
+    setInspectorTab('prompt')
+  }
 
   useEffect(() => {
-    if (!selectedProjectId && selectedProject) {
-      selectProject(selectedProject.id)
-    }
+    if (!selectedProjectId && selectedProject) selectProject(selectedProject.id)
   }, [selectProject, selectedProject, selectedProjectId])
 
   return (
-    <main className="studio-shell">
-      <Sidebar />
-      <section className="studio-main" aria-label="Manmu Studio workspace">
-        <StudioHeader project={selectedProject} />
-        <div className="workspace-grid">
-          <ProjectPanel
-            projects={projects}
-            selectedProjectId={selectedProject?.id}
-            isLoading={projectsLoading}
-            onSelect={selectProject}
-          />
-          <EpisodeCommandCenter project={selectedProject} episodes={selectedEpisodes} onLog={logEvent} />
-          <StoryAnalysisPanel activeEpisode={activeEpisode} project={selectedProject} />
-          <AgentBoard project={selectedProject} />
-          <ApprovalGatesPanel activeEpisode={activeEpisode} />
-          <StoryboardKanban activeEpisode={activeEpisode} />
-          <AssetLibrary activeEpisode={activeEpisode} />
-          <TimelineEditor activeEpisode={activeEpisode} />
-        </div>
-      </section>
-      <JobsRail />
+    <main className="cinema-shell">
+      <StudioSidebar
+        isLoading={projectsLoading}
+        onSelectProject={selectProject}
+        projects={projects}
+        selectedProject={selectedProject}
+      />
+      <StudioStage
+        activeEpisode={activeEpisode}
+        displayShots={filteredShots}
+        episodes={episodes}
+        onAddLocalShot={addLocalShot}
+        onSearchChange={setSearchQuery}
+        onSelectShot={setSelectedShotKey}
+        onToggleNeedsWork={() => setOnlyNeedsWork((value) => !value)}
+        onViewModeChange={setViewMode}
+        onlyNeedsWork={onlyNeedsWork}
+        project={selectedProject}
+        searchQuery={searchQuery}
+        selectedShotKey={selectedShot.key}
+        viewMode={viewMode}
+      />
+      <ShotInspector
+        activeEpisode={activeEpisode}
+        displayShots={displayShots}
+        inspectorTab={inspectorTab}
+        note={notes[selectedShot.key] ?? ''}
+        onInspectorTabChange={setInspectorTab}
+        onNoteChange={(value) => setNotes((current) => ({ ...current, [selectedShot.key]: value }))}
+        onSelectNext={() => selectRelativeShot(1)}
+        onSelectPrevious={() => selectRelativeShot(-1)}
+        onPromptDraftChange={(value) => setPromptDrafts((current) => ({ ...current, [selectedShot.key]: value }))}
+        project={selectedProject}
+        promptDraft={promptDrafts[selectedShot.key]}
+        selectedShot={selectedShot}
+      />
     </main>
   )
 }
 
-function Sidebar() {
-  const items = [
-    { label: 'Projects', icon: Layers3 },
-    { label: 'Command', icon: Clapperboard },
-    { label: 'Agents', icon: Sparkles },
-    { label: 'Assets', icon: Library },
-    { label: 'Timeline', icon: Film },
-  ]
+function StudioSidebar({
+  isLoading,
+  onSelectProject,
+  projects,
+  selectedProject,
+}: {
+  isLoading: boolean
+  onSelectProject: (projectId: string) => void
+  projects: Project[]
+  selectedProject?: Project
+}) {
+  const createProject = useCreateProject()
+  const [projectName, setProjectName] = useState('')
+  const submitProject = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    createProject.mutate(
+      { description: 'AI 漫剧生产项目', name: projectName },
+      { onSuccess: (project) => onSelectProject(project.id) },
+    )
+    setProjectName('')
+  }
 
   return (
-    <aside className="sidebar" aria-label="Primary navigation">
-      <div className="brand-mark">
-        <WandSparkles aria-hidden="true" />
+    <aside className="cinema-sidebar" aria-label="漫幕主导航">
+      <div className="manmu-logo">
+        <span className="logo-glyph">M</span>
         <div>
-          <strong>漫幕</strong>
-          <span>AI Manju Studio</span>
+          <strong>漫幕 Manmu</strong>
+          <small>AI 漫剧工场</small>
         </div>
       </div>
-      <nav className="nav-list">
-        {items.map((item, index) => (
-          <button className={index === 0 ? 'nav-item active' : 'nav-item'} key={item.label} type="button">
+      <ProjectSwitcher isLoading={isLoading} onSelect={onSelectProject} projects={projects} selectedProject={selectedProject} />
+      <nav className="cinema-nav">
+        {navItems.map((item, index) => (
+          <button className={index === 4 ? 'cinema-nav-item active' : 'cinema-nav-item'} key={item.label} type="button">
             <item.icon aria-hidden="true" />
             <span>{item.label}</span>
           </button>
         ))}
       </nav>
-      <div className="sidebar-card">
-        <CircleDollarSign aria-hidden="true" />
-        <span>Budget guard</span>
-        <strong>¥0.00 / MVP</strong>
+      <form className="quick-create" onSubmit={submitProject}>
+        <label>
+          <span>新建项目</span>
+          <input
+            minLength={1}
+            onChange={(event) => setProjectName(event.target.value)}
+            placeholder="九霄之上"
+            required
+            value={projectName}
+          />
+        </label>
+        <button disabled={createProject.isPending} type="submit">
+          <Plus aria-hidden="true" />
+          创建项目
+        </button>
+      </form>
+      <div className="owner-card">
+        <div className="avatar-orb">LY</div>
+        <div>
+          <strong>Lin Yifei</strong>
+          <small>主理人</small>
+        </div>
+        <Settings aria-hidden="true" />
       </div>
     </aside>
   )
 }
 
-function StudioHeader({ project }: { project?: Project }) {
+function ProjectSwitcher({
+  isLoading,
+  onSelect,
+  projects,
+  selectedProject,
+}: {
+  isLoading: boolean
+  onSelect: (projectId: string) => void
+  projects: Project[]
+  selectedProject?: Project
+}) {
   return (
-    <header className="studio-header">
-      <div>
-        <p className="eyebrow">AI generated manju production workspace</p>
-        <h1>{project ? project.name : 'Create your first Manmu project'}</h1>
-        <p className="header-copy">
-          Story analysis, character and scene maps, agent approvals, shot generation, timeline export.
-        </p>
+    <section className="project-switcher" aria-busy={isLoading} aria-label="项目切换">
+      <span className="section-kicker">当前项目</span>
+      <button className="project-current" disabled={projects.length === 0} type="button">
+        <span className="project-cover thumb-cloud" aria-hidden="true" />
+        <span>
+          <strong>{selectedProject?.name ?? '新建一个漫剧项目'}</strong>
+          <small>{selectedProject?.description || '九霄之上 · 天门试炼'}</small>
+        </span>
+        <ChevronDown aria-hidden="true" />
+      </button>
+      {projects.length > 1 ? (
+        <div className="project-mini-list">
+          {projects.slice(0, 4).map((project) => (
+            <button className={project.id === selectedProject?.id ? 'mini-project active' : 'mini-project'} key={project.id} onClick={() => onSelect(project.id)} type="button">
+              {project.name}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
+function StudioStage({
+  activeEpisode,
+  displayShots,
+  episodes,
+  onAddLocalShot,
+  onSearchChange,
+  onSelectShot,
+  onToggleNeedsWork,
+  onViewModeChange,
+  onlyNeedsWork,
+  project,
+  searchQuery,
+  selectedShotKey,
+  viewMode,
+}: {
+  activeEpisode?: Episode
+  displayShots: StudioShot[]
+  episodes: Episode[]
+  onAddLocalShot: () => void
+  onSearchChange: (query: string) => void
+  onSelectShot: (shotKey: string) => void
+  onToggleNeedsWork: () => void
+  onViewModeChange: (mode: ViewMode) => void
+  onlyNeedsWork: boolean
+  project?: Project
+  searchQuery: string
+  selectedShotKey: string
+  viewMode: ViewMode
+}) {
+  return (
+    <section className="studio-stage" aria-label="分镜与剪辑工作区">
+      <StudioTopBar
+        activeEpisode={activeEpisode}
+        episodes={episodes}
+        onSearchChange={onSearchChange}
+        project={project}
+        searchQuery={searchQuery}
+      />
+      <StoryboardWorkspace
+        activeEpisode={activeEpisode}
+        displayShots={displayShots}
+        onAddLocalShot={onAddLocalShot}
+        onSelectShot={onSelectShot}
+        onToggleNeedsWork={onToggleNeedsWork}
+        onViewModeChange={onViewModeChange}
+        onlyNeedsWork={onlyNeedsWork}
+        project={project}
+        selectedShotKey={selectedShotKey}
+        viewMode={viewMode}
+      />
+      <TimelineDock activeEpisode={activeEpisode} displayShots={displayShots} onAddLocalShot={onAddLocalShot} />
+    </section>
+  )
+}
+
+function StudioTopBar({
+  activeEpisode,
+  episodes,
+  onSearchChange,
+  project,
+  searchQuery,
+}: {
+  activeEpisode?: Episode
+  episodes: Episode[]
+  onSearchChange: (query: string) => void
+  project?: Project
+  searchQuery: string
+}) {
+  const createEpisode = useCreateEpisode(project?.id)
+  const seedStoryboard = useSeedStoryboardShots()
+  const [episodeTitle, setEpisodeTitle] = useState('')
+  const submitEpisode = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    createEpisode.mutate({ title: episodeTitle }, { onSuccess: () => setEpisodeTitle('') })
+  }
+
+  return (
+    <header className="studio-topbar">
+      <div className="title-cluster">
+        <strong>{project?.name ?? '九霄之上 · 天门试炼'}</strong>
+        <span className="pro-badge">Pro</span>
+        <small>刚刚自动保存</small>
       </div>
-      <div className="header-stats" aria-label="Production status">
-        <StatusCard label="Workflow" value="Fixed SOP" icon={ListChecks} />
-        <StatusCard label="Realtime" value="SSE ready" icon={Radio} />
-        <StatusCard label="Export" value="FFmpeg planned" icon={Play} />
+      <div className="episode-pill">
+        <Clapperboard aria-hidden="true" />
+        <span>{activeEpisode ? `第 ${activeEpisode.number.toString().padStart(2, '0')} 集 · ${activeEpisode.title}` : '还没有剧集'}</span>
+        <ChevronDown aria-hidden="true" />
+      </div>
+      <label className="search-box">
+        <Search aria-hidden="true" />
+        <span className="search-box-label">检索</span>
+        <input onChange={(event) => onSearchChange(event.target.value)} placeholder="搜索镜头、场景、角色编号..." value={searchQuery} />
+      </label>
+      <div className="ops-status">
+        <Radio aria-hidden="true" />
+        <span>模型状态</span>
+        <strong>全部可用</strong>
+      </div>
+      <div className="budget-card">
+        <span>本集预算</span>
+        <strong>¥ 12,450.00</strong>
+        <small>68%</small>
+      </div>
+      <button className="primary-generate" disabled={!activeEpisode || seedStoryboard.isPending} onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} type="button">
+        <Sparkles aria-hidden="true" />
+        生成下一镜
+      </button>
+      <form className="episode-create" onSubmit={submitEpisode}>
+        <label>
+          <span className="sr-only">剧集标题</span>
+          <input disabled={!project} onChange={(event) => setEpisodeTitle(event.target.value)} placeholder="新建剧集标题" required value={episodeTitle} />
+        </label>
+        <button disabled={!project || createEpisode.isPending} type="submit">
+          <Plus aria-hidden="true" />
+        </button>
+      </form>
+      <span className="episode-count">{episodes.length} 集</span>
+    </header>
+  )
+}
+
+function StoryboardWorkspace({
+  activeEpisode,
+  displayShots,
+  onAddLocalShot,
+  onSelectShot,
+  onToggleNeedsWork,
+  onViewModeChange,
+  onlyNeedsWork,
+  project,
+  selectedShotKey,
+  viewMode,
+}: {
+  activeEpisode?: Episode
+  displayShots: StudioShot[]
+  onAddLocalShot: () => void
+  onSelectShot: (shotKey: string) => void
+  onToggleNeedsWork: () => void
+  onViewModeChange: (mode: ViewMode) => void
+  onlyNeedsWork: boolean
+  project?: Project
+  selectedShotKey: string
+  viewMode: ViewMode
+}) {
+  const seedStoryMap = useSeedStoryMap()
+  const seedAssets = useSeedEpisodeAssets()
+  const seedStoryboard = useSeedStoryboardShots()
+  const startStoryAnalysis = useStartStoryAnalysis()
+  const { data: storyMap } = useStoryMap(activeEpisode?.id)
+  const { data: analyses = [] } = useStoryAnalyses(activeEpisode?.id)
+  const { data: gates = [] } = useEpisodeApprovalGates(activeEpisode?.id)
+
+  return (
+    <section className="storyboard-workspace" aria-labelledby="storyboard-board-title">
+      <div className="board-header">
+        <div>
+          <h1 id="storyboard-board-title">分镜看板</h1>
+          <span>{displayShots.length} 个镜头</span>
+        </div>
+        <div className="board-actions">
+          <ActionButton disabled={!activeEpisode || startStoryAnalysis.isPending} icon={BookOpenText} label={`故事解析 ${analyses.length}`} onClick={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || seedStoryMap.isPending} icon={Layers3} label={storyMap ? '资产图谱就绪' : '生成资产图谱'} onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || seedAssets.isPending} icon={Library} label="生成候选资产" onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)} />
+          <ActionButton disabled={!activeEpisode || seedStoryboard.isPending} icon={Boxes} label="生成分镜卡" onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)} />
+          <ActionButton icon={ListFilter} label={onlyNeedsWork ? `待处理 ${gates.length}` : `审批点 ${gates.length}`} onClick={onToggleNeedsWork} />
+          <div className="view-toggle" aria-label="切换分镜视图">
+            <button className={viewMode === 'grid' ? 'active' : ''} onClick={() => onViewModeChange('grid')} type="button">宫格</button>
+            <button className={viewMode === 'compact' ? 'active' : ''} onClick={() => onViewModeChange('compact')} type="button">紧凑</button>
+          </div>
+        </div>
+      </div>
+      {!project || !activeEpisode ? (
+        <div className="board-notice">
+          正在展示演示分镜。创建项目和剧集后，故事解析、资产图谱、生成队列和导出动作会接入当前剧集。
+        </div>
+      ) : null}
+      <ShotGrid
+        displayShots={displayShots}
+        onAddLocalShot={onAddLocalShot}
+        onSelectShot={onSelectShot}
+        selectedShotKey={selectedShotKey}
+        viewMode={viewMode}
+      />
+    </section>
+  )
+}
+
+function ActionButton({ disabled, icon: Icon, label, onClick }: { disabled?: boolean; icon: typeof Activity; label: string; onClick: () => void }) {
+  return (
+    <button className="ghost-action" disabled={disabled} onClick={onClick} type="button">
+      <Icon aria-hidden="true" />
+      {label}
+    </button>
+  )
+}
+
+function ShotGrid({
+  displayShots,
+  onAddLocalShot,
+  onSelectShot,
+  selectedShotKey,
+  viewMode,
+}: {
+  displayShots: StudioShot[]
+  onAddLocalShot: () => void
+  onSelectShot: (shotKey: string) => void
+  selectedShotKey: string
+  viewMode: ViewMode
+}) {
+  return (
+    <div className={viewMode === 'compact' ? 'shot-grid compact' : 'shot-grid'} aria-label="分镜镜头卡片">
+      {displayShots.map((shot) => (
+        <ShotCard key={shot.key} onSelect={() => onSelectShot(shot.key)} selected={shot.key === selectedShotKey} shot={shot} />
+      ))}
+      <button className="add-shot-card" onClick={onAddLocalShot} type="button">
+        <Plus aria-hidden="true" />
+        <span>添加草稿镜头</span>
+        <kbd>⌘ N</kbd>
+      </button>
+    </div>
+  )
+}
+
+function ShotCard({ onSelect, selected, shot }: { onSelect: () => void; selected: boolean; shot: StudioShot }) {
+  const generatePromptPack = useGenerateShotPromptPack()
+  const canGeneratePack = Boolean(shot.id)
+  return (
+    <article className={selected ? 'shot-card selected' : 'shot-card'} onClick={onSelect}>
+      <button className="shot-select-button" onClick={onSelect} type="button">
+        <span className="sr-only">选中第 {shot.code} 镜</span>
+      </button>
+      <div className={`shot-thumbnail ${shot.thumbnail}`} aria-hidden="true">
+        <span>{shot.code}</span>
+        <small>{formatDuration(shot.durationMS)}</small>
+      </div>
+      <div className="shot-card-body">
+        <div>
+          <span className="scene-chip">{shot.sceneCode}</span>
+          <strong>{shot.sceneName}</strong>
+        </div>
+        <p>{shot.description}</p>
+        <div className="tag-row">
+          {shot.tags.map((tag) => (
+            <span key={tag}>{tag}</span>
+          ))}
+        </div>
+      </div>
+      <div className="shot-status-row">
+        <span className={`status-dot ${shot.status}`}>{statusLabel(shot.status)}</span>
+        <small>{shot.progress}%</small>
+      </div>
+      <div className="progress-track">
+        <span style={{ width: `${shot.progress}%` }} />
+      </div>
+      <button className="shot-inline-action" disabled={!canGeneratePack || generatePromptPack.isPending} onClick={(event) => {
+        event.stopPropagation()
+        if (shot.id) generatePromptPack.mutate(shot.id)
+      }} type="button">
+        <Zap aria-hidden="true" />
+        生成提示词包
+      </button>
+    </article>
+  )
+}
+
+function ShotInspector({
+  activeEpisode,
+  displayShots,
+  inspectorTab,
+  note,
+  onInspectorTabChange,
+  onNoteChange,
+  onPromptDraftChange,
+  onSelectNext,
+  onSelectPrevious,
+  project,
+  promptDraft,
+  selectedShot,
+}: {
+  activeEpisode?: Episode
+  displayShots: StudioShot[]
+  inspectorTab: InspectorTab
+  note: string
+  onInspectorTabChange: (tab: InspectorTab) => void
+  onNoteChange: (value: string) => void
+  onPromptDraftChange: (value: string) => void
+  onSelectNext: () => void
+  onSelectPrevious: () => void
+  project?: Project
+  promptDraft?: string
+  selectedShot: StudioShot
+}) {
+  const { data: promptPack } = useShotPromptPack(selectedShot.id)
+  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
+  const { data: gates = [] } = useEpisodeApprovalGates(activeEpisode?.id)
+  const approveGate = useApproveApprovalGate()
+
+  return (
+    <aside className="shot-inspector" aria-label="当前镜头检查器">
+      <InspectorHeader onSelectNext={onSelectNext} onSelectPrevious={onSelectPrevious} selectedShot={selectedShot} />
+      <InspectorTabs activeTab={inspectorTab} onChange={onInspectorTabChange} />
+      {inspectorTab === 'details' ? <SceneTimingCard selectedShot={selectedShot} /> : null}
+      {inspectorTab === 'prompt' ? (
+        <PromptPackCard
+          onPromptDraftChange={onPromptDraftChange}
+          pack={promptPack}
+          promptDraft={promptDraft}
+          selectedShot={selectedShot}
+        />
+      ) : null}
+      {inspectorTab === 'references' ? <ReferenceTokens assets={assets} pack={promptPack} /> : null}
+      {inspectorTab === 'notes' ? <ShotNotes note={note} onNoteChange={onNoteChange} selectedShot={selectedShot} /> : null}
+      <ModelPresetCard />
+      <ApprovalStatusCard activeEpisode={activeEpisode} approveGate={approveGate} gates={gates} />
+      <InspectorActions activeEpisode={activeEpisode} disabled={!project || !selectedShot.id} displayShots={displayShots} selectedShot={selectedShot} />
+    </aside>
+  )
+}
+
+function InspectorHeader({
+  onSelectNext,
+  onSelectPrevious,
+  selectedShot,
+}: {
+  onSelectNext: () => void
+  onSelectPrevious: () => void
+  selectedShot: StudioShot
+}) {
+  return (
+    <header className="inspector-header">
+      <div>
+        <strong>第 {selectedShot.code} 镜</strong>
+        <span>已选中</span>
+      </div>
+      <div className="inspector-nav">
+        <button aria-label="上一镜" onClick={onSelectPrevious} type="button">‹</button>
+        <button aria-label="下一镜" onClick={onSelectNext} type="button">›</button>
       </div>
     </header>
   )
 }
 
-function StatusCard({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Activity }) {
-  return (
-    <div className="status-card">
-      <Icon aria-hidden="true" />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  )
-}
-
-function ProjectPanel({
-  projects,
-  selectedProjectId,
-  isLoading,
-  onSelect,
-}: {
-  projects: Project[]
-  selectedProjectId?: string
-  isLoading: boolean
-  onSelect: (projectId: string) => void
-}) {
-  const createProject = useCreateProject()
-  const [name, setName] = useState('')
-
-  const submitProject = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    createProject.mutate(
-      { name, description: 'AI manju production project' },
-      {
-        onSuccess: (project) => {
-          onSelect(project.id)
-          setName('')
-        },
-      },
-    )
-  }
-
-  return (
-    <section className="panel project-panel" aria-labelledby="project-panel-title">
-      <PanelTitle icon={Layers3} title="Project list" subtitle="Go API backed CRUD" id="project-panel-title" />
-      <form className="inline-form" onSubmit={submitProject}>
-        <label>
-          <span>Project name</span>
-          <input
-            minLength={1}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="例如：夜幕契约"
-            required
-            value={name}
-          />
-        </label>
-        <button disabled={createProject.isPending} type="submit">
-          <Plus aria-hidden="true" />
-          Create
-        </button>
-      </form>
-      <div className="project-list" aria-busy={isLoading}>
-        {projects.length === 0 ? (
-          <EmptyState title="No projects yet" text="Create a project to start story analysis and asset mapping." />
-        ) : (
-          projects.map((project) => (
-            <button
-              className={project.id === selectedProjectId ? 'project-row active' : 'project-row'}
-              key={project.id}
-              onClick={() => onSelect(project.id)}
-              type="button"
-            >
-              <span>{project.name}</span>
-              <small>{project.status}</small>
-            </button>
-          ))
-        )}
-      </div>
-    </section>
-  )
-}
-
-function EpisodeCommandCenter({
-  episodes,
-  onLog,
-  project,
-}: {
-  episodes: Episode[]
-  onLog: (message: string) => void
-  project?: Project
-}) {
-  const createEpisode = useCreateEpisode(project?.id)
-  const startStoryAnalysis = useStartStoryAnalysis()
-  const saveTimeline = useSaveEpisodeTimeline()
-  const [title, setTitle] = useState('')
-
-  const submitEpisode = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    if (!project) return
-    createEpisode.mutate(
-      { title },
-      {
-        onSuccess: (episode) => {
-          onLog(`Episode ${episode.number} created: ${episode.title}`)
-          setTitle('')
-        },
-      },
-    )
-  }
-
-  return (
-    <section className="panel command-panel" aria-labelledby="episode-command-title">
-      <PanelTitle icon={Clapperboard} title="Episode command center" subtitle="Script to production gates" id="episode-command-title" />
-      <div className="command-layout">
-        <form className="inline-form" onSubmit={submitEpisode}>
-          <label>
-            <span>Episode title</span>
-            <input disabled={!project} onChange={(event) => setTitle(event.target.value)} required value={title} />
-          </label>
-          <button disabled={!project || createEpisode.isPending} type="submit">
-            Add episode
-          </button>
-        </form>
-        <div className="episode-list">
-          {episodes.length === 0 ? (
-            <EmptyState title="No episodes" text="Add an episode to unlock story analysis and storyboard planning." />
-          ) : (
-            episodes.map((episode) => (
-              <div className="episode-row" key={episode.id}>
-                <strong>EP{episode.number.toString().padStart(2, '0')}</strong>
-                <span>{episode.title}</span>
-                <small>{episode.status}</small>
-                <button
-                  className="secondary-action"
-                  disabled={startStoryAnalysis.isPending}
-                  onClick={() =>
-                    startStoryAnalysis.mutate(episode.id, {
-                      onSuccess: (result) => {
-                        onLog(`Story analysis queued: ${result.generation_job.id.slice(0, 8)}`)
-                      },
-                    })
-                  }
-                  type="button"
-                >
-                  Start analysis
-                </button>
-                <button
-                  className="secondary-action"
-                  disabled={saveTimeline.isPending}
-                  onClick={() =>
-                    saveTimeline.mutate(
-                      { episodeId: episode.id, request: { duration_ms: 15_000 } },
-                      {
-                        onSuccess: (timeline) => {
-                          onLog(`Timeline saved v${timeline.version}: ${timeline.duration_ms}ms`)
-                        },
-                      },
-                    )
-                  }
-                  type="button"
-                >
-                  Save timeline
-                </button>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function AgentBoard({ project }: { project?: Project }) {
-  const { data: jobs = [], isLoading } = useGenerationJobs()
-  const projectJobs = useMemo(
-    () => jobs.filter((job) => job.project_id === project?.id),
-    [jobs, project?.id],
-  )
-  const agentSteps = useMemo(() => buildAgentSteps(projectJobs, Boolean(project)), [projectJobs, project])
-
-  return (
-    <section className="panel" aria-labelledby="agent-board-title">
-      <PanelTitle
-        icon={Sparkles}
-        title="Agent Board"
-        subtitle={isLoading ? 'Loading workflow telemetry' : 'Live SOP state from generation jobs'}
-        id="agent-board-title"
-      />
-      <div className="agent-list">
-        {agentSteps.map((step) => (
-          <div className={`agent-step ${step.status}`} key={step.name}>
-            <div>
-              <strong>{step.name}</strong>
-              <span>{step.detail}</span>
-            </div>
-            <small>
-              {step.statusLabel}
-              {step.jobCount > 0 ? ` · ${step.jobCount} job${step.jobCount > 1 ? 's' : ''}` : ''}
-            </small>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-function ApprovalGatesPanel({ activeEpisode }: { activeEpisode?: Episode }) {
-  const { data: gates = [], isLoading } = useEpisodeApprovalGates(activeEpisode?.id)
-  const seedApprovalGates = useSeedApprovalGates()
-  const approveGate = useApproveApprovalGate()
-  const requestChanges = useRequestApprovalChanges()
-
-  return (
-    <section className="panel approval-panel" aria-labelledby="approval-gates-title">
-      <PanelTitle
-        icon={ShieldCheck}
-        title="Approval gates"
-        subtitle={isLoading ? 'Loading human checkpoints' : 'Human-in-the-loop blockers'}
-        id="approval-gates-title"
-      />
-      <PanelToolbar>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || seedApprovalGates.isPending}
-          onClick={() => activeEpisode && seedApprovalGates.mutate(activeEpisode.id)}
-          type="button"
-        >
-          Seed gates
-        </button>
-      </PanelToolbar>
-      {!activeEpisode ? (
-        <EmptyState title="No episode selected" text="Create an episode before seeding human approval gates." />
-      ) : gates.length === 0 ? (
-        <EmptyState title="No gates yet" text="Seed gates after story analysis, C/S/P map, storyboard, or timeline artifacts exist." />
-      ) : (
-        <div className="approval-gate-list" aria-label="Approval gates">
-          {gates.map((gate) => (
-            <ApprovalGateCard
-              approvePending={approveGate.isPending}
-              gate={gate}
-              key={gate.id}
-              onApprove={() => approveGate.mutate({ episodeId: gate.episode_id, gateId: gate.id })}
-              onRequestChanges={() => requestChanges.mutate({ episodeId: gate.episode_id, gateId: gate.id })}
-              requestChangesPending={requestChanges.isPending}
-            />
-          ))}
-        </div>
-      )}
-    </section>
-  )
-}
-
-function ApprovalGateCard({
-  approvePending,
-  gate,
-  onApprove,
-  onRequestChanges,
-  requestChangesPending,
-}: {
-  approvePending: boolean
-  gate: ApprovalGate
-  onApprove: () => void
-  onRequestChanges: () => void
-  requestChangesPending: boolean
-}) {
-  const isPending = gate.status === 'pending'
-
-  return (
-    <article className={`approval-gate-card ${gate.status}`}>
-      <div>
-        <strong>{gate.gate_type.replaceAll('_', ' ')}</strong>
-        <span>
-          {gate.subject_type} · {gate.status.replaceAll('_', ' ')}
-        </span>
-      </div>
-      <div className="approval-gate-actions">
-        <button
-          className="secondary-action"
-          disabled={!isPending || approvePending}
-          onClick={onApprove}
-          type="button"
-        >
-          Approve
-        </button>
-        <button
-          className="secondary-action"
-          disabled={!isPending || requestChangesPending}
-          onClick={onRequestChanges}
-          type="button"
-        >
-          Request changes
-        </button>
-      </div>
-    </article>
-  )
-}
-
-function StoryAnalysisPanel({ activeEpisode, project }: { activeEpisode?: Episode; project?: Project }) {
-  const { data: analyses = [], isLoading } = useStoryAnalyses(activeEpisode?.id)
-  const latestAnalysis = analyses[0]
-
-  return (
-    <section className="panel analysis-panel" aria-labelledby="story-analysis-title">
-      <PanelTitle
-        icon={BookOpenText}
-        title="Story analysis"
-        subtitle={isLoading ? 'Loading structured artifacts' : 'Generated C/S/P seeds'}
-        id="story-analysis-title"
-      />
-      {!project ? (
-        <EmptyState title="Select a project" text="Story analysis artifacts appear after an episode analysis job succeeds." />
-      ) : !activeEpisode ? (
-        <EmptyState title="No episode selected" text="Create an episode, start analysis, then run the worker once." />
-      ) : !latestAnalysis ? (
-        <EmptyState title="No analysis artifact" text="Run the worker after starting analysis to generate the first structured artifact." />
-      ) : (
-        <StoryAnalysisSummary episode={activeEpisode} analysis={latestAnalysis} />
-      )}
-    </section>
-  )
-}
-
-function StoryAnalysisSummary({ analysis, episode }: { analysis: StoryAnalysis; episode: Episode }) {
-  const metrics = [
-    { label: 'Characters', value: analysis.character_seeds.length },
-    { label: 'Scenes', value: analysis.scene_seeds.length },
-    { label: 'Props', value: analysis.prop_seeds.length },
+function InspectorTabs({ activeTab, onChange }: { activeTab: InspectorTab; onChange: (tab: InspectorTab) => void }) {
+  const tabs: { key: InspectorTab; label: string }[] = [
+    { key: 'details', label: '镜头信息' },
+    { key: 'prompt', label: '提示词' },
+    { key: 'references', label: '参考资产' },
+    { key: 'notes', label: '导演备注' },
   ]
-
   return (
-    <div className="analysis-card">
-      <div className="analysis-meta">
-        <span>EP{episode.number.toString().padStart(2, '0')}</span>
-        <strong>v{analysis.version}</strong>
-        <small>{analysis.status}</small>
-      </div>
-      <p>{analysis.summary}</p>
-      <div className="analysis-metrics" aria-label="Story analysis seed counts">
-        {metrics.map((metric) => (
-          <span key={metric.label}>
-            <strong>{metric.value}</strong>
-            {metric.label}
-          </span>
-        ))}
-      </div>
-      <div className="analysis-tags" aria-label="Story themes">
-        {analysis.themes.map((theme) => (
-          <span key={theme}>{theme}</span>
-        ))}
-      </div>
-    </div>
+    <nav className="inspector-tabs" aria-label="镜头详情分区">
+      {tabs.map((tab) => (
+        <button className={activeTab === tab.key ? 'active' : ''} key={tab.key} onClick={() => onChange(tab.key)} type="button">{tab.label}</button>
+      ))}
+    </nav>
   )
 }
 
-function buildAgentSteps(jobs: GenerationJob[], hasProject: boolean): AgentStep[] {
-  const storyAnalysisDone = jobs.some((job) => job.task_type === 'story_analysis' && job.status === 'succeeded')
-  return productionSteps.map((step) => {
-    if (step.taskType === 'production_plan') {
-      return {
-        ...step,
-        jobCount: 0,
-        status: hasProject ? 'ready' : 'waiting',
-        statusLabel: hasProject ? 'Ready' : 'Select project',
-      }
-    }
-
-    const matchingJobs = jobs.filter((job) => job.task_type === step.taskType)
-    if (matchingJobs.length > 0) {
-      return summarizeAgentStep(step, matchingJobs)
-    }
-    return {
-      ...step,
-      jobCount: 0,
-      status: storyAnalysisDone ? 'ready' : 'waiting',
-      statusLabel: storyAnalysisDone ? 'Ready' : 'Waiting',
-    }
-  })
-}
-
-function summarizeAgentStep(step: (typeof productionSteps)[number], jobs: GenerationJob[]): AgentStep {
-  const latestJob = [...jobs].sort((a, b) => b.updated_at.localeCompare(a.updated_at))[0]
-  return {
-    ...step,
-    jobCount: jobs.length,
-    latestJob,
-    status: agentStatusFromJob(latestJob.status),
-    statusLabel: latestJob.status.replaceAll('_', ' '),
-  }
-}
-
-function agentStatusFromJob(status: GenerationJobStatus): AgentStepStatus {
-  if (status === 'succeeded') return 'succeeded'
-  if (blockedGenerationStatuses.includes(status)) return 'blocked'
-  if (activeGenerationStatuses.includes(status)) return status === 'queued' ? 'queued' : 'running'
-  return 'waiting'
-}
-
-function StoryboardKanban({ activeEpisode }: { activeEpisode?: Episode }) {
-  const { data: shots = [], isLoading } = useStoryboardShots(activeEpisode?.id)
-  const seedStoryboard = useSeedStoryboardShots()
-  const columns = buildStoryboardColumns(shots)
-
+function SceneTimingCard({ selectedShot }: { selectedShot: StudioShot }) {
   return (
-    <section className="panel" aria-labelledby="storyboard-title">
-      <PanelTitle
-        icon={Boxes}
-        title="Storyboard Kanban"
-        subtitle={isLoading ? 'Loading shot cards' : 'Scene-to-shot prompt cards'}
-        id="storyboard-title"
-      />
-      <PanelToolbar>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || seedStoryboard.isPending}
-          onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)}
-          type="button"
-        >
-          Seed storyboard
+    <section className="inspector-section" aria-labelledby="scene-timing-title">
+      <h2 id="scene-timing-title">场景与节奏</h2>
+      <dl className="detail-list">
+        <div><dt>场景</dt><dd><span className="scene-chip">{selectedShot.sceneCode}</span> {selectedShot.sceneName}</dd></div>
+        <div><dt>镜头时长</dt><dd>{formatDuration(selectedShot.durationMS)}</dd></div>
+        <div><dt>帧率</dt><dd>24 fps</dd></div>
+        <div><dt>画幅</dt><dd>16:9 宽银幕</dd></div>
+      </dl>
+    </section>
+  )
+}
+
+function PromptPackCard({
+  onPromptDraftChange,
+  pack,
+  promptDraft,
+  selectedShot,
+}: {
+  onPromptDraftChange: (value: string) => void
+  pack?: ShotPromptPack
+  promptDraft?: string
+  selectedShot: StudioShot
+}) {
+  const generatePromptPack = useGenerateShotPromptPack()
+  const promptText = promptDraft ?? pack?.direct_prompt ?? selectedShot.prompt
+  return (
+    <section className="inspector-section prompt-section" aria-labelledby="prompt-pack-title">
+      <div className="section-title-row">
+        <h2 id="prompt-pack-title">SD2 镜头提示词包</h2>
+        <button disabled={!selectedShot.id || generatePromptPack.isPending} onClick={() => selectedShot.id && generatePromptPack.mutate(selectedShot.id)} type="button">
+          重新生成
         </button>
-      </PanelToolbar>
-      <div className="kanban-grid">
-        {columns.map((column) => (
-          <div className={`kanban-column ${column.tone}`} key={column.title}>
-            <span>{column.title}</span>
-            <strong>{column.count}</strong>
+      </div>
+      <label className="prompt-editor">
+        <span>可编辑提示词</span>
+        <textarea onChange={(event) => onPromptDraftChange(event.target.value)} value={promptText} />
+      </label>
+      <small>{promptText.length}/2000</small>
+    </section>
+  )
+}
+
+function ReferenceTokens({ assets, pack }: { assets: Asset[]; pack?: ShotPromptPack }) {
+  const refs = pack?.reference_bindings.map((ref, index) => ({ label: ref.token, thumbnail: thumbnailByIndex(index) })) ?? demoReferences
+  return (
+    <section className="inspector-section" aria-labelledby="reference-token-title">
+      <div className="section-title-row">
+        <h2 id="reference-token-title">参考资产令牌</h2>
+        <span>{refs.length} / {Math.max(10, assets.length)}</span>
+      </div>
+      <div className="reference-grid">
+        {refs.slice(0, 4).map((ref) => (
+          <div className="reference-card" key={ref.label}>
+            <span className={`reference-thumb ${ref.thumbnail}`} aria-hidden="true" />
+            <strong>{ref.label}</strong>
           </div>
         ))}
       </div>
-      <ShotList activeEpisode={activeEpisode} shots={shots} />
     </section>
   )
 }
 
-function buildStoryboardColumns(shots: StoryboardShot[]) {
-  return storyboardColumns.map((column) => {
-    if (column.title === 'Prompt ready') return { ...column, count: shots.length }
-    if (column.title === 'Planned') return { ...column, count: 0 }
-    return column
-  })
-}
-
-function ShotList({ activeEpisode, shots }: { activeEpisode?: Episode; shots: StoryboardShot[] }) {
-  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before seeding storyboard shots." />
-  if (shots.length === 0) return <EmptyState title="No shot cards" text="Seed the storyboard after generating the story map." />
-
+function ModelPresetCard() {
   return (
-    <div className="shot-grid" aria-label="Storyboard shot cards">
-      {shots.map((shot) => (
-        <ShotCard key={shot.id} shot={shot} />
-      ))}
-    </div>
+    <section className="inspector-section" aria-labelledby="model-preset-title">
+      <h2 id="model-preset-title">生成模型预设</h2>
+      <button className="model-select" type="button">
+        <span><strong>Seedance Fast</strong><small>优先保证出片速度与动作连续性</small></span>
+        <span className="model-badge">SD2.1</span>
+        <ChevronDown aria-hidden="true" />
+      </button>
+    </section>
   )
 }
 
-function ShotCard({ shot }: { shot: StoryboardShot }) {
-  const { data: promptPack } = useShotPromptPack(shot.id)
+function ApprovalStatusCard({
+  activeEpisode,
+  approveGate,
+  gates,
+}: {
+  activeEpisode?: Episode
+  approveGate: ReturnType<typeof useApproveApprovalGate>
+  gates: ApprovalGate[]
+}) {
+  const seedApprovalGates = useSeedApprovalGates()
+  const pendingGate = gates.find((gate) => gate.status === 'pending')
+  const approvedGate = gates.find((gate) => gate.status === 'approved')
+  return (
+    <section className="inspector-section approval-status" aria-labelledby="approval-status-title">
+      <h2 id="approval-status-title">人审状态</h2>
+      <span className={approvedGate ? 'approved-pill' : 'pending-pill'}>{approvedGate ? '已通过' : '等待确认'}</span>
+      <small>{approvedGate?.reviewed_by ? `${approvedGate.reviewed_by} 已确认` : '进入昂贵生成前，需要人工确认。'}</small>
+      <div className="approval-actions">
+        <button disabled={!activeEpisode || seedApprovalGates.isPending} onClick={() => activeEpisode && seedApprovalGates.mutate(activeEpisode.id)} type="button">刷新审批点</button>
+        <button disabled={!pendingGate || approveGate.isPending} onClick={() => pendingGate && approveGate.mutate({ episodeId: pendingGate.episode_id, gateId: pendingGate.id })} type="button">确认通过</button>
+      </div>
+    </section>
+  )
+}
+
+function ShotNotes({ note, onNoteChange, selectedShot }: { note: string; onNoteChange: (value: string) => void; selectedShot: StudioShot }) {
+  return (
+    <section className="inspector-section prompt-section" aria-labelledby="shot-notes-title">
+      <h2 id="shot-notes-title">导演备注</h2>
+      <label className="prompt-editor">
+        <span>给后续生成和剪辑的备注</span>
+        <textarea
+          onChange={(event) => onNoteChange(event.target.value)}
+          placeholder={`例如：第 ${selectedShot.code} 镜需要保留云海开阔感，人物不要贴脸。`}
+          value={note}
+        />
+      </label>
+    </section>
+  )
+}
+
+function InspectorActions({
+  activeEpisode,
+  disabled,
+  displayShots,
+  selectedShot,
+}: {
+  activeEpisode?: Episode
+  disabled: boolean
+  displayShots: StudioShot[]
+  selectedShot: StudioShot
+}) {
   const generatePromptPack = useGenerateShotPromptPack()
-  const activePromptPack = generatePromptPack.data?.shot_id === shot.id ? generatePromptPack.data : promptPack
-
-  return (
-    <article className="shot-card">
-      <div className="shot-card-header">
-        <strong>{shot.code}</strong>
-        <span>{Math.round(shot.duration_ms / 1000)}s</span>
-      </div>
-      <h3>{shot.title}</h3>
-      <p>{shot.description}</p>
-      <small>{shot.prompt}</small>
-      <div className="prompt-pack-actions">
-        <button
-          className="secondary-action"
-          disabled={generatePromptPack.isPending}
-          onClick={() => generatePromptPack.mutate(shot.id)}
-          type="button"
-        >
-          Generate SD2 pack
-        </button>
-        {activePromptPack ? <PromptPackPreview pack={activePromptPack} /> : null}
-      </div>
-    </article>
-  )
-}
-
-function PromptPackPreview({ pack }: { pack: ShotPromptPack }) {
+  const saveTimeline = useSaveEpisodeTimeline()
   const startVideoGeneration = useStartShotVideoGeneration()
-  const copyPrompt = () => {
-    void navigator.clipboard.writeText(pack.direct_prompt)
+  const regenerate = () => {
+    if (!selectedShot.id) return
+    generatePromptPack.mutate(selectedShot.id, { onSuccess: () => startVideoGeneration.mutate(selectedShot.id ?? '') })
   }
 
   return (
-    <div className="prompt-pack-preview">
-      <div className="prompt-pack-meta">
-        <span>{pack.preset}</span>
-        <span>{pack.task_type.replaceAll('_', ' ')}</span>
-        <span>{pack.reference_bindings.length} refs</span>
-      </div>
-      <p>{pack.direct_prompt}</p>
-      <div className="reference-token-list" aria-label="SD2 reference bindings">
-        {pack.reference_bindings.map((ref) => (
-          <span key={ref.asset_id}>
-            {ref.token} · {ref.role} · {ref.kind}
-          </span>
-        ))}
-      </div>
-      <button className="secondary-action" onClick={copyPrompt} type="button">
-        Copy prompt
+    <div className="inspector-actions">
+      <button className="primary-inspector-action" disabled={disabled || startVideoGeneration.isPending || generatePromptPack.isPending} onClick={regenerate} type="button">
+        <Sparkles aria-hidden="true" />
+        重新出片
       </button>
-      <button
-        className="secondary-action"
-        disabled={startVideoGeneration.isPending}
-        onClick={() => startVideoGeneration.mutate(pack.shot_id)}
-        type="button"
-      >
-        Queue SD2 video
-      </button>
-      {startVideoGeneration.data ? <small>Job {startVideoGeneration.data.status}</small> : null}
+      <button disabled={disabled || generatePromptPack.isPending} onClick={() => selectedShot.id && generatePromptPack.mutate(selectedShot.id)} type="button">重写提示词</button>
+      <button disabled={disabled || !activeEpisode || saveTimeline.isPending} onClick={() => activeEpisode && saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(displayShots) })} type="button">送入时间线</button>
     </div>
   )
 }
 
-function AssetLibrary({ activeEpisode }: { activeEpisode?: Episode }) {
-  const { data: storyMap, isLoading } = useStoryMap(activeEpisode?.id)
-  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
-  const seedStoryMap = useSeedStoryMap()
-  const seedAssets = useSeedEpisodeAssets()
-
-  return (
-    <section className="panel" aria-labelledby="asset-library-title">
-      <PanelTitle
-        icon={Library}
-        title="Asset library"
-        subtitle={isLoading ? 'Loading C/S/P map' : 'Character, scene, and prop map'}
-        id="asset-library-title"
-      />
-      <PanelToolbar>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || seedStoryMap.isPending}
-          onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)}
-          type="button"
-        >
-          Seed C/S/P map
-        </button>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || seedAssets.isPending}
-          onClick={() => activeEpisode && seedAssets.mutate(activeEpisode.id)}
-          type="button"
-        >
-          Seed asset candidates
-        </button>
-      </PanelToolbar>
-      <StoryMapGrid activeEpisode={activeEpisode} storyMap={storyMap} />
-      <AssetCandidateGrid activeEpisode={activeEpisode} assets={assets} />
-    </section>
-  )
-}
-
-function StoryMapGrid({
+function TimelineDock({
   activeEpisode,
-  storyMap,
+  displayShots,
+  onAddLocalShot,
 }: {
   activeEpisode?: Episode
-  storyMap?: StoryMap
+  displayShots: StudioShot[]
+  onAddLocalShot: () => void
 }) {
-  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before seeding C/S/P assets." />
-  if (!storyMap) return <EmptyState title="No story map" text="Seed C/S/P map after story analysis succeeds." />
-
-  return (
-    <div className="story-map-grid" aria-label="Character scene prop map">
-      <StoryMapColumn title="Characters" items={storyMap.characters} emptyText="No character seeds yet" />
-      <StoryMapColumn title="Scenes" items={storyMap.scenes} emptyText="No scene seeds yet" />
-      <StoryMapColumn title="Props" items={storyMap.props} emptyText="No prop seeds yet" />
-    </div>
-  )
-}
-
-function StoryMapColumn({ emptyText, items, title }: { emptyText: string; items: StoryMapItem[]; title: string }) {
-  return (
-    <div className="story-map-column">
-      <h3>{title}</h3>
-      {items.length === 0 ? <small>{emptyText}</small> : null}
-      {items.map((item) => (
-        <article className="story-map-card" key={item.id}>
-          <strong>{item.code}</strong>
-          <span>{item.name}</span>
-          <small>{item.description}</small>
-        </article>
-      ))}
-    </div>
-  )
-}
-
-function AssetCandidateGrid({ activeEpisode, assets }: { activeEpisode?: Episode; assets: Asset[] }) {
-  const lockAsset = useLockAsset()
-
-  if (!activeEpisode) return null
-  if (assets.length === 0) {
-    return <EmptyState title="No asset candidates" text="Seed asset candidates after the C/S/P map is ready." />
-  }
-
-  return (
-    <div className="asset-grid" aria-label="Asset candidates">
-      {assets.map((asset) => (
-        <article className="asset-card" key={asset.id}>
-          <div className="asset-preview" />
-          <span>
-            {asset.kind} · {asset.purpose}
-          </span>
-          <small>{asset.status === 'ready' ? 'locked reference' : asset.uri}</small>
-          <button
-            className="secondary-action"
-            disabled={asset.status === 'ready' || lockAsset.isPending}
-            onClick={() => lockAsset.mutate({ assetId: asset.id, episodeId: activeEpisode.id })}
-            type="button"
-          >
-            {asset.status === 'ready' ? 'Locked' : 'Lock'}
-          </button>
-        </article>
-      ))}
-    </div>
-  )
-}
-
-function TimelineEditor({ activeEpisode }: { activeEpisode?: Episode }) {
   const { data: timeline } = useEpisodeTimeline(activeEpisode?.id)
-  const { data: shots = [] } = useStoryboardShots(activeEpisode?.id)
-  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
-  const initialDraft = useMemo(() => (timeline ? timelineDraftFromTimeline(timeline) : emptyTimelineDraft()), [timeline])
-  const draftKey = timeline ? `${timeline.id}-${timeline.version}` : (activeEpisode?.id ?? 'no-episode')
-
-  return (
-    <TimelineDraftEditor
-      activeEpisode={activeEpisode}
-      assets={assets}
-      initialDraft={initialDraft}
-      key={draftKey}
-      shots={shots}
-      timeline={timeline}
-    />
-  )
-}
-
-function TimelineDraftEditor({
-  activeEpisode,
-  assets,
-  initialDraft,
-  shots,
-  timeline,
-}: {
-  activeEpisode?: Episode
-  assets: Asset[]
-  initialDraft: TimelineDraft
-  shots: StoryboardShot[]
-  timeline?: Timeline
-}) {
   const saveTimeline = useSaveEpisodeTimeline()
   const startExport = useStartEpisodeExport()
   const exportQuery = useExport(startExport.data?.id)
   const activeExport = exportQuery.data ?? startExport.data
-  const draft = useTimelineDraftState({ activeEpisode, assets, initialDraft, saveTimeline, shots })
+  const duration = displayShots.reduce((total, shot) => total + shot.durationMS, 0)
+  const saveDraft = () => {
+    if (!activeEpisode) return
+    saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(displayShots) })
+  }
 
   return (
-    <section className="panel timeline-panel" aria-labelledby="timeline-title">
-      <PanelTitle
-        icon={Film}
-        title="Timeline editor"
-        subtitle={timeline ? `Saved v${timeline.version}` : 'Tracks, clips, and export handoff'}
-        id="timeline-title"
-      />
-      <TimelineEditorToolbar
-        activeEpisode={activeEpisode}
-        canBuildFromStoryboard={shots.length > 0}
-        canStartExport={Boolean(timeline)}
-        draft={draft}
-        startExport={startExport}
-        saveTimelinePending={saveTimeline.isPending}
-      />
-      <ExportStatusCard exportItem={activeExport} isFetching={exportQuery.isFetching} isStarting={startExport.isPending} />
-      <TimelineDurationField durationMS={draft.durationMS} onChange={draft.changeDuration} />
-      <div className="timeline-stage">
-        <div className="playhead" aria-hidden="true" />
-        <TimelineTracks
-          activeEpisode={activeEpisode}
-          onClipChange={draft.updateClip}
-          onClipRemove={draft.removeClip}
-          tracks={draft.tracks}
-        />
+    <section className="timeline-dock" aria-labelledby="timeline-title">
+      <div className="timeline-toolbar">
+        <h2 id="timeline-title">剪辑时间线</h2>
+        <div className="transport-controls" aria-label="播放控制">
+          <button aria-label="切开片段" type="button"><Scissors aria-hidden="true" /></button>
+          <button aria-label="播放预览" type="button"><Play aria-hidden="true" /></button>
+          <button aria-label="全屏预览" type="button"><Maximize2 aria-hidden="true" /></button>
+        </div>
+        <span className="timecode">00:00:11:12</span>
+        <button className="ghost-action" disabled={!activeEpisode || saveTimeline.isPending} onClick={saveDraft} type="button">保存剪辑</button>
+        <button className="ghost-action" disabled={!activeEpisode || !timeline || startExport.isPending} onClick={() => activeEpisode && startExport.mutate(activeEpisode.id)} type="button">开始导出</button>
       </div>
+      <TimelineRuler />
+      <TimelineTracks displayShots={displayShots} onAddLocalShot={onAddLocalShot} />
+      <footer className="timeline-footer">
+        <span>总时长 {formatTimecode(duration)}</span>
+        <span>{displayShots.length} 镜 · {Math.round(duration / 1000)} 秒</span>
+        <span>导出预设 1080p · H.264 · 24fps</span>
+        <span>导出状态 {activeExport ? exportStatusLabel(activeExport.status) : '可预览'}</span>
+      </footer>
     </section>
   )
 }
 
-function useTimelineDraftState({
-  activeEpisode,
-  assets,
-  initialDraft,
-  saveTimeline,
-  shots,
-}: {
-  activeEpisode?: Episode
-  assets: Asset[]
-  initialDraft: TimelineDraft
-  saveTimeline: ReturnType<typeof useSaveEpisodeTimeline>
-  shots: StoryboardShot[]
-}) {
-  const [durationMS, setDurationMS] = useState(initialDraft.duration_ms)
-  const [tracks, setTracks] = useState<TimelineDraftTrack[]>(initialDraft.tracks)
-  const readyAssets = useMemo(() => assets.filter((asset) => asset.status === 'ready'), [assets])
-
-  const buildFromStoryboard = () => {
-    const draft = timelineDraftFromShots(shots)
-    setDurationMS(draft.duration_ms)
-    setTracks(draft.tracks)
-  }
-  const addLockedAssetClip = () => {
-    const asset = readyAssets[0]
-    if (!asset) return
-    const updatedTracks = appendAssetClip(tracks, asset)
-    setTracks(updatedTracks)
-    setDurationMS((currentDuration) => Math.max(currentDuration, nextClipStart(firstTrackClips(updatedTracks))))
-  }
-  const saveDraftTimeline = () => {
-    if (!activeEpisode) return
-    saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(durationMS, tracks) })
-  }
-
-  return {
-    addLockedAssetClip,
-    buildFromStoryboard,
-    canAddLockedAsset: readyAssets.length > 0,
-    changeDuration: (value: string) => setDurationMS(parseTimelineNumber(value)),
-    durationMS,
-    removeClip: (trackID: string, clipID: string) =>
-      setTracks((currentTracks) => removeTimelineDraftClip(currentTracks, trackID, clipID)),
-    saveDraftTimeline,
-    tracks,
-    updateClip: (trackID: string, clipID: string, patch: Partial<TimelineDraftClip>) =>
-      setTracks((currentTracks) => updateTimelineDraftClip(currentTracks, trackID, clipID, patch)),
-  }
-}
-
-function TimelineEditorToolbar({
-  activeEpisode,
-  canBuildFromStoryboard,
-  canStartExport,
-  draft,
-  saveTimelinePending,
-  startExport,
-}: {
-  activeEpisode?: Episode
-  canBuildFromStoryboard: boolean
-  canStartExport: boolean
-  draft: ReturnType<typeof useTimelineDraftState>
-  saveTimelinePending: boolean
-  startExport: ReturnType<typeof useStartEpisodeExport>
-}) {
+function TimelineRuler() {
   return (
-    <PanelToolbar>
-      <button
-        className="secondary-action"
-        disabled={!activeEpisode || !canBuildFromStoryboard}
-        onClick={draft.buildFromStoryboard}
-        type="button"
-      >
-        Build from storyboard
-      </button>
-      <button
-        className="secondary-action"
-        disabled={!activeEpisode || !draft.canAddLockedAsset}
-        onClick={draft.addLockedAssetClip}
-        type="button"
-      >
-        Add locked asset
-      </button>
-      <button className="secondary-action" disabled={!activeEpisode || saveTimelinePending} onClick={draft.saveDraftTimeline} type="button">
-        Save edits
-      </button>
-      <button
-        className="secondary-action"
-        disabled={!activeEpisode || !canStartExport || startExport.isPending}
-        onClick={() => activeEpisode && startExport.mutate(activeEpisode.id)}
-        type="button"
-      >
-        Start export
-      </button>
-    </PanelToolbar>
-  )
-}
-
-function ExportStatusCard({
-  exportItem,
-  isFetching,
-  isStarting,
-}: {
-  exportItem?: Export
-  isFetching: boolean
-  isStarting: boolean
-}) {
-  if (!exportItem && !isStarting) return null
-  const status = exportItem?.status ?? 'queued'
-  const content = exportStatusContent(status)
-  return (
-    <aside className={`export-status-card ${status}`} aria-live="polite" aria-label="Export status">
-      <div>
-        <strong>{content.title}</strong>
-        <span>{content.detail}</span>
-      </div>
-      <small>{isFetching || isStarting ? 'Polling export worker' : `Format ${exportItem?.format ?? 'mp4'}`}</small>
-    </aside>
-  )
-}
-
-function exportStatusContent(status: Export['status']) {
-  const content: Record<Export['status'], { detail: string; title: string }> = {
-    canceled: { title: 'Export canceled', detail: 'This render was stopped before completion.' },
-    failed: { title: 'Export failed', detail: 'Worker returned an error; retry after checking timeline inputs.' },
-    queued: { title: 'Export queued', detail: 'Waiting for the render worker to pick up this timeline.' },
-    rendering: { title: 'Rendering export', detail: 'Worker is composing tracks and preparing output media.' },
-    succeeded: { title: 'Export ready', detail: 'Final timeline render completed successfully.' },
-  }
-  return content[status]
-}
-
-function TimelineDurationField({ durationMS, onChange }: { durationMS: number; onChange: (value: string) => void }) {
-  return (
-    <label className="timeline-duration-field">
-      <span>Timeline duration</span>
-      <input
-        min={0}
-        onChange={(event) => onChange(event.target.value)}
-        step={500}
-        type="number"
-        value={durationMS}
-      />
-    </label>
-  )
-}
-
-function buildTimelineRequest(durationMS: number, tracks: TimelineDraftTrack[]): SaveTimelineRequest {
-  return {
-    duration_ms: durationMS,
-    tracks: tracks.map((track) => ({
-      clips: track.clips.map((clip) => ({
-        asset_id: clip.asset_id,
-        duration_ms: clip.duration_ms,
-        kind: clip.kind,
-        start_ms: clip.start_ms,
-        trim_start_ms: clip.trim_start_ms,
-      })),
-      kind: track.kind,
-      name: track.name,
-      position: track.position,
-    })),
-  }
-}
-
-function timelineDraftFromShots(shots: StoryboardShot[]): TimelineDraft {
-  const sourceShots = shots.length > 0 ? shots : [{ duration_ms: 15_000 }]
-  return {
-    duration_ms: sourceShots.reduce((total, shot) => total + shot.duration_ms, 0),
-    tracks: [
-      {
-        clips: sourceShots.map((shot, index) => ({
-          duration_ms: shot.duration_ms,
-          id: `shot-${index}`,
-          kind: 'shot',
-          start_ms: sourceShots.slice(0, index).reduce((total, item) => total + item.duration_ms, 0),
-          trim_start_ms: 0,
-        })),
-        id: 'storyboard-video',
-        kind: 'video',
-        name: 'Storyboard video',
-        position: 1,
-      },
-    ],
-  }
-}
-
-function timelineDraftFromTimeline(timeline: Timeline): TimelineDraft {
-  return {
-    duration_ms: timeline.duration_ms,
-    tracks: timeline.tracks.map((track) => ({
-      clips: track.clips.map((clip) => ({
-        asset_id: clip.asset_id || undefined,
-        duration_ms: clip.duration_ms,
-        id: clip.id,
-        kind: clip.kind,
-        start_ms: clip.start_ms,
-        trim_start_ms: clip.trim_start_ms,
-      })),
-      id: track.id,
-      kind: track.kind,
-      name: track.name,
-      position: track.position,
-    })),
-  }
-}
-
-function emptyTimelineDraft(): TimelineDraft {
-  return { duration_ms: 0, tracks: [] }
-}
-
-function appendAssetClip(tracks: TimelineDraftTrack[], asset: Asset): TimelineDraftTrack[] {
-  const [firstTrack, ...restTracks] = tracks.length > 0 ? tracks : [defaultVideoTrack()]
-  const startMS = nextClipStart(firstTrack.clips)
-  const clip = {
-    asset_id: asset.id,
-    duration_ms: 3000,
-    id: `asset-${asset.id}-${startMS}`,
-    kind: asset.kind,
-    start_ms: startMS,
-    trim_start_ms: 0,
-  }
-  return [{ ...firstTrack, clips: [...firstTrack.clips, clip] }, ...restTracks]
-}
-
-function defaultVideoTrack(): TimelineDraftTrack {
-  return { clips: [], id: 'video-track-draft', kind: 'video', name: 'Video', position: 1 }
-}
-
-function firstTrackClips(tracks: TimelineDraftTrack[]): TimelineDraftClip[] {
-  return tracks[0]?.clips ?? []
-}
-
-function nextClipStart(clips: TimelineDraftClip[]): number {
-  return clips.reduce((maxEnd, clip) => Math.max(maxEnd, clip.start_ms + clip.duration_ms), 0)
-}
-
-function updateTimelineDraftClip(
-  tracks: TimelineDraftTrack[],
-  trackID: string,
-  clipID: string,
-  patch: Partial<TimelineDraftClip>,
-): TimelineDraftTrack[] {
-  return tracks.map((track) => {
-    if (track.id !== trackID) return track
-    return {
-      ...track,
-      clips: track.clips.map((clip) => (clip.id === clipID ? { ...clip, ...patch } : clip)),
-    }
-  })
-}
-
-function removeTimelineDraftClip(
-  tracks: TimelineDraftTrack[],
-  trackID: string,
-  clipID: string,
-): TimelineDraftTrack[] {
-  return tracks.map((track) => {
-    if (track.id !== trackID) return track
-    return { ...track, clips: track.clips.filter((clip) => clip.id !== clipID) }
-  })
-}
-
-function parseTimelineNumber(value: string): number {
-  const parsed = Number.parseInt(value, 10)
-  if (Number.isNaN(parsed)) return 0
-  return Math.max(0, parsed)
-}
-
-function TimelineTracks({
-  activeEpisode,
-  onClipChange,
-  onClipRemove,
-  tracks,
-}: {
-  activeEpisode?: Episode
-  onClipChange: (trackID: string, clipID: string, patch: Partial<TimelineDraftClip>) => void
-  onClipRemove: (trackID: string, clipID: string) => void
-  tracks: TimelineDraftTrack[]
-}) {
-  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before saving timeline clips." />
-  if (tracks.length === 0) return <EmptyState title="No timeline tracks" text="Build from storyboard or add locked assets." />
-
-  return (
-    <>
-      {tracks.map((track) => (
-        <div className="track-row" key={track.id}>
-          <span>{track.name}</span>
-          <div className="clip-strip">
-            {track.clips.map((clip) => (
-              <TimelineClipEditor
-                clip={clip}
-                key={clip.id}
-                onChange={(patch) => onClipChange(track.id, clip.id, patch)}
-                onRemove={() => onClipRemove(track.id, clip.id)}
-              />
-            ))}
-          </div>
-        </div>
+    <div className="timeline-ruler" aria-hidden="true">
+      {['00:00:00', '00:00:05', '00:00:10', '00:00:15', '00:00:20', '00:00:25', '00:00:30'].map((mark) => (
+        <span key={mark}>{mark}</span>
       ))}
-    </>
+    </div>
   )
 }
 
-function TimelineClipEditor({
-  clip,
-  onChange,
-  onRemove,
-}: {
-  clip: TimelineDraftClip
-  onChange: (patch: Partial<TimelineDraftClip>) => void
-  onRemove: () => void
-}) {
+function TimelineTracks({ displayShots, onAddLocalShot }: { displayShots: StudioShot[]; onAddLocalShot: () => void }) {
   return (
-    <article className="clip-block">
-      <strong>{clip.kind}</strong>
-      <label>
-        <span>Start</span>
-        <input
-          min={0}
-          onChange={(event) => onChange({ start_ms: parseTimelineNumber(event.target.value) })}
-          step={500}
-          type="number"
-          value={clip.start_ms}
-        />
-      </label>
-      <label>
-        <span>Length</span>
-        <input
-          min={0}
-          onChange={(event) => onChange({ duration_ms: parseTimelineNumber(event.target.value) })}
-          step={500}
-          type="number"
-          value={clip.duration_ms}
-        />
-      </label>
-      <button className="secondary-action" onClick={onRemove} type="button">
-        Remove
-      </button>
+    <div className="timeline-tracks" aria-label="剪辑轨道">
+      <TrackLabel icon={Film} label="V1" name="画面" />
+      <div className="timeline-strip video-strip">
+        {displayShots.map((shot) => <TimelineClip key={shot.key} shot={shot} />)}
+        <button className="add-clip" onClick={onAddLocalShot} type="button"><Plus aria-hidden="true" /> 添加片段</button>
+      </div>
+      <TrackLabel icon={Music2} label="A1" name="配乐" />
+      <div className="audio-wave">BGM_九霄之上_Main Theme.wav</div>
+      <TrackLabel icon={Subtitles} label="S1" name="字幕" />
+      <div className="subtitle-strip">{displayShots.map((shot) => <span key={shot.key}>{subtitleForShot(shot.code)}</span>)}</div>
+      <TrackLabel icon={Scissors} label="T1" name="转场" />
+      <div className="transition-strip"><span>云雾叠化 00:00:15</span><span>雷光闪切 00:00:10</span></div>
+    </div>
+  )
+}
+
+function TrackLabel({ icon: Icon, label, name }: { icon: typeof Activity; label: string; name: string }) {
+  return (
+    <div className="track-label">
+      <span>{label}</span>
+      <Icon aria-hidden="true" />
+      <strong>{name}</strong>
+      <Lock aria-hidden="true" />
+      <Eye aria-hidden="true" />
+    </div>
+  )
+}
+
+function TimelineClip({ shot }: { shot: StudioShot }) {
+  return (
+    <article className="timeline-clip">
+      <span className={`clip-thumb ${shot.thumbnail}`} aria-hidden="true" />
+      <strong>{shot.code}</strong>
+      <small>{formatDuration(shot.durationMS)}</small>
     </article>
   )
 }
 
-function JobsRail() {
-  const { data: jobs = [] } = useGenerationJobs()
-  const eventLog = useStudioStore((state) => state.eventLog)
-
-  return (
-    <aside className="jobs-rail" aria-label="Generation jobs and events">
-      <PanelTitle icon={Activity} title="Jobs" subtitle="Generation queue" id="jobs-title" />
-      <div className="jobs-list">
-        {jobs.length === 0 ? <span className="muted">No generation jobs yet</span> : null}
-        {jobs.map((job) => (
-          <div className="job-row" key={job.id}>
-            <strong>{job.task_type}</strong>
-            <small>{job.status}</small>
-          </div>
-        ))}
-      </div>
-      <div className="event-log">
-        {eventLog.map((event) => (
-          <small key={event}>{event}</small>
-        ))}
-      </div>
-    </aside>
-  )
+function mapDisplayShots(shots: StoryboardShot[]): StudioShot[] {
+  if (shots.length === 0) return demoShots
+  return shots.map((shot, index) => ({
+    code: shot.code || `${index + 1}`.padStart(2, '0'),
+    description: shot.description || '系统生成的分镜镜头',
+    durationMS: shot.duration_ms,
+    id: shot.id,
+    key: shot.id,
+    progress: index % 3 === 1 ? 72 : index % 3 === 2 ? 0 : 100,
+    prompt: shot.prompt,
+    sceneCode: `SC${((index % 3) + 1).toString().padStart(2, '0')}`,
+    sceneName: shot.title,
+    status: index % 3 === 1 ? 'generating' : index % 3 === 2 ? 'queued' : 'prompt_ready',
+    tags: ['云澜', '白璃', '长老'].slice(0, (index % 3) + 1),
+    thumbnail: thumbnailByIndex(index),
+    title: shot.title,
+  }))
 }
 
-function PanelTitle({
-  icon: Icon,
-  id,
-  subtitle,
-  title,
-}: {
-  icon: typeof Activity
-  id: string
-  subtitle: string
-  title: string
-}) {
-  return (
-    <div className="panel-title">
-      <Icon aria-hidden="true" />
-      <div>
-        <h2 id={id}>{title}</h2>
-        <p>{subtitle}</p>
-      </div>
-    </div>
-  )
+function buildTimelineRequest(shots: StudioShot[]): SaveTimelineRequest {
+  return {
+    duration_ms: shots.reduce((total, shot) => total + shot.durationMS, 0),
+    tracks: [{
+      clips: shots.map((shot, index) => ({
+        asset_id: undefined,
+        duration_ms: shot.durationMS,
+        kind: 'shot',
+        start_ms: shots.slice(0, index).reduce((total, item) => total + item.durationMS, 0),
+        trim_start_ms: 0,
+      })),
+      kind: 'video',
+      name: '分镜视频轨',
+      position: 1,
+    }],
+  }
 }
 
-function PanelToolbar({ children }: { children: ReactNode }) {
-  return <div className="panel-toolbar">{children}</div>
+function statusLabel(status: StudioShot['status']): string {
+  const labels: Record<StudioShot['status'], string> = {
+    approved: '已通过',
+    draft: '草稿',
+    generating: '生成中',
+    prompt_ready: '提示词就绪',
+    queued: '排队中',
+  }
+  return labels[status]
 }
 
-function EmptyState({ text, title }: { text: string; title: string }) {
-  return (
-    <div className="empty-state">
-      <strong>{title}</strong>
-      <span>{text}</span>
-    </div>
-  )
+function exportStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    canceled: '已取消',
+    completed: '已完成',
+    failed: '导出失败',
+    processing: '导出中',
+    queued: '排队中',
+    rendering: '渲染中',
+    requested: '已提交',
+    succeeded: '已完成',
+  }
+  return labels[status] ?? status.replaceAll('_', ' ')
+}
+
+function thumbnailByIndex(index: number): string {
+  const thumbnails = ['thumb-cloud', 'thumb-hero', 'thumb-muse', 'thumb-temple', 'thumb-battle', 'thumb-beast']
+  return thumbnails[index % thumbnails.length]
+}
+
+function formatDuration(durationMS: number): string {
+  return `00:${(durationMS / 1000).toFixed(1).padStart(4, '0')}`
+}
+
+function formatTimecode(durationMS: number): string {
+  const totalSeconds = Math.round(durationMS / 1000)
+  return `00:00:${totalSeconds.toString().padStart(2, '0')}:11`
+}
+
+function subtitleForShot(code: string): string {
+  const subtitles: Record<string, string> = {
+    '01': '云海之上，天门将开。',
+    '02': '我云澜，必登九霄！',
+    '03': '白璃师姐？',
+    '04': '天玄宗，外门广场。',
+    '05': '今日试炼，开始！',
+    '06': '这...这是什么？',
+  }
+  return subtitles[code] ?? '镜头对白待生成。'
 }
 
 export default App
