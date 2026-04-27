@@ -360,6 +360,27 @@ Deferred:
 
 - Freeform canvas, advanced trimming/splitting, and manual clip drag editing until asset candidate generation exists.
 
+Backend production file split status: complete.
+
+Implemented:
+
+- Split PostgreSQL production repository behavior into focused files:
+  - `story_analysis_repo.go`
+  - `story_maps_repo.go`
+  - `timeline_repo.go`
+  - `exports_repo.go`
+- Split production service artifact/map/timeline/export use cases into focused files:
+  - `story_analysis_service.go`
+  - `story_maps_service.go`
+  - `timeline_export_service.go`
+- Kept public interfaces and request parameter structs stable in the original package files.
+
+Verified:
+
+- `gofmt -w internal/repo internal/service`
+- `GOTOOLCHAIN=local go test ./...`
+- `GOTOOLCHAIN=local go build ./...`
+
 Remaining core modules slice status: complete.
 
 Implemented:
