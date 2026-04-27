@@ -77,3 +77,30 @@ func TestSeedanceAdapterSubmitsArkRequestWhenKeyPresent(t *testing.T) {
 		t.Fatalf("expected fast model payload, got %+v", payload)
 	}
 }
+
+func TestSeedanceAdapterPollsArkTaskWhenKeyPresent(t *testing.T) {
+	var authHeader string
+	var requestPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader = r.Header.Get("authorization")
+		requestPath = r.URL.Path
+		w.Header().Set("content-type", "application/json")
+		_, _ = w.Write([]byte(`{"id":"ark-task-1","status":"succeeded"}`))
+	}))
+	defer server.Close()
+
+	adapter := NewSeedanceAdapter("test-key", server.URL, server.Client())
+	task, err := adapter.PollGeneration(context.Background(), "ark-task-1")
+	if err != nil {
+		t.Fatalf("poll generation: %v", err)
+	}
+	if task.Mode != "ark" || task.ID != "ark-task-1" || task.Status != "succeeded" {
+		t.Fatalf("unexpected task: %+v", task)
+	}
+	if authHeader != "Bearer test-key" {
+		t.Fatalf("expected bearer auth header, got %q", authHeader)
+	}
+	if requestPath != "/ark-task-1" {
+		t.Fatalf("expected task id path, got %q", requestPath)
+	}
+}

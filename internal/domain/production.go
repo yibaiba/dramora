@@ -12,16 +12,19 @@ type WorkflowRun struct {
 }
 
 type GenerationJob struct {
-	ID            string
-	ProjectID     string
-	EpisodeID     string
-	WorkflowRunID string
-	Provider      string
-	Model         string
-	TaskType      string
-	Status        GenerationJobStatus
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	ID             string
+	ProjectID      string
+	EpisodeID      string
+	WorkflowRunID  string
+	Provider       string
+	Model          string
+	TaskType       string
+	Status         GenerationJobStatus
+	Prompt         string
+	Params         map[string]any
+	ProviderTaskID string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 type ApprovalGate struct {

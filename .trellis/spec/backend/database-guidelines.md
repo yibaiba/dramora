@@ -78,6 +78,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - MVP asset candidate locking uses `assets.status = 'ready'`; draft candidates remain `assets.status = 'draft'`.
 - Human approval gates are stored in `approval_gates` as first-class blockers before expensive generation/export phases.
 - SD2/Seedance prompt packs are stored in `shot_prompt_packs` as the source-of-truth prompt artifact before video generation jobs are submitted.
+- `generation_jobs.prompt`, `generation_jobs.params`, and `generation_jobs.provider_task_id` must be loaded by worker-facing repository reads so provider execution can resume from durable state.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
 
@@ -94,6 +95,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Saving episode timeline | upsert `timelines` by `episode_id`, set status to `saved`, and increment version on updates. |
 | Saving invalid timeline graph | reject blank track kind/name, blank clip kind, negative timings, or clips that exceed timeline duration with `domain.ErrInvalidInput`; HTTP maps to 400. |
 | Worker advances generation job | update `generation_jobs.status` and insert a matching `generation_job_events` row in one DB transaction. |
+| Worker submits a Seedance video job | read the persisted job prompt/params, advance `queued -> submitting -> submitted`, call the Seedance adapter outside HTTP handlers, and persist `provider_task_id`. |
+| Worker polls a Seedance video job | process `submitted`/`polling` jobs by `provider_task_id`; running provider tasks stay/advance to `polling`, failed tasks advance to `failed`, and completed tasks advance through `downloading -> postprocessing -> succeeded`. |
 | Worker advances queued export | move `exports.status` from `queued` to `rendering` to `succeeded` through `ProductionService.ProcessQueuedExports`; do not mark exports succeeded in the HTTP handler. |
 | Worker finds a rendering export | resume it and advance to `succeeded` so a previous partial worker failure does not leave exports permanently stuck. |
 | Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
@@ -120,6 +123,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Timeline save routes should test save-then-read behavior through the HTTP layer.
 - Timeline save routes should test invalid graph timing through the HTTP layer.
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
+- Seedance worker tests should cover default fake mode without real `ARK_API_KEY`, persisted provider task ids, and polling completion.
 - Export worker execution should be service-tested with the memory repo and route-tested by starting an export, processing queued exports, then reading the export status.
 - Export worker tests should include resuming an export that is already in `rendering`.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.

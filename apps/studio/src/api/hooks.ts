@@ -27,7 +27,7 @@ import {
   startEpisodeExport,
   startStoryAnalysis,
 } from './client'
-import type { CreateEpisodeRequest, CreateProjectRequest, SaveTimelineRequest } from './types'
+import type { CreateEpisodeRequest, CreateProjectRequest, Export, SaveTimelineRequest } from './types'
 
 export function useProjects() {
   return useQuery({
@@ -245,5 +245,10 @@ export function useExport(exportId?: string) {
     enabled: Boolean(exportId),
     queryFn: () => getExport(exportId ?? ''),
     queryKey: ['export', exportId],
+    refetchInterval: (query) => (isExportInProgress(query.state.data?.status) ? 3_000 : false),
   })
+}
+
+function isExportInProgress(status?: Export['status']) {
+  return status === 'queued' || status === 'rendering'
 }

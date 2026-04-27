@@ -6,6 +6,7 @@ import (
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
@@ -98,6 +99,107 @@ func TestProductionServiceProcessesQueuedExportsNoop(t *testing.T) {
 	}
 	if export.Status != domain.ExportStatusSucceeded {
 		t.Fatalf("expected succeeded export, got %q", export.Status)
+	}
+}
+
+func TestProductionServiceSubmitsAndPollsSeedanceGenerationJob(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	productionRepo := repo.NewMemoryProductionRepository()
+	productionService := NewProductionServiceWithSeedance(productionRepo, nil, provider.NewSeedanceAdapter("", "", nil))
+	jobID := "00000000-0000-0000-0000-000000000201"
+
+	createdJob, err := productionRepo.CreateGenerationJob(ctx, repo.CreateGenerationJobParams{
+		ID: jobID, ProjectID: "00000000-0000-0000-0000-000000000202",
+		EpisodeID:  "00000000-0000-0000-0000-000000000203",
+		RequestKey: "shot-video:test", Provider: provider.ProviderSeedance,
+		Model: provider.ModelSeedance10ProFast, TaskType: string(provider.TaskTypeImageToVideo),
+		Status: domain.GenerationJobStatusQueued, Prompt: "SH001 opening shot",
+		Params: map[string]any{
+			"ratio": "16:9", "resolution": "720p", "duration": 5,
+			"reference_bindings": []domain.PromptReferenceBinding{
+				{Token: "@image1", Role: "first_frame", URI: "manmu://asset/one"},
+			},
+		},
+		EventMessage: "shot video generation queued",
+	})
+	if err != nil {
+		t.Fatalf("create generation job: %v", err)
+	}
+
+	summary, err := productionService.ProcessQueuedGenerationJobs(ctx, jobs.DefaultExecutionLimit)
+	if err != nil {
+		t.Fatalf("submit queued generation job: %v", err)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("unexpected submit summary: %+v", summary)
+	}
+	submittedJob, err := productionService.GetGenerationJob(ctx, createdJob.ID)
+	if err != nil {
+		t.Fatalf("get submitted job: %v", err)
+	}
+	if submittedJob.Status != domain.GenerationJobStatusSubmitted || submittedJob.ProviderTaskID == "" {
+		t.Fatalf("expected submitted job with provider task id, got %+v", submittedJob)
+	}
+
+	summary, err = productionService.ProcessQueuedGenerationJobs(ctx, jobs.DefaultExecutionLimit)
+	if err != nil {
+		t.Fatalf("poll submitted generation job: %v", err)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("unexpected poll summary: %+v", summary)
+	}
+	completedJob, err := productionService.GetGenerationJob(ctx, createdJob.ID)
+	if err != nil {
+		t.Fatalf("get completed job: %v", err)
+	}
+	if completedJob.Status != domain.GenerationJobStatusSucceeded {
+		t.Fatalf("expected succeeded job, got %+v", completedJob)
+	}
+}
+
+func TestProductionServiceRecoversInterruptedSeedanceGenerationJob(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	productionRepo := repo.NewMemoryProductionRepository()
+	productionService := NewProductionServiceWithSeedance(productionRepo, nil, provider.NewSeedanceAdapter("", "", nil))
+	jobID := "00000000-0000-0000-0000-000000000211"
+
+	createdJob, err := productionRepo.CreateGenerationJob(ctx, repo.CreateGenerationJobParams{
+		ID: jobID, ProjectID: "00000000-0000-0000-0000-000000000212",
+		EpisodeID:  "00000000-0000-0000-0000-000000000213",
+		RequestKey: "shot-video:interrupted", Provider: provider.ProviderSeedance,
+		Model: provider.ModelSeedance10ProFast, TaskType: string(provider.TaskTypeTextToVideo),
+		Status: domain.GenerationJobStatusQueued, Prompt: "SH002 interrupted shot",
+		Params:       map[string]any{"duration": 5},
+		EventMessage: "shot video generation queued",
+	})
+	if err != nil {
+		t.Fatalf("create generation job: %v", err)
+	}
+	submittingJob, err := productionRepo.AdvanceGenerationJobStatus(ctx, repo.AdvanceGenerationJobStatusParams{
+		ID: createdJob.ID, From: domain.GenerationJobStatusQueued, To: domain.GenerationJobStatusSubmitting,
+		EventMessage: "seedance worker submitting generation job",
+	})
+	if err != nil {
+		t.Fatalf("advance job to submitting: %v", err)
+	}
+
+	summary, err := productionService.ProcessQueuedGenerationJobs(ctx, jobs.DefaultExecutionLimit)
+	if err != nil {
+		t.Fatalf("recover submitting generation job: %v", err)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("unexpected recovery summary: %+v", summary)
+	}
+	recoveredJob, err := productionService.GetGenerationJob(ctx, submittingJob.ID)
+	if err != nil {
+		t.Fatalf("get recovered job: %v", err)
+	}
+	if recoveredJob.Status != domain.GenerationJobStatusFailed {
+		t.Fatalf("expected unrecoverable submitting job to fail, got %+v", recoveredJob)
 	}
 }
 

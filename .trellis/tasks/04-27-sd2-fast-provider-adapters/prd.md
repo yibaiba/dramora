@@ -79,6 +79,9 @@ Build the next Manmu core slice around Seedance/SD2 fast video generation: provi
 - [x] Manmu can generate and read an SD2 prompt pack for a storyboard shot.
 - [x] Prompt pack includes time slices, camera motion, first-frame/reference guidance, reference bindings, stability constraints, and model preset params.
 - [x] `sd2 fast` provider preset is visible through backend capabilities and Studio prompt pack UI.
+- [x] Worker submits Seedance video jobs asynchronously and persists provider task ids.
+- [x] Worker polls submitted/polling Seedance jobs and advances completed output through postprocessing.
+- [x] Studio shows export worker status with polling after `Start export`.
 - [x] No real API key or provider secret is committed.
 - [x] Backend tests cover prompt pack generation and provider adapter payload normalization.
 - [x] Studio can show/copy SD2 prompt pack through GET/POST-only routes.
@@ -139,3 +142,6 @@ Recommended MVP sequence:
 - Enhanced Studio timeline editing with a component-local draft: build clips from storyboard, append locked asset clips, edit clip start/length, remove clips, and save through the existing `POST /api/v1/episodes/{episodeId}/timeline` route.
 - Added backend timeline graph validation for blank track/clip fields, negative timing, and clips exceeding the timeline duration.
 - Added export worker execution: `StartEpisodeExport` enqueues `export.render`, the worker processes queued/rendering exports, and exports advance `queued -> rendering -> succeeded` through repository-backed status updates.
+- Added real Seedance worker boundary: queued SD2 video jobs advance to `submitting`, call the provider adapter, persist `provider_task_id`, then poll submitted/polling jobs and complete fake/finished provider tasks via `downloading -> postprocessing -> succeeded`.
+- Expanded generation job repository reads to include `prompt`, `params`, and `provider_task_id` so worker execution uses the persisted prompt pack payload instead of rebuilding provider input in HTTP handlers.
+- Added Studio export status polling through `useExport(exportId)` and an accessible timeline export status card for queued/rendering/succeeded/failed/canceled states.

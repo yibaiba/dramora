@@ -77,10 +77,11 @@ type CreateGenerationJobParams struct {
 }
 
 type AdvanceGenerationJobStatusParams struct {
-	ID           string
-	From         domain.GenerationJobStatus
-	To           domain.GenerationJobStatus
-	EventMessage string
+	ID             string
+	From           domain.GenerationJobStatus
+	To             domain.GenerationJobStatus
+	ProviderTaskID string
+	EventMessage   string
 }
 
 type SaveApprovalGateParams struct {
@@ -361,7 +362,14 @@ func advanceGenerationJobStatusTx(
 	tx pgx.Tx,
 	params AdvanceGenerationJobStatusParams,
 ) (domain.GenerationJob, error) {
-	job, err := scanGenerationJob(tx.QueryRow(ctx, advanceGenerationJobStatusSQL, params.ID, params.From, params.To))
+	job, err := scanGenerationJob(tx.QueryRow(
+		ctx,
+		advanceGenerationJobStatusSQL,
+		params.ID,
+		params.From,
+		params.To,
+		params.ProviderTaskID,
+	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.GenerationJob{}, domain.ErrNotFound
 	}

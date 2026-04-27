@@ -50,6 +50,8 @@ Mutations invalidate the relevant query key after success.
 
 Agent Board should derive display state from `['generation-jobs']` instead of copying job rows into Zustand. Filter jobs by the selected project or episode in component memoization, then map job statuses to SOP step labels.
 
+Export status should remain server state under `['export', exportId]`. After `Start export`, use the returned export id to poll `useExport(exportId)` while status is `queued` or `rendering`; do not mirror export rows into Zustand or component effects.
+
 Timeline editor draft state should stay component-local until the user explicitly saves through `useSaveEpisodeTimeline`. The canonical timeline remains the `['timeline', episodeId]` query result; when deriving an initial editable draft from server state, use keyed component remounting or explicit user actions instead of synchronously copying query data in an effect.
 
 ---

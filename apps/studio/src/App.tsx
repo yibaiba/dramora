@@ -21,6 +21,7 @@ import {
   useCreateEpisode,
   useCreateProject,
   useEpisodeTimeline,
+  useExport,
   useApproveApprovalGate,
   useEpisodeAssets,
   useEpisodeApprovalGates,
@@ -48,6 +49,7 @@ import type {
   Episode,
   ApprovalGate,
   Asset,
+  Export,
   GenerationJob,
   GenerationJobStatus,
   Project,
@@ -869,6 +871,8 @@ function TimelineDraftEditor({
 }) {
   const saveTimeline = useSaveEpisodeTimeline()
   const startExport = useStartEpisodeExport()
+  const exportQuery = useExport(startExport.data?.id)
+  const activeExport = exportQuery.data ?? startExport.data
   const draft = useTimelineDraftState({ activeEpisode, assets, initialDraft, saveTimeline, shots })
 
   return (
@@ -887,6 +891,7 @@ function TimelineDraftEditor({
         startExport={startExport}
         saveTimelinePending={saveTimeline.isPending}
       />
+      <ExportStatusCard exportItem={activeExport} isFetching={exportQuery.isFetching} isStarting={startExport.isPending} />
       <TimelineDurationField durationMS={draft.durationMS} onChange={draft.changeDuration} />
       <div className="timeline-stage">
         <div className="playhead" aria-hidden="true" />
@@ -994,9 +999,42 @@ function TimelineEditorToolbar({
       >
         Start export
       </button>
-      {startExport.data ? <span className="export-status">Export {startExport.data.status}</span> : null}
     </PanelToolbar>
   )
+}
+
+function ExportStatusCard({
+  exportItem,
+  isFetching,
+  isStarting,
+}: {
+  exportItem?: Export
+  isFetching: boolean
+  isStarting: boolean
+}) {
+  if (!exportItem && !isStarting) return null
+  const status = exportItem?.status ?? 'queued'
+  const content = exportStatusContent(status)
+  return (
+    <aside className={`export-status-card ${status}`} aria-live="polite" aria-label="Export status">
+      <div>
+        <strong>{content.title}</strong>
+        <span>{content.detail}</span>
+      </div>
+      <small>{isFetching || isStarting ? 'Polling export worker' : `Format ${exportItem?.format ?? 'mp4'}`}</small>
+    </aside>
+  )
+}
+
+function exportStatusContent(status: Export['status']) {
+  const content: Record<Export['status'], { detail: string; title: string }> = {
+    canceled: { title: 'Export canceled', detail: 'This render was stopped before completion.' },
+    failed: { title: 'Export failed', detail: 'Worker returned an error; retry after checking timeline inputs.' },
+    queued: { title: 'Export queued', detail: 'Waiting for the render worker to pick up this timeline.' },
+    rendering: { title: 'Rendering export', detail: 'Worker is composing tracks and preparing output media.' },
+    succeeded: { title: 'Export ready', detail: 'Final timeline render completed successfully.' },
+  }
+  return content[status]
 }
 
 function TimelineDurationField({ durationMS, onChange }: { durationMS: number; onChange: (value: string) => void }) {

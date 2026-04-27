@@ -35,6 +35,7 @@ func scanGenerationJobs(rows rowsScanner) ([]domain.GenerationJob, error) {
 
 func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 	var job domain.GenerationJob
+	var paramsPayload []byte
 	if err := row.Scan(
 		&job.ID,
 		&job.ProjectID,
@@ -44,10 +45,21 @@ func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 		&job.Model,
 		&job.TaskType,
 		&job.Status,
+		&job.Prompt,
+		&paramsPayload,
+		&job.ProviderTaskID,
 		&job.CreatedAt,
 		&job.UpdatedAt,
 	); err != nil {
 		return domain.GenerationJob{}, err
+	}
+	if len(paramsPayload) > 0 {
+		if err := json.Unmarshal(paramsPayload, &job.Params); err != nil {
+			return domain.GenerationJob{}, err
+		}
+	}
+	if job.Params == nil {
+		job.Params = map[string]any{}
 	}
 	return job, nil
 }

@@ -69,6 +69,8 @@ func (r *MemoryProductionRepository) CreateStoryAnalysisRun(
 		Model:         params.Model,
 		TaskType:      "story_analysis",
 		Status:        domain.GenerationJobStatusQueued,
+		Prompt:        params.Prompt,
+		Params:        map[string]any{},
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -162,7 +164,11 @@ func (r *MemoryProductionRepository) CreateGenerationJob(
 	job := domain.GenerationJob{
 		ID: params.ID, ProjectID: params.ProjectID, EpisodeID: params.EpisodeID,
 		WorkflowRunID: params.WorkflowRunID, Provider: params.Provider, Model: params.Model,
-		TaskType: params.TaskType, Status: params.Status, CreatedAt: now, UpdatedAt: now,
+		TaskType: params.TaskType, Status: params.Status, Prompt: params.Prompt, Params: params.Params,
+		CreatedAt: now, UpdatedAt: now,
+	}
+	if job.Params == nil {
+		job.Params = map[string]any{}
 	}
 	r.jobs[job.ID] = job
 	r.jobKeys[params.RequestKey] = job.ID
@@ -181,6 +187,9 @@ func (r *MemoryProductionRepository) AdvanceGenerationJobStatus(
 		return domain.GenerationJob{}, domain.ErrNotFound
 	}
 	job.Status = params.To
+	if params.ProviderTaskID != "" {
+		job.ProviderTaskID = params.ProviderTaskID
+	}
 	job.UpdatedAt = time.Now().UTC()
 	r.jobs[job.ID] = job
 	return job, nil

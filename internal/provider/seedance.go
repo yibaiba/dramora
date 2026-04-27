@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 )
@@ -148,6 +149,21 @@ func (a *SeedanceAdapter) SubmitGeneration(
 	return SeedanceGenerationTask{ID: taskID, Status: status, Mode: "ark"}, nil
 }
 
+func (a *SeedanceAdapter) PollGeneration(ctx context.Context, taskID string) (SeedanceGenerationTask, error) {
+	taskID = strings.TrimSpace(taskID)
+	if taskID == "" {
+		return SeedanceGenerationTask{}, fmt.Errorf("seedance task id is required")
+	}
+	if a.Mode() == "fake" {
+		return SeedanceGenerationTask{ID: taskID, Status: "succeeded", Mode: "fake"}, nil
+	}
+	status, err := a.pollArkGeneration(ctx, taskID)
+	if err != nil {
+		return SeedanceGenerationTask{}, err
+	}
+	return SeedanceGenerationTask{ID: taskID, Status: status, Mode: "ark"}, nil
+}
+
 func BuildSeedanceGenerationRequest(input SeedanceRequestInput) SeedanceGenerationRequest {
 	profile := SeedanceFastProfile()
 	duration := input.DurationSec
@@ -205,6 +221,25 @@ func (a *SeedanceAdapter) submitArkGeneration(
 		return "", "", fmt.Errorf("seedance ark request failed with status %d", response.StatusCode)
 	}
 	return decodeArkTask(response)
+}
+
+func (a *SeedanceAdapter) pollArkGeneration(ctx context.Context, taskID string) (string, error) {
+	taskURL := strings.TrimRight(a.baseURL, "/") + "/" + url.PathEscape(taskID)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, taskURL, nil)
+	if err != nil {
+		return "", err
+	}
+	request.Header.Set("authorization", "Bearer "+a.apiKey)
+	response, err := a.client.Do(request)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return "", fmt.Errorf("seedance ark poll failed with status %d", response.StatusCode)
+	}
+	_, status, err := decodeArkTask(response)
+	return status, err
 }
 
 func decodeArkTask(response *http.Response) (string, string, error) {
