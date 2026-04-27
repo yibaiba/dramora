@@ -11,6 +11,7 @@ var ErrExecutorRequired = errors.New("jobs executor is required")
 
 type Executor interface {
 	ProcessQueuedGenerationJobs(ctx context.Context, limit int) (ExecutionSummary, error)
+	ProcessQueuedExports(ctx context.Context, limit int) (ExecutionSummary, error)
 }
 
 type Worker struct {
@@ -29,16 +30,31 @@ func (w *Worker) RunOnce(ctx context.Context) (ExecutionSummary, error) {
 	if w.executor == nil {
 		return ExecutionSummary{}, ErrExecutorRequired
 	}
-	summary, err := w.executor.ProcessQueuedGenerationJobs(ctx, DefaultExecutionLimit)
+	generationSummary, err := w.executor.ProcessQueuedGenerationJobs(ctx, DefaultExecutionLimit)
+	if err != nil {
+		return generationSummary, err
+	}
+	exportSummary, err := w.executor.ProcessQueuedExports(ctx, DefaultExecutionLimit)
+	summary := MergeExecutionSummaries(generationSummary, exportSummary)
 	if err != nil {
 		return summary, err
 	}
-	w.logger.Info("worker no-op batch complete",
+	w.logger.Info("worker batch complete",
 		"processed", summary.Processed,
 		"succeeded", summary.Succeeded,
 		"failed", summary.Failed,
 	)
 	return summary, nil
+}
+
+func MergeExecutionSummaries(items ...ExecutionSummary) ExecutionSummary {
+	summary := ExecutionSummary{}
+	for _, item := range items {
+		summary.Processed += item.Processed
+		summary.Succeeded += item.Succeeded
+		summary.Failed += item.Failed
+	}
+	return summary
 }
 
 func (w *Worker) Run(ctx context.Context, queues []string) error {

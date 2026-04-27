@@ -367,3 +367,20 @@ SELECT id::text, timeline_id::text, status, format, created_at, updated_at
 FROM exports
 WHERE id = $1::uuid
 `
+
+const listExportsByStatusSQL = `
+SELECT id::text, timeline_id::text, status, format, created_at, updated_at
+FROM exports
+WHERE status = $1
+ORDER BY created_at, id
+LIMIT $2
+`
+
+const advanceExportStatusSQL = `
+UPDATE exports
+SET status = $3,
+    updated_at = now()
+WHERE id = $1::uuid
+  AND status = $2
+RETURNING id::text, timeline_id::text, status, format, created_at, updated_at
+`

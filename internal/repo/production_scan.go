@@ -323,3 +323,15 @@ func scanExport(row rowScanner) (domain.Export, error) {
 	err := row.Scan(&item.ID, &item.TimelineID, &item.Status, &item.Format, &item.CreatedAt, &item.UpdatedAt)
 	return item, err
 }
+
+func scanExports(rows rowsScanner) ([]domain.Export, error) {
+	items := make([]domain.Export, 0)
+	for rows.Next() {
+		item, err := scanExport(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}

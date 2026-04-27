@@ -135,6 +135,73 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 	return summary, nil
 }
 
+func (s *ProductionService) ProcessQueuedExports(ctx context.Context, limit int) (jobs.ExecutionSummary, error) {
+	if limit <= 0 {
+		return jobs.ExecutionSummary{}, fmt.Errorf("%w: execution limit must be positive", domain.ErrInvalidInput)
+	}
+
+	summary, err := s.processExportsByStatus(ctx, domain.ExportStatusQueued, limit)
+	if err != nil {
+		return jobs.ExecutionSummary{}, err
+	}
+	if remaining := limit - summary.Processed; remaining > 0 {
+		renderingSummary, err := s.processExportsByStatus(ctx, domain.ExportStatusRendering, remaining)
+		summary = jobs.MergeExecutionSummaries(summary, renderingSummary)
+		if err != nil {
+			return summary, err
+		}
+	}
+	return summary, nil
+}
+
+func (s *ProductionService) processExportsByStatus(
+	ctx context.Context,
+	status domain.ExportStatus,
+	limit int,
+) (jobs.ExecutionSummary, error) {
+	exports, err := s.production.ListExportsByStatus(ctx, status, limit)
+	if err != nil {
+		return jobs.ExecutionSummary{}, err
+	}
+
+	summary := jobs.ExecutionSummary{}
+	for _, export := range exports {
+		summary.Processed++
+		if err := s.processExportNoop(ctx, export); err != nil {
+			summary.Failed++
+			return summary, fmt.Errorf("process export %s: %w", export.ID, err)
+		}
+		summary.Succeeded++
+	}
+	return summary, nil
+}
+
+func (s *ProductionService) processExportNoop(ctx context.Context, export domain.Export) error {
+	current := export
+	if current.Status == domain.ExportStatusQueued {
+		rendering, err := s.advanceExport(ctx, current, domain.ExportStatusRendering)
+		if err != nil {
+			return err
+		}
+		current = rendering
+	}
+	_, err := s.advanceExport(ctx, current, domain.ExportStatusSucceeded)
+	return err
+}
+
+func (s *ProductionService) advanceExport(
+	ctx context.Context,
+	export domain.Export,
+	nextStatus domain.ExportStatus,
+) (domain.Export, error) {
+	if err := export.Status.ValidateTransition(nextStatus); err != nil {
+		return domain.Export{}, err
+	}
+	return s.production.AdvanceExportStatus(ctx, repo.AdvanceExportStatusParams{
+		ID: export.ID, From: export.Status, To: nextStatus,
+	})
+}
+
 func (s *ProductionService) processGenerationJobNoop(ctx context.Context, generationJob domain.GenerationJob) error {
 	current := generationJob
 	for _, step := range noopGenerationSteps {

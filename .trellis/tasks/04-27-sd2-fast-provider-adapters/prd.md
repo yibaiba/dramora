@@ -138,3 +138,4 @@ Recommended MVP sequence:
 - Added MVP approval gates with seed/list/approve/request-changes routes and Studio approval board.
 - Enhanced Studio timeline editing with a component-local draft: build clips from storyboard, append locked asset clips, edit clip start/length, remove clips, and save through the existing `POST /api/v1/episodes/{episodeId}/timeline` route.
 - Added backend timeline graph validation for blank track/clip fields, negative timing, and clips exceeding the timeline duration.
+- Added export worker execution: `StartEpisodeExport` enqueues `export.render`, the worker processes queued/rendering exports, and exports advance `queued -> rendering -> succeeded` through repository-backed status updates.

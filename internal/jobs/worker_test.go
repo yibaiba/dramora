@@ -10,7 +10,10 @@ import (
 func TestWorkerRunOnceExecutesQueuedJobs(t *testing.T) {
 	t.Parallel()
 
-	executor := &fakeExecutor{summary: ExecutionSummary{Processed: 1, Succeeded: 1}}
+	executor := &fakeExecutor{
+		exportSummary:     ExecutionSummary{Processed: 1, Succeeded: 1},
+		generationSummary: ExecutionSummary{Processed: 2, Succeeded: 2},
+	}
 	worker := NewWorker(slog.Default(), executor)
 
 	summary, err := worker.RunOnce(context.Background())
@@ -20,7 +23,7 @@ func TestWorkerRunOnceExecutesQueuedJobs(t *testing.T) {
 	if !executor.called {
 		t.Fatal("expected executor to be called")
 	}
-	if summary.Processed != 1 || summary.Succeeded != 1 {
+	if summary.Processed != 3 || summary.Succeeded != 3 {
 		t.Fatalf("unexpected summary: %+v", summary)
 	}
 }
@@ -35,8 +38,9 @@ func TestWorkerRunOnceRequiresExecutor(t *testing.T) {
 }
 
 type fakeExecutor struct {
-	called  bool
-	summary ExecutionSummary
+	called            bool
+	exportSummary     ExecutionSummary
+	generationSummary ExecutionSummary
 }
 
 func (e *fakeExecutor) ProcessQueuedGenerationJobs(_ context.Context, limit int) (ExecutionSummary, error) {
@@ -44,5 +48,12 @@ func (e *fakeExecutor) ProcessQueuedGenerationJobs(_ context.Context, limit int)
 	if limit != DefaultExecutionLimit {
 		return ExecutionSummary{}, errors.New("unexpected limit")
 	}
-	return e.summary, nil
+	return e.generationSummary, nil
+}
+
+func (e *fakeExecutor) ProcessQueuedExports(_ context.Context, limit int) (ExecutionSummary, error) {
+	if limit != DefaultExecutionLimit {
+		return ExecutionSummary{}, errors.New("unexpected limit")
+	}
+	return e.exportSummary, nil
 }

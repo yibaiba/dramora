@@ -38,7 +38,7 @@ go test ./...
 The scaffold does not require provider secrets or a database connection yet.
 
 If `MANMU_DATABASE_URL` is empty, the API uses an in-memory repository for local smoke tests. Set `MANMU_DATABASE_URL` after applying migrations to use PostgreSQL-backed CRUD.
-The worker uses the same repository wiring. With PostgreSQL configured, it can no-op process queued `generation_jobs` through the current status machine so workflow plumbing is testable before real model providers are attached.
+The worker uses the same repository wiring. With PostgreSQL configured, it can no-op process queued `generation_jobs` and `exports` through their current status machines so workflow plumbing is testable before real model providers or renderers are attached.
 SD2/Seedance fast prompt packs work without provider secrets. The Seedance adapter defaults to fake mode and switches to Ark request mode only when `ARK_API_KEY` is present at runtime.
 
 Example local environment:

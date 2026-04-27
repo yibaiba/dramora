@@ -56,6 +56,7 @@ db/migrations/000003_create_production_core.up.sql
 db/migrations/000004_create_story_analyses.up.sql
 db/migrations/000005_create_story_maps_and_shots.up.sql
 db/migrations/000006_create_shot_prompt_packs.up.sql
+db/migrations/000008_add_exports_status_index.up.sql
 ```
 
 Repository constructors:
@@ -93,6 +94,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Saving episode timeline | upsert `timelines` by `episode_id`, set status to `saved`, and increment version on updates. |
 | Saving invalid timeline graph | reject blank track kind/name, blank clip kind, negative timings, or clips that exceed timeline duration with `domain.ErrInvalidInput`; HTTP maps to 400. |
 | Worker advances generation job | update `generation_jobs.status` and insert a matching `generation_job_events` row in one DB transaction. |
+| Worker advances queued export | move `exports.status` from `queued` to `rendering` to `succeeded` through `ProductionService.ProcessQueuedExports`; do not mark exports succeeded in the HTTP handler. |
+| Worker finds a rendering export | resume it and advance to `succeeded` so a previous partial worker failure does not leave exports permanently stuck. |
 | Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
 | Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
 | Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
@@ -117,6 +120,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Timeline save routes should test save-then-read behavior through the HTTP layer.
 - Timeline save routes should test invalid graph timing through the HTTP layer.
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
+- Export worker execution should be service-tested with the memory repo and route-tested by starting an export, processing queued exports, then reading the export status.
+- Export worker tests should include resuming an export that is already in `rendering`.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
 - Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.
 - Approval gate routes should test seed, approve, and request-changes behavior through the HTTP layer.

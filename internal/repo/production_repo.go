@@ -41,6 +41,8 @@ type ProductionRepository interface {
 	SaveEpisodeTimelineGraph(ctx context.Context, params SaveEpisodeTimelineGraphParams) (domain.Timeline, error)
 	CreateExport(ctx context.Context, params CreateExportParams) (domain.Export, error)
 	GetExport(ctx context.Context, exportID string) (domain.Export, error)
+	ListExportsByStatus(ctx context.Context, status domain.ExportStatus, limit int) ([]domain.Export, error)
+	AdvanceExportStatus(ctx context.Context, params AdvanceExportStatusParams) (domain.Export, error)
 }
 
 type CreateStoryAnalysisRunParams struct {
@@ -226,6 +228,12 @@ type CreateExportParams struct {
 	TimelineID string
 	Status     domain.ExportStatus
 	Format     string
+}
+
+type AdvanceExportStatusParams struct {
+	ID   string
+	From domain.ExportStatus
+	To   domain.ExportStatus
 }
 
 type PostgresProductionRepository struct {

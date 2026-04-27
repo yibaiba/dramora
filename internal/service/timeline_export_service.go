@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/jobs"
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
@@ -66,12 +67,26 @@ func (s *ProductionService) StartEpisodeExport(ctx context.Context, episodeID st
 	if err != nil {
 		return domain.Export{}, err
 	}
-	return s.production.CreateExport(ctx, repo.CreateExportParams{
+	export, err := s.production.CreateExport(ctx, repo.CreateExportParams{
 		ID:         id,
 		TimelineID: timeline.ID,
 		Status:     domain.ExportStatusQueued,
 		Format:     "mp4",
 	})
+	if err != nil {
+		return domain.Export{}, err
+	}
+	if err := s.jobClient.Enqueue(ctx, jobs.Job{
+		ID:   id,
+		Kind: jobs.JobKindExportRender,
+		Payload: map[string]any{
+			"export_id":   id,
+			"timeline_id": timeline.ID,
+		},
+	}); err != nil {
+		return domain.Export{}, err
+	}
+	return export, nil
 }
 
 func (s *ProductionService) GetExport(ctx context.Context, id string) (domain.Export, error) {

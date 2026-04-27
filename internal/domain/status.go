@@ -121,6 +121,17 @@ func (s ApprovalGateStatus) ValidateTransition(next ApprovalGateStatus) error {
 	return invalidTransition(string(s), string(next))
 }
 
+func (s ExportStatus) CanTransitionTo(next ExportStatus) bool {
+	return canTransition(exportTransitions, string(s), string(next))
+}
+
+func (s ExportStatus) ValidateTransition(next ExportStatus) error {
+	if s.CanTransitionTo(next) {
+		return nil
+	}
+	return invalidTransition(string(s), string(next))
+}
+
 func invalidTransition(current string, next string) error {
 	return fmt.Errorf("%w: %s to %s", ErrInvalidTransition, current, next)
 }

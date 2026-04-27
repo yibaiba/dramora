@@ -73,3 +73,16 @@ func TestApprovalGateStatusTransition(t *testing.T) {
 		t.Fatalf("expected invalid transition, got %v", err)
 	}
 }
+
+func TestExportStatusTransition(t *testing.T) {
+	t.Parallel()
+
+	if err := ExportStatusQueued.ValidateTransition(ExportStatusRendering); err != nil {
+		t.Fatalf("expected queued -> rendering to be valid: %v", err)
+	}
+
+	err := ExportStatusSucceeded.ValidateTransition(ExportStatusRendering)
+	if !errors.Is(err, ErrInvalidTransition) {
+		t.Fatalf("expected invalid transition, got %v", err)
+	}
+}

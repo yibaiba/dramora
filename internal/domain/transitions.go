@@ -86,6 +86,18 @@ var approvalGateTransitions = map[string][]string{
 	},
 }
 
+var exportTransitions = map[string][]string{
+	string(ExportStatusQueued): {
+		string(ExportStatusRendering),
+		string(ExportStatusCanceled),
+	},
+	string(ExportStatusRendering): {
+		string(ExportStatusSucceeded),
+		string(ExportStatusFailed),
+		string(ExportStatusCanceled),
+	},
+}
+
 func canTransition(transitions map[string][]string, current string, next string) bool {
 	if current == next {
 		return true

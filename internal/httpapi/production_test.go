@@ -382,6 +382,26 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	if exportResp.Code != http.StatusAccepted {
 		t.Fatalf("expected export 202, got %d: %s", exportResp.Code, exportResp.Body.String())
 	}
+	var exportPayload struct {
+		Export exportResponse `json:"export"`
+	}
+	decodeBody(t, exportResp, &exportPayload)
+	if _, err := productionService.ProcessQueuedExports(exportReq.Context(), jobs.DefaultExecutionLimit); err != nil {
+		t.Fatalf("process export job: %v", err)
+	}
+	exportDetailResp := httptest.NewRecorder()
+	exportDetailReq := httptest.NewRequest(http.MethodGet, "/api/v1/exports/"+exportPayload.Export.ID, nil)
+	router.ServeHTTP(exportDetailResp, exportDetailReq)
+	if exportDetailResp.Code != http.StatusOK {
+		t.Fatalf("expected export detail 200, got %d: %s", exportDetailResp.Code, exportDetailResp.Body.String())
+	}
+	var exportDetailPayload struct {
+		Export exportResponse `json:"export"`
+	}
+	decodeBody(t, exportDetailResp, &exportDetailPayload)
+	if exportDetailPayload.Export.Status != "succeeded" {
+		t.Fatalf("expected succeeded export, got %q", exportDetailPayload.Export.Status)
+	}
 }
 
 func createTestEpisode(t *testing.T, router http.Handler) episodeResponse {

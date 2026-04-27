@@ -732,3 +732,49 @@ func (r *MemoryProductionRepository) GetExport(_ context.Context, exportID strin
 	}
 	return export, nil
 }
+
+func (r *MemoryProductionRepository) ListExportsByStatus(
+	_ context.Context,
+	status domain.ExportStatus,
+	limit int,
+) ([]domain.Export, error) {
+	if limit <= 0 {
+		return []domain.Export{}, nil
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	exports := make([]domain.Export, 0)
+	for _, item := range r.exports {
+		if item.Status == status {
+			exports = append(exports, item)
+		}
+	}
+	sort.Slice(exports, func(i int, j int) bool {
+		if exports[i].CreatedAt.Equal(exports[j].CreatedAt) {
+			return exports[i].ID < exports[j].ID
+		}
+		return exports[i].CreatedAt.Before(exports[j].CreatedAt)
+	})
+	if len(exports) > limit {
+		exports = exports[:limit]
+	}
+	return exports, nil
+}
+
+func (r *MemoryProductionRepository) AdvanceExportStatus(
+	_ context.Context,
+	params AdvanceExportStatusParams,
+) (domain.Export, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	export, ok := r.exports[params.ID]
+	if !ok || export.Status != params.From {
+		return domain.Export{}, domain.ErrNotFound
+	}
+	export.Status = params.To
+	export.UpdatedAt = time.Now().UTC()
+	r.exports[export.ID] = export
+	return export, nil
+}
