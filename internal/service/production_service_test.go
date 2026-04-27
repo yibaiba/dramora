@@ -47,4 +47,15 @@ func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 	if got := generationJobs[0].Status; got != domain.GenerationJobStatusSucceeded {
 		t.Fatalf("expected succeeded job, got %q", got)
 	}
+
+	analyses, err := productionService.ListStoryAnalyses(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("list story analyses: %v", err)
+	}
+	if len(analyses) != 1 {
+		t.Fatalf("expected 1 story analysis, got %d", len(analyses))
+	}
+	if len(analyses[0].CharacterSeeds) == 0 || len(analyses[0].SceneSeeds) == 0 {
+		t.Fatalf("expected story analysis seeds, got %+v", analyses[0])
+	}
 }

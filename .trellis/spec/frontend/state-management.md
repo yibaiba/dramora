@@ -35,7 +35,12 @@ Current query keys:
 ['projects']
 ['episodes', projectId]
 ['generation-jobs']
+['story-analyses', episodeId]
+['story-analysis', analysisId]
+['story-map', episodeId]
+['storyboard-shots', episodeId]
 ['timeline', episodeId]
+['export', exportId]
 ```
 
 Mutations invalidate the relevant query key after success.

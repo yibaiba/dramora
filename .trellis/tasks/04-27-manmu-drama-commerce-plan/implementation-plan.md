@@ -157,10 +157,12 @@ GET /api/v1/projects/{projectId}
 GET /api/v1/projects/{projectId}/episodes
 POST /api/v1/projects/{projectId}/episodes
 GET /api/v1/episodes/{episodeId}
-GET /api/v1/workflow-runs/{workflowRunId}
 GET /api/v1/generation-jobs
 GET /api/v1/generation-jobs/{jobId}
+GET /api/v1/episodes/{episodeId}/story-analyses
+GET /api/v1/story-analyses/{analysisId}
 GET /api/v1/episodes/{episodeId}/timeline
+GET /api/v1/workflow-runs/{workflowRunId}
 POST /api/v1/episodes/{episodeId}/timeline
 GET /api/v1/events/stream
 ```
@@ -321,13 +323,51 @@ Core implementation map status:
 4. Worker no-op execution over queued jobs: complete.
 5. Timeline metadata save/load: complete.
 6. Agent Board real job data: complete.
-7. Remaining core before advanced canvas: story analysis artifacts, character/scene/prop maps, storyboard shot cards, timeline tracks/clips, export job.
+7. Story analysis artifacts persistence/read API: complete.
+8. Character/scene/prop maps: complete.
+9. Storyboard shot cards: complete.
+10. Timeline tracks/clips save/load: complete.
+11. Export job/render scaffold: complete.
+
+Story analysis artifact slice status: complete.
+
+Implemented:
+
+- `story_analyses` migration with episode-scoped versions and generation job linkage.
+- Domain/repository/service support for generated story analysis artifacts.
+- Worker no-op execution now creates a structured story analysis artifact when a `story_analysis` job succeeds.
+- Read APIs: `GET /api/v1/episodes/{episodeId}/story-analyses` and `GET /api/v1/story-analyses/{analysisId}`.
+- OpenAPI, README, and sqlc query source updates for the new artifact contract.
+- Studio typed client/hooks and Story Analysis panel showing latest summary, seed counts, and themes.
+
+Verified:
+
+- `GOTOOLCHAIN=local go test ./...`
+- `cd apps/studio && npm run lint -- --quiet`
+- `cd apps/studio && npm run build`
 
 Next implementation slice:
 
-- Implement story analysis artifact persistence and read API.
-- Then implement character/scene/prop map extraction surfaces.
-- Defer freeform canvas and advanced timeline editing until storyboard + assets + clips exist.
+- Add richer Studio panels for the new C/S/P, storyboard, timeline clip, and export APIs.
+- Defer freeform canvas and advanced timeline editing until asset candidate generation exists.
+
+Remaining core modules slice status: complete.
+
+Implemented:
+
+- `characters`, `scenes`, `props`, and `storyboard_shots` migrations.
+- Episode-scoped GET/POST seed APIs for C/S/P maps and storyboard shot cards.
+- Timeline graph save/load support for tracks and clips on the existing `POST /episodes/{episodeId}/timeline` route.
+- Export scaffold with `POST /episodes/{episodeId}/exports` and `GET /exports/{exportId}`.
+- PostgreSQL and in-memory repository implementations for all four core modules.
+- Typed Studio client/hooks for the new GET/POST-only API contracts.
+
+Verified:
+
+- `GOTOOLCHAIN=local go test ./...`
+- `GOTOOLCHAIN=local go build ./...`
+- `cd apps/studio && npm run lint -- --quiet`
+- `cd apps/studio && npm run build`
 
 ## Validation plan
 

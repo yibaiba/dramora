@@ -2,10 +2,14 @@ import type {
   CreateEpisodeRequest,
   CreateProjectRequest,
   Episode,
+  Export,
   GenerationJob,
   Project,
   SaveTimelineRequest,
   StartStoryAnalysisResponse,
+  StoryAnalysis,
+  StoryMap,
+  StoryboardShot,
   Timeline,
 } from './types'
 
@@ -72,10 +76,59 @@ export async function startStoryAnalysis(episodeId: string): Promise<StartStoryA
   })
 }
 
+export async function listStoryAnalyses(episodeId: string): Promise<StoryAnalysis[]> {
+  const payload = await fetchJSON<{ story_analyses: StoryAnalysis[] }>(`/api/v1/episodes/${episodeId}/story-analyses`)
+  return payload.story_analyses
+}
+
+export async function getStoryAnalysis(analysisId: string): Promise<StoryAnalysis> {
+  const payload = await fetchJSON<{ story_analysis: StoryAnalysis }>(`/api/v1/story-analyses/${analysisId}`)
+  return payload.story_analysis
+}
+
+export async function getStoryMap(episodeId: string): Promise<StoryMap> {
+  const payload = await fetchJSON<{ story_map: StoryMap }>(`/api/v1/episodes/${episodeId}/story-map`)
+  return payload.story_map
+}
+
+export async function seedStoryMap(episodeId: string): Promise<StoryMap> {
+  const payload = await fetchJSON<{ story_map: StoryMap }>(`/api/v1/episodes/${episodeId}/story-map:seed`, {
+    method: 'POST',
+  })
+  return payload.story_map
+}
+
+export async function listStoryboardShots(episodeId: string): Promise<StoryboardShot[]> {
+  const payload = await fetchJSON<{ storyboard_shots: StoryboardShot[] }>(
+    `/api/v1/episodes/${episodeId}/storyboard-shots`,
+  )
+  return payload.storyboard_shots
+}
+
+export async function seedStoryboardShots(episodeId: string): Promise<StoryboardShot[]> {
+  const payload = await fetchJSON<{ storyboard_shots: StoryboardShot[] }>(
+    `/api/v1/episodes/${episodeId}/storyboard-shots:seed`,
+    { method: 'POST' },
+  )
+  return payload.storyboard_shots
+}
+
 export async function saveEpisodeTimeline(episodeId: string, request: SaveTimelineRequest): Promise<Timeline> {
   const payload = await fetchJSON<{ timeline: Timeline }>(`/api/v1/episodes/${episodeId}/timeline`, {
     body: JSON.stringify(request),
     method: 'POST',
   })
   return payload.timeline
+}
+
+export async function startEpisodeExport(episodeId: string): Promise<Export> {
+  const payload = await fetchJSON<{ export: Export }>(`/api/v1/episodes/${episodeId}/exports`, {
+    method: 'POST',
+  })
+  return payload.export
+}
+
+export async function getExport(exportId: string): Promise<Export> {
+  const payload = await fetchJSON<{ export: Export }>(`/api/v1/exports/${exportId}`)
+  return payload.export
 }

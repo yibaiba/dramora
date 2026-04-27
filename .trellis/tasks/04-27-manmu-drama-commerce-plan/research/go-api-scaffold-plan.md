@@ -324,6 +324,13 @@ MVP can use a simple auth stub if real auth is not implemented yet, but the rout
 | POST | `/approval-gates/{gateId}:reject` | Reject gate. |
 | POST | `/approval-gates/{gateId}:request-changes` | Request changes. |
 
+### Story analysis artifacts
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/episodes/{episodeId}/story-analyses` | List generated story analysis artifacts for an episode. |
+| GET | `/story-analyses/{analysisId}` | Story analysis artifact detail for C/S/P seed review. |
+
 ### Generation jobs
 
 | Method | Path | Purpose |

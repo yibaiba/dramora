@@ -37,6 +37,7 @@ Migration order should follow the implementation plan:
 3. assets and artifact lineage
 4. workflow/generation job tables
 5. timeline/export tables
+6. generated story analysis artifacts
 
 ### Scenario: Production core persistence
 
@@ -52,6 +53,8 @@ Migration files:
 db/migrations/000001_create_identity.up.sql
 db/migrations/000002_create_projects.up.sql
 db/migrations/000003_create_production_core.up.sql
+db/migrations/000004_create_story_analyses.up.sql
+db/migrations/000005_create_story_maps_and_shots.up.sql
 ```
 
 Repository constructors:
@@ -71,6 +74,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - `db/queries/*.sql` is the sqlc source of truth even when hand-written pgx repositories exist.
 - Media payloads must be object URIs in `assets.uri`, never base64 blobs.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
+- Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
 
 #### 4. Validation & Error Matrix
 
@@ -84,6 +88,10 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Starting story analysis | create `workflow_runs`, `generation_jobs`, and `generation_job_events` in one DB transaction. |
 | Saving episode timeline | upsert `timelines` by `episode_id`, set status to `saved`, and increment version on updates. |
 | Worker advances generation job | update `generation_jobs.status` and insert a matching `generation_job_events` row in one DB transaction. |
+| Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
+| Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
+| Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
+| Timeline graph is saved | upsert timeline metadata, then replace tracks/clips in a repository transaction. |
 
 #### 5. Good/Base/Bad Cases
 
@@ -99,6 +107,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Production read routes should test empty list and 404 behavior until create/start endpoints exist.
 - Timeline save routes should test save-then-read behavior through the HTTP layer.
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
+- Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
+- Core map/storyboard/timeline/export routes should test the end-to-end seed/save/start route chain through the HTTP layer.
 
 #### 7. Wrong vs Correct
 

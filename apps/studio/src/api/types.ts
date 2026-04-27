@@ -65,7 +65,86 @@ export type Timeline = {
   status: 'draft' | 'saved' | 'exporting' | 'exported'
   version: number
   duration_ms: number
-  tracks: Record<string, never>[]
+  tracks: TimelineTrack[]
+  created_at: string
+  updated_at: string
+}
+
+export type TimelineTrack = {
+  id: string
+  kind: string
+  name: string
+  position: number
+  clips: TimelineClip[]
+  created_at: string
+  updated_at: string
+}
+
+export type TimelineClip = {
+  id: string
+  asset_id: string
+  kind: string
+  start_ms: number
+  duration_ms: number
+  trim_start_ms: number
+  created_at: string
+  updated_at: string
+}
+
+export type StoryAnalysis = {
+  id: string
+  project_id: string
+  episode_id: string
+  workflow_run_id: string
+  generation_job_id: string
+  version: number
+  status: 'generated' | 'approved'
+  summary: string
+  themes: string[]
+  character_seeds: string[]
+  scene_seeds: string[]
+  prop_seeds: string[]
+  created_at: string
+  updated_at: string
+}
+
+export type StoryMap = {
+  characters: StoryMapItem[]
+  scenes: StoryMapItem[]
+  props: StoryMapItem[]
+}
+
+export type StoryMapItem = {
+  id: string
+  project_id: string
+  episode_id: string
+  code: string
+  name: string
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export type StoryboardShot = {
+  id: string
+  project_id: string
+  episode_id: string
+  scene_id: string
+  code: string
+  title: string
+  description: string
+  prompt: string
+  position: number
+  duration_ms: number
+  created_at: string
+  updated_at: string
+}
+
+export type Export = {
+  id: string
+  timeline_id: string
+  status: 'queued' | 'rendering' | 'succeeded' | 'failed' | 'canceled'
+  format: string
   created_at: string
   updated_at: string
 }
@@ -82,6 +161,22 @@ export type StartStoryAnalysisResponse = {
 
 export type SaveTimelineRequest = {
   duration_ms: number
+  tracks?: SaveTimelineTrackRequest[]
+}
+
+export type SaveTimelineTrackRequest = {
+  kind: string
+  name: string
+  position: number
+  clips?: SaveTimelineClipRequest[]
+}
+
+export type SaveTimelineClipRequest = {
+  asset_id?: string
+  kind: string
+  start_ms: number
+  duration_ms: number
+  trim_start_ms?: number
 }
 
 export type CreateEpisodeRequest = {

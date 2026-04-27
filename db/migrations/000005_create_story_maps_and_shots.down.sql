@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS storyboard_shots;
+DROP TABLE IF EXISTS props;
+DROP TABLE IF EXISTS scenes;
+DROP TABLE IF EXISTS characters;

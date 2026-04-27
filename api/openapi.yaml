@@ -152,6 +152,114 @@ paths:
                     $ref: "#/components/schemas/GenerationJob"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/story-analyses:
+    get:
+      summary: List completed story analysis artifacts for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Story analysis list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_analyses:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoryAnalysis"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/story-analyses/{analysisId}:
+    get:
+      summary: Get story analysis artifact
+      parameters:
+        - $ref: "#/components/parameters/AnalysisID"
+      responses:
+        "200":
+          description: Story analysis detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_analysis:
+                    $ref: "#/components/schemas/StoryAnalysis"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/story-map:
+    get:
+      summary: Get character, scene, and prop maps for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Story map detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_map:
+                    $ref: "#/components/schemas/StoryMap"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/story-map:seed:
+    post:
+      summary: Seed character, scene, and prop maps from latest story analysis
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "201":
+          description: Seeded story map
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_map:
+                    $ref: "#/components/schemas/StoryMap"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/storyboard-shots:
+    get:
+      summary: List storyboard shot cards for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Storyboard shot list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyboard_shots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoryboardShot"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/storyboard-shots:seed:
+    post:
+      summary: Seed storyboard shot cards from latest story analysis and scene map
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "201":
+          description: Seeded storyboard shot cards
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyboard_shots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StoryboardShot"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/workflow-runs/{workflowRunId}:
     get:
       summary: Get workflow run
@@ -242,6 +350,40 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/exports:
+    post:
+      summary: Start an MP4 export job for the current episode timeline
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "202":
+          description: Export accepted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  export:
+                    $ref: "#/components/schemas/Export"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/exports/{exportId}:
+    get:
+      summary: Get export status
+      parameters:
+        - $ref: "#/components/parameters/ExportID"
+      responses:
+        "200":
+          description: Export detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  export:
+                    $ref: "#/components/schemas/Export"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/events/stream:
     get:
       summary: Stream server-sent workflow and job events
@@ -283,6 +425,18 @@ components:
         type: string
     JobID:
       name: jobId
+      in: path
+      required: true
+      schema:
+        type: string
+    AnalysisID:
+      name: analysisId
+      in: path
+      required: true
+      schema:
+        type: string
+    ExportID:
+      name: exportId
       in: path
       required: true
       schema:
@@ -458,6 +612,128 @@ components:
         updated_at:
           type: string
           format: date-time
+    StoryAnalysis:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - workflow_run_id
+        - generation_job_id
+        - version
+        - status
+        - summary
+        - themes
+        - character_seeds
+        - scene_seeds
+        - prop_seeds
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        workflow_run_id:
+          type: string
+        generation_job_id:
+          type: string
+        version:
+          type: integer
+        status:
+          type: string
+          enum: [generated, approved]
+        summary:
+          type: string
+        themes:
+          type: array
+          items:
+            type: string
+        character_seeds:
+          type: array
+          items:
+            type: string
+        scene_seeds:
+          type: array
+          items:
+            type: string
+        prop_seeds:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StoryMap:
+      type: object
+      properties:
+        characters:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryMapItem"
+        scenes:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryMapItem"
+        props:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryMapItem"
+    StoryMapItem:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        code:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StoryboardShot:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        scene_id:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        prompt:
+          type: string
+        position:
+          type: integer
+        duration_ms:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     Timeline:
       type: object
       required:
@@ -484,7 +760,7 @@ components:
         tracks:
           type: array
           items:
-            type: object
+            $ref: "#/components/schemas/TimelineTrack"
         created_at:
           type: string
           format: date-time
@@ -497,3 +773,84 @@ components:
         duration_ms:
           type: integer
           minimum: 0
+        tracks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaveTimelineTrackRequest"
+    TimelineTrack:
+      type: object
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+        name:
+          type: string
+        position:
+          type: integer
+        clips:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineClip"
+    TimelineClip:
+      type: object
+      properties:
+        id:
+          type: string
+        asset_id:
+          type: string
+        kind:
+          type: string
+        start_ms:
+          type: integer
+        duration_ms:
+          type: integer
+        trim_start_ms:
+          type: integer
+    SaveTimelineTrackRequest:
+      type: object
+      properties:
+        kind:
+          type: string
+        name:
+          type: string
+        position:
+          type: integer
+        clips:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaveTimelineClipRequest"
+    SaveTimelineClipRequest:
+      type: object
+      properties:
+        asset_id:
+          type: string
+        kind:
+          type: string
+        start_ms:
+          type: integer
+          minimum: 0
+        duration_ms:
+          type: integer
+          minimum: 0
+        trim_start_ms:
+          type: integer
+          minimum: 0
+    Export:
+      type: object
+      properties:
+        id:
+          type: string
+        timeline_id:
+          type: string
+        status:
+          type: string
+          enum: [queued, rendering, succeeded, failed, canceled]
+        format:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

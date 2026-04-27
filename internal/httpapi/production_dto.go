@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/repo"
 )
 
 type workflowRunResponse struct {
@@ -28,15 +29,97 @@ type generationJobResponse struct {
 	UpdatedAt     time.Time                  `json:"updated_at"`
 }
 
+type storyAnalysisResponse struct {
+	ID              string                     `json:"id"`
+	ProjectID       string                     `json:"project_id"`
+	EpisodeID       string                     `json:"episode_id"`
+	WorkflowRunID   string                     `json:"workflow_run_id"`
+	GenerationJobID string                     `json:"generation_job_id"`
+	Version         int                        `json:"version"`
+	Status          domain.StoryAnalysisStatus `json:"status"`
+	Summary         string                     `json:"summary"`
+	Themes          []string                   `json:"themes"`
+	CharacterSeeds  []string                   `json:"character_seeds"`
+	SceneSeeds      []string                   `json:"scene_seeds"`
+	PropSeeds       []string                   `json:"prop_seeds"`
+	CreatedAt       time.Time                  `json:"created_at"`
+	UpdatedAt       time.Time                  `json:"updated_at"`
+}
+
 type timelineResponse struct {
-	ID         string                `json:"id"`
-	EpisodeID  string                `json:"episode_id"`
-	Status     domain.TimelineStatus `json:"status"`
-	Version    int                   `json:"version"`
-	DurationMS int                   `json:"duration_ms"`
-	Tracks     []Envelope            `json:"tracks"`
-	CreatedAt  time.Time             `json:"created_at"`
-	UpdatedAt  time.Time             `json:"updated_at"`
+	ID         string                  `json:"id"`
+	EpisodeID  string                  `json:"episode_id"`
+	Status     domain.TimelineStatus   `json:"status"`
+	Version    int                     `json:"version"`
+	DurationMS int                     `json:"duration_ms"`
+	Tracks     []timelineTrackResponse `json:"tracks"`
+	CreatedAt  time.Time               `json:"created_at"`
+	UpdatedAt  time.Time               `json:"updated_at"`
+}
+
+type storyMapResponse struct {
+	Characters []characterResponse `json:"characters"`
+	Scenes     []sceneResponse     `json:"scenes"`
+	Props      []propResponse      `json:"props"`
+}
+
+type characterResponse struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"project_id"`
+	EpisodeID   string    `json:"episode_id"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type sceneResponse characterResponse
+type propResponse characterResponse
+
+type storyboardShotResponse struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"project_id"`
+	EpisodeID   string    `json:"episode_id"`
+	SceneID     string    `json:"scene_id"`
+	Code        string    `json:"code"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Prompt      string    `json:"prompt"`
+	Position    int       `json:"position"`
+	DurationMS  int       `json:"duration_ms"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type timelineTrackResponse struct {
+	ID        string                 `json:"id"`
+	Kind      string                 `json:"kind"`
+	Name      string                 `json:"name"`
+	Position  int                    `json:"position"`
+	Clips     []timelineClipResponse `json:"clips"`
+	CreatedAt time.Time              `json:"created_at"`
+	UpdatedAt time.Time              `json:"updated_at"`
+}
+
+type timelineClipResponse struct {
+	ID          string    `json:"id"`
+	AssetID     string    `json:"asset_id"`
+	Kind        string    `json:"kind"`
+	StartMS     int       `json:"start_ms"`
+	DurationMS  int       `json:"duration_ms"`
+	TrimStartMS int       `json:"trim_start_ms"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type exportResponse struct {
+	ID         string              `json:"id"`
+	TimelineID string              `json:"timeline_id"`
+	Status     domain.ExportStatus `json:"status"`
+	Format     string              `json:"format"`
+	CreatedAt  time.Time           `json:"created_at"`
+	UpdatedAt  time.Time           `json:"updated_at"`
 }
 
 func workflowRunDTO(run domain.WorkflowRun) workflowRunResponse {
@@ -65,6 +148,25 @@ func generationJobDTO(job domain.GenerationJob) generationJobResponse {
 	}
 }
 
+func storyAnalysisDTO(analysis domain.StoryAnalysis) storyAnalysisResponse {
+	return storyAnalysisResponse{
+		ID:              analysis.ID,
+		ProjectID:       analysis.ProjectID,
+		EpisodeID:       analysis.EpisodeID,
+		WorkflowRunID:   analysis.WorkflowRunID,
+		GenerationJobID: analysis.GenerationJobID,
+		Version:         analysis.Version,
+		Status:          analysis.Status,
+		Summary:         analysis.Summary,
+		Themes:          analysis.Themes,
+		CharacterSeeds:  analysis.CharacterSeeds,
+		SceneSeeds:      analysis.SceneSeeds,
+		PropSeeds:       analysis.PropSeeds,
+		CreatedAt:       analysis.CreatedAt,
+		UpdatedAt:       analysis.UpdatedAt,
+	}
+}
+
 func timelineDTO(timeline domain.Timeline) timelineResponse {
 	return timelineResponse{
 		ID:         timeline.ID,
@@ -72,8 +174,96 @@ func timelineDTO(timeline domain.Timeline) timelineResponse {
 		Status:     timeline.Status,
 		Version:    timeline.Version,
 		DurationMS: timeline.DurationMS,
-		Tracks:     []Envelope{},
+		Tracks:     timelineTrackDTOs(timeline.Tracks),
 		CreatedAt:  timeline.CreatedAt,
 		UpdatedAt:  timeline.UpdatedAt,
+	}
+}
+
+func storyMapDTO(storyMap repo.StoryMap) storyMapResponse {
+	return storyMapResponse{
+		Characters: characterDTOs(storyMap.Characters),
+		Scenes:     sceneDTOs(storyMap.Scenes),
+		Props:      propDTOs(storyMap.Props),
+	}
+}
+
+func characterDTOs(items []domain.Character) []characterResponse {
+	responses := make([]characterResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, characterResponse{
+			ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+			Code: item.Code, Name: item.Name, Description: item.Description,
+			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return responses
+}
+
+func sceneDTOs(items []domain.Scene) []sceneResponse {
+	responses := make([]sceneResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, sceneResponse(characterResponse{
+			ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+			Code: item.Code, Name: item.Name, Description: item.Description,
+			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		}))
+	}
+	return responses
+}
+
+func propDTOs(items []domain.Prop) []propResponse {
+	responses := make([]propResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, propResponse(characterResponse{
+			ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+			Code: item.Code, Name: item.Name, Description: item.Description,
+			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		}))
+	}
+	return responses
+}
+
+func storyboardShotDTOs(items []domain.StoryboardShot) []storyboardShotResponse {
+	responses := make([]storyboardShotResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, storyboardShotResponse{
+			ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+			SceneID: item.SceneID, Code: item.Code, Title: item.Title,
+			Description: item.Description, Prompt: item.Prompt,
+			Position: item.Position, DurationMS: item.DurationMS,
+			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return responses
+}
+
+func timelineTrackDTOs(items []domain.TimelineTrack) []timelineTrackResponse {
+	responses := make([]timelineTrackResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, timelineTrackResponse{
+			ID: item.ID, Kind: item.Kind, Name: item.Name, Position: item.Position,
+			Clips: timelineClipDTOs(item.Clips), CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return responses
+}
+
+func timelineClipDTOs(items []domain.TimelineClip) []timelineClipResponse {
+	responses := make([]timelineClipResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, timelineClipResponse{
+			ID: item.ID, AssetID: item.AssetID, Kind: item.Kind, StartMS: item.StartMS,
+			DurationMS: item.DurationMS, TrimStartMS: item.TrimStartMS,
+			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return responses
+}
+
+func exportDTO(item domain.Export) exportResponse {
+	return exportResponse{
+		ID: item.ID, TimelineID: item.TimelineID, Status: item.Status,
+		Format: item.Format, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 	}
 }

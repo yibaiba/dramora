@@ -1,5 +1,6 @@
 import {
   Activity,
+  BookOpenText,
   Boxes,
   CircleDollarSign,
   Clapperboard,
@@ -22,10 +23,11 @@ import {
   useGenerationJobs,
   useProjects,
   useSaveEpisodeTimeline,
+  useStoryAnalyses,
   useStartStoryAnalysis,
 } from './api/hooks'
 import { useStudioStore } from './state/studioStore'
-import type { GenerationJob, GenerationJobStatus, Project } from './api/types'
+import type { Episode, GenerationJob, GenerationJobStatus, Project, StoryAnalysis } from './api/types'
 
 const productionSteps = [
   { name: 'Producer', taskType: 'production_plan', detail: '目标、预算、审批点' },
@@ -94,6 +96,7 @@ function App() {
             onSelect={selectProject}
           />
           <EpisodeCommandCenter project={selectedProject} onLog={logEvent} />
+          <StoryAnalysisPanel project={selectedProject} />
           <AgentBoard project={selectedProject} />
           <StoryboardKanban />
           <AssetLibrary />
@@ -298,7 +301,7 @@ function EpisodeCommandCenter({ project, onLog }: { project?: Project; onLog: (m
                   disabled={saveTimeline.isPending}
                   onClick={() =>
                     saveTimeline.mutate(
-                      { durationMs: 15_000, episodeId: episode.id },
+                      { episodeId: episode.id, request: { duration_ms: 15_000 } },
                       {
                         onSuccess: (timeline) => {
                           onLog(`Timeline saved v${timeline.version}: ${timeline.duration_ms}ms`)
@@ -350,6 +353,65 @@ function AgentBoard({ project }: { project?: Project }) {
         ))}
       </div>
     </section>
+  )
+}
+
+function StoryAnalysisPanel({ project }: { project?: Project }) {
+  const { data: episodes = [] } = useEpisodes(project?.id)
+  const activeEpisode = episodes[0]
+  const { data: analyses = [], isLoading } = useStoryAnalyses(activeEpisode?.id)
+  const latestAnalysis = analyses[0]
+
+  return (
+    <section className="panel analysis-panel" aria-labelledby="story-analysis-title">
+      <PanelTitle
+        icon={BookOpenText}
+        title="Story analysis"
+        subtitle={isLoading ? 'Loading structured artifacts' : 'Generated C/S/P seeds'}
+        id="story-analysis-title"
+      />
+      {!project ? (
+        <EmptyState title="Select a project" text="Story analysis artifacts appear after an episode analysis job succeeds." />
+      ) : !activeEpisode ? (
+        <EmptyState title="No episode selected" text="Create an episode, start analysis, then run the worker once." />
+      ) : !latestAnalysis ? (
+        <EmptyState title="No analysis artifact" text="Run the worker after starting analysis to generate the first structured artifact." />
+      ) : (
+        <StoryAnalysisSummary episode={activeEpisode} analysis={latestAnalysis} />
+      )}
+    </section>
+  )
+}
+
+function StoryAnalysisSummary({ analysis, episode }: { analysis: StoryAnalysis; episode: Episode }) {
+  const metrics = [
+    { label: 'Characters', value: analysis.character_seeds.length },
+    { label: 'Scenes', value: analysis.scene_seeds.length },
+    { label: 'Props', value: analysis.prop_seeds.length },
+  ]
+
+  return (
+    <div className="analysis-card">
+      <div className="analysis-meta">
+        <span>EP{episode.number.toString().padStart(2, '0')}</span>
+        <strong>v{analysis.version}</strong>
+        <small>{analysis.status}</small>
+      </div>
+      <p>{analysis.summary}</p>
+      <div className="analysis-metrics" aria-label="Story analysis seed counts">
+        {metrics.map((metric) => (
+          <span key={metric.label}>
+            <strong>{metric.value}</strong>
+            {metric.label}
+          </span>
+        ))}
+      </div>
+      <div className="analysis-tags" aria-label="Story themes">
+        {analysis.themes.map((theme) => (
+          <span key={theme}>{theme}</span>
+        ))}
+      </div>
+    </div>
   )
 }
 

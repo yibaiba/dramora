@@ -81,18 +81,24 @@ func TestProjectRouteValidation(t *testing.T) {
 }
 
 func testRouter() http.Handler {
+	router, _ := testRouterWithProductionService()
+	return router
+}
+
+func testRouterWithProductionService() (http.Handler, *service.ProductionService) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectService := service.NewProjectService(
 		repo.NewMemoryProjectRepository(),
 		"00000000-0000-0000-0000-000000000001",
 	)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
-	return NewRouter(RouterConfig{
+	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",
 		ProjectService:    projectService,
 		ProductionService: productionService,
 	})
+	return router, productionService
 }
 
 func decodeBody(t *testing.T, resp *httptest.ResponseRecorder, dest any) {

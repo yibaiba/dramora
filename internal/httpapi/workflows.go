@@ -25,6 +25,35 @@ func (api *api) startStoryAnalysis(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (api *api) listStoryAnalyses(w http.ResponseWriter, r *http.Request) {
+	episodeID := chi.URLParam(r, "episodeId")
+	if _, err := api.projectService.GetEpisode(r.Context(), episodeID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	analyses, err := api.productionService.ListStoryAnalyses(r.Context(), episodeID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	items := make([]storyAnalysisResponse, 0, len(analyses))
+	for _, analysis := range analyses {
+		items = append(items, storyAnalysisDTO(analysis))
+	}
+	writeJSON(w, http.StatusOK, Envelope{"story_analyses": items})
+}
+
+func (api *api) getStoryAnalysis(w http.ResponseWriter, r *http.Request) {
+	analysis, err := api.productionService.GetStoryAnalysis(r.Context(), chi.URLParam(r, "analysisId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"story_analysis": storyAnalysisDTO(analysis)})
+}
+
 func (api *api) getWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	run, err := api.productionService.GetWorkflowRun(r.Context(), chi.URLParam(r, "workflowRunId"))
 	if err != nil {

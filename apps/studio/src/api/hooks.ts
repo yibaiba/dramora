@@ -2,13 +2,21 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEpisode,
   createProject,
+  getExport,
+  getStoryAnalysis,
+  getStoryMap,
   listEpisodes,
   listGenerationJobs,
   listProjects,
+  listStoryAnalyses,
+  listStoryboardShots,
   saveEpisodeTimeline,
+  seedStoryboardShots,
+  seedStoryMap,
+  startEpisodeExport,
   startStoryAnalysis,
 } from './client'
-import type { CreateEpisodeRequest, CreateProjectRequest } from './types'
+import type { CreateEpisodeRequest, CreateProjectRequest, SaveTimelineRequest } from './types'
 
 export function useProjects() {
   return useQuery({
@@ -58,15 +66,83 @@ export function useStartStoryAnalysis() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (episodeId: string) => startStoryAnalysis(episodeId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['generation-jobs'] }),
+    onSuccess: (_result, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['story-analyses', episodeId] })
+    },
+  })
+}
+
+export function useStoryAnalyses(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => listStoryAnalyses(episodeId ?? ''),
+    queryKey: ['story-analyses', episodeId],
+    refetchInterval: 10_000,
+  })
+}
+
+export function useStoryAnalysis(analysisId?: string) {
+  return useQuery({
+    enabled: Boolean(analysisId),
+    queryFn: () => getStoryAnalysis(analysisId ?? ''),
+    queryKey: ['story-analysis', analysisId],
+  })
+}
+
+export function useStoryMap(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => getStoryMap(episodeId ?? ''),
+    queryKey: ['story-map', episodeId],
+  })
+}
+
+export function useSeedStoryMap() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => seedStoryMap(episodeId),
+    onSuccess: (_storyMap, episodeId) => queryClient.invalidateQueries({ queryKey: ['story-map', episodeId] }),
+  })
+}
+
+export function useStoryboardShots(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => listStoryboardShots(episodeId ?? ''),
+    queryKey: ['storyboard-shots', episodeId],
+  })
+}
+
+export function useSeedStoryboardShots() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => seedStoryboardShots(episodeId),
+    onSuccess: (_shots, episodeId) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] }),
   })
 }
 
 export function useSaveEpisodeTimeline() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ durationMs, episodeId }: { durationMs: number; episodeId: string }) =>
-      saveEpisodeTimeline(episodeId, { duration_ms: durationMs }),
+    mutationFn: ({ episodeId, request }: { episodeId: string; request: SaveTimelineRequest }) =>
+      saveEpisodeTimeline(episodeId, request),
     onSuccess: (timeline) => queryClient.invalidateQueries({ queryKey: ['timeline', timeline.episode_id] }),
+  })
+}
+
+export function useStartEpisodeExport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => startEpisodeExport(episodeId),
+    onSuccess: (item) => queryClient.invalidateQueries({ queryKey: ['export', item.id] }),
+  })
+}
+
+export function useExport(exportId?: string) {
+  return useQuery({
+    enabled: Boolean(exportId),
+    queryFn: () => getExport(exportId ?? ''),
+    queryKey: ['export', exportId],
   })
 }
