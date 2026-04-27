@@ -104,7 +104,7 @@ The first React Studio slice lives in `apps/studio`:
 - Zustand for selected project and local Studio event state.
 - Lucide icons for structural icons.
 - Tailwind v4 Vite plugin plus custom design tokens.
-- Vite dev proxy maps `/api`, `/healthz`, and `/readyz` to `http://127.0.0.1:8080`.
+- Vite dev proxy maps `/api`, `/healthz`, and `/readyz` to `http://127.0.0.1:8080` by default.
 
 Run the Studio:
 
@@ -118,6 +118,12 @@ Point Studio directly at another API origin if needed:
 
 ```bash
 VITE_MANMU_API_BASE_URL=http://127.0.0.1:8080 npm run dev
+```
+
+Or keep relative API paths and point the Vite dev proxy at another backend port:
+
+```bash
+VITE_MANMU_API_PROXY_TARGET=http://127.0.0.1:16666 npm run dev -- --port 16667
 ```
 
 Validate the Studio:

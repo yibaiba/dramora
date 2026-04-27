@@ -54,11 +54,12 @@ Environment:
 
 ```bash
 VITE_MANMU_API_BASE_URL=http://127.0.0.1:8080
+VITE_MANMU_API_PROXY_TARGET=http://127.0.0.1:8080
 ```
 
 #### 3. Contracts
 
-- Vite proxy maps `/api`, `/healthz`, and `/readyz` to the Go API during local dev.
+- Vite proxy maps `/api`, `/healthz`, and `/readyz` to the Go API during local dev and can be retargeted with `VITE_MANMU_API_PROXY_TARGET`.
 - `apps/studio/go.mod` is intentional: it prevents root `go test ./...` from traversing `node_modules`.
 - `src/api/types.ts` mirrors `api/openapi.yaml` route DTOs.
 - `src/api/client.ts` owns raw fetch calls.
