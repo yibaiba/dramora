@@ -46,10 +46,23 @@ type approvalGateResponse struct {
 	UpdatedAt     time.Time                 `json:"updated_at"`
 }
 
+type storySourceResponse struct {
+	ID          string    `json:"id"`
+	ProjectID   string    `json:"project_id"`
+	EpisodeID   string    `json:"episode_id"`
+	SourceType  string    `json:"source_type"`
+	Title       string    `json:"title"`
+	ContentText string    `json:"content_text"`
+	Language    string    `json:"language"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type storyAnalysisResponse struct {
 	ID              string                     `json:"id"`
 	ProjectID       string                     `json:"project_id"`
 	EpisodeID       string                     `json:"episode_id"`
+	StorySourceID   string                     `json:"story_source_id"`
 	WorkflowRunID   string                     `json:"workflow_run_id"`
 	GenerationJobID string                     `json:"generation_job_id"`
 	Version         int                        `json:"version"`
@@ -59,6 +72,8 @@ type storyAnalysisResponse struct {
 	CharacterSeeds  []string                   `json:"character_seeds"`
 	SceneSeeds      []string                   `json:"scene_seeds"`
 	PropSeeds       []string                   `json:"prop_seeds"`
+	Outline         []domain.StoryBeat         `json:"outline"`
+	AgentOutputs    []domain.StoryAgentOutput  `json:"agent_outputs"`
 	CreatedAt       time.Time                  `json:"created_at"`
 	UpdatedAt       time.Time                  `json:"updated_at"`
 }
@@ -231,11 +246,20 @@ func approvalGateDTOs(gates []domain.ApprovalGate) []approvalGateResponse {
 	return responses
 }
 
+func storySourceDTO(source domain.StorySource) storySourceResponse {
+	return storySourceResponse{
+		ID: source.ID, ProjectID: source.ProjectID, EpisodeID: source.EpisodeID,
+		SourceType: source.SourceType, Title: source.Title, ContentText: source.ContentText,
+		Language: source.Language, CreatedAt: source.CreatedAt, UpdatedAt: source.UpdatedAt,
+	}
+}
+
 func storyAnalysisDTO(analysis domain.StoryAnalysis) storyAnalysisResponse {
 	return storyAnalysisResponse{
 		ID:              analysis.ID,
 		ProjectID:       analysis.ProjectID,
 		EpisodeID:       analysis.EpisodeID,
+		StorySourceID:   analysis.StorySourceID,
 		WorkflowRunID:   analysis.WorkflowRunID,
 		GenerationJobID: analysis.GenerationJobID,
 		Version:         analysis.Version,
@@ -245,6 +269,8 @@ func storyAnalysisDTO(analysis domain.StoryAnalysis) storyAnalysisResponse {
 		CharacterSeeds:  analysis.CharacterSeeds,
 		SceneSeeds:      analysis.SceneSeeds,
 		PropSeeds:       analysis.PropSeeds,
+		Outline:         analysis.Outline,
+		AgentOutputs:    analysis.AgentOutputs,
 		CreatedAt:       analysis.CreatedAt,
 		UpdatedAt:       analysis.UpdatedAt,
 	}

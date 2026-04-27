@@ -14,6 +14,7 @@ type MemoryProductionRepository struct {
 	runs      map[string]domain.WorkflowRun
 	jobs      map[string]domain.GenerationJob
 	jobKeys   map[string]string
+	sources   map[string]domain.StorySource
 	gates     map[string]domain.ApprovalGate
 	analyses  map[string]domain.StoryAnalysis
 	timelines map[string]domain.Timeline
@@ -31,6 +32,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		runs:      make(map[string]domain.WorkflowRun),
 		jobs:      make(map[string]domain.GenerationJob),
 		jobKeys:   make(map[string]string),
+		sources:   make(map[string]domain.StorySource),
 		gates:     make(map[string]domain.ApprovalGate),
 		analyses:  make(map[string]domain.StoryAnalysis),
 		timelines: make(map[string]domain.Timeline),
@@ -42,6 +44,61 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		assets:    make(map[string]domain.Asset),
 		exports:   make(map[string]domain.Export),
 	}
+}
+
+func (r *MemoryProductionRepository) CreateStorySource(
+	_ context.Context,
+	params CreateStorySourceParams,
+) (domain.StorySource, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UTC()
+	source := domain.StorySource{
+		ID: params.ID, ProjectID: params.ProjectID, EpisodeID: params.EpisodeID,
+		SourceType: params.SourceType, Title: params.Title, ContentText: params.ContentText,
+		Language: params.Language, CreatedAt: now, UpdatedAt: now,
+	}
+	r.sources[source.ID] = source
+	return source, nil
+}
+
+func (r *MemoryProductionRepository) ListStorySources(
+	_ context.Context,
+	episodeID string,
+) ([]domain.StorySource, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	sources := r.storySourcesLocked(episodeID)
+	return sources, nil
+}
+
+func (r *MemoryProductionRepository) LatestStorySource(
+	_ context.Context,
+	episodeID string,
+) (domain.StorySource, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	sources := r.storySourcesLocked(episodeID)
+	if len(sources) == 0 {
+		return domain.StorySource{}, domain.ErrNotFound
+	}
+	return sources[0], nil
+}
+
+func (r *MemoryProductionRepository) storySourcesLocked(episodeID string) []domain.StorySource {
+	sources := make([]domain.StorySource, 0)
+	for _, source := range r.sources {
+		if source.EpisodeID == episodeID {
+			sources = append(sources, source)
+		}
+	}
+	sort.Slice(sources, func(i int, j int) bool {
+		return sources[i].CreatedAt.After(sources[j].CreatedAt)
+	})
+	return sources
 }
 
 func (r *MemoryProductionRepository) CreateStoryAnalysisRun(
@@ -348,6 +405,7 @@ func (r *MemoryProductionRepository) buildStoryAnalysisLocked(
 		ID:              params.ID,
 		ProjectID:       params.ProjectID,
 		EpisodeID:       params.EpisodeID,
+		StorySourceID:   params.StorySourceID,
 		WorkflowRunID:   params.WorkflowRunID,
 		GenerationJobID: params.GenerationJobID,
 		Version:         r.nextStoryAnalysisVersion(params.EpisodeID),
@@ -357,6 +415,8 @@ func (r *MemoryProductionRepository) buildStoryAnalysisLocked(
 		CharacterSeeds:  append([]string{}, params.CharacterSeeds...),
 		SceneSeeds:      append([]string{}, params.SceneSeeds...),
 		PropSeeds:       append([]string{}, params.PropSeeds...),
+		Outline:         append([]domain.StoryBeat{}, params.Outline...),
+		AgentOutputs:    append([]domain.StoryAgentOutput{}, params.AgentOutputs...),
 		CreatedAt:       now,
 		UpdatedAt:       now,
 	}

@@ -111,13 +111,42 @@ func scanStoryAnalyses(rows rowsScanner) ([]domain.StoryAnalysis, error) {
 	return analyses, rows.Err()
 }
 
+func scanStorySources(rows rowsScanner) ([]domain.StorySource, error) {
+	sources := make([]domain.StorySource, 0)
+	for rows.Next() {
+		source, err := scanStorySource(rows)
+		if err != nil {
+			return nil, err
+		}
+		sources = append(sources, source)
+	}
+	return sources, rows.Err()
+}
+
+func scanStorySource(row rowScanner) (domain.StorySource, error) {
+	var source domain.StorySource
+	err := row.Scan(
+		&source.ID,
+		&source.ProjectID,
+		&source.EpisodeID,
+		&source.SourceType,
+		&source.Title,
+		&source.ContentText,
+		&source.Language,
+		&source.CreatedAt,
+		&source.UpdatedAt,
+	)
+	return source, err
+}
+
 func scanStoryAnalysis(row rowScanner) (domain.StoryAnalysis, error) {
 	var analysis domain.StoryAnalysis
-	var themes, characters, scenes, props []byte
+	var themes, characters, scenes, props, outline, agentOutputs []byte
 	if err := row.Scan(
 		&analysis.ID,
 		&analysis.ProjectID,
 		&analysis.EpisodeID,
+		&analysis.StorySourceID,
 		&analysis.WorkflowRunID,
 		&analysis.GenerationJobID,
 		&analysis.Version,
@@ -127,12 +156,14 @@ func scanStoryAnalysis(row rowScanner) (domain.StoryAnalysis, error) {
 		&characters,
 		&scenes,
 		&props,
+		&outline,
+		&agentOutputs,
 		&analysis.CreatedAt,
 		&analysis.UpdatedAt,
 	); err != nil {
 		return domain.StoryAnalysis{}, err
 	}
-	if err := decodeStoryAnalysisSeeds(&analysis, themes, characters, scenes, props); err != nil {
+	if err := decodeStoryAnalysisSeeds(&analysis, themes, characters, scenes, props, outline, agentOutputs); err != nil {
 		return domain.StoryAnalysis{}, err
 	}
 	return analysis, nil
@@ -144,6 +175,8 @@ func decodeStoryAnalysisSeeds(
 	characters []byte,
 	scenes []byte,
 	props []byte,
+	outline []byte,
+	agentOutputs []byte,
 ) error {
 	if err := json.Unmarshal(themes, &analysis.Themes); err != nil {
 		return err
@@ -154,7 +187,13 @@ func decodeStoryAnalysisSeeds(
 	if err := json.Unmarshal(scenes, &analysis.SceneSeeds); err != nil {
 		return err
 	}
-	return json.Unmarshal(props, &analysis.PropSeeds)
+	if err := json.Unmarshal(props, &analysis.PropSeeds); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(outline, &analysis.Outline); err != nil {
+		return err
+	}
+	return json.Unmarshal(agentOutputs, &analysis.AgentOutputs)
 }
 
 func scanTimeline(row rowScanner) (domain.Timeline, error) {

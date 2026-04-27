@@ -81,6 +81,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - `generation_jobs.prompt`, `generation_jobs.params`, `generation_jobs.provider_task_id`, and `generation_jobs.result_asset_id` must be loaded by worker-facing repository reads so provider execution can resume from durable state.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
+- Story source input is stored in `story_sources`; `story_analyses.story_source_id`, `outline`, and `agent_outputs` link deterministic or provider-backed analysis output to the source text.
 
 #### 4. Validation & Error Matrix
 
@@ -101,6 +102,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Worker advances queued export | move `exports.status` from `queued` to `rendering` to `succeeded` through `ProductionService.ProcessQueuedExports`; do not mark exports succeeded in the HTTP handler. |
 | Worker finds a rendering export | resume it and advance to `succeeded` so a previous partial worker failure does not leave exports permanently stuck. |
 | Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
+| Story analysis job has a saved story source | use the latest episode story source when generating summary, C/S/P seeds, outline, and agent outputs. |
+| Story analysis job has no story source | use the local default source only as a development fallback; do not pretend user-provided source exists. |
 | Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
 | Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
 | Asset candidates are seeded | create idempotent episode-scoped assets from C/S/P map rows with object-style URIs. |
@@ -129,9 +132,96 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Export worker execution should be service-tested with the memory repo and route-tested by starting an export, processing queued exports, then reading the export status.
 - Export worker tests should include resuming an export that is already in `rendering`.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
+- Story source routes should test save/list behavior and analysis output should assert `story_source_id`, non-empty `outline`, and multi-agent `agent_outputs`.
 - Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.
 - Approval gate routes should test seed, approve, and request-changes behavior through the HTTP layer.
 - Prompt pack routes should test SD2 preset, image-to-video task type, and `@image2` reference binding when multiple assets are locked.
+
+### Scenario: Story source and multi-agent analysis artifacts
+
+#### 1. Scope / Trigger
+
+- Trigger: Studio accepts novel/story text and story-analysis workers generate inspectable outline/person/scene/prop output.
+- Applies when changing story source routes, `story_analyses` JSONB output fields, deterministic analyzer behavior, OpenAPI schemas, or Studio hooks.
+
+#### 2. Signatures
+
+Database migration:
+
+```text
+db/migrations/000009_add_story_sources_and_analysis_outputs.up.sql
+```
+
+Frontend-facing API:
+
+```text
+GET  /api/v1/episodes/{episodeId}/story-sources
+POST /api/v1/episodes/{episodeId}/story-sources
+GET  /api/v1/episodes/{episodeId}/story-analyses
+GET  /api/v1/story-analyses/{analysisId}
+```
+
+Repository/service signatures:
+
+```go
+ProductionRepository.CreateStorySource(ctx, params) (domain.StorySource, error)
+ProductionRepository.LatestStorySource(ctx, episodeID) (domain.StorySource, error)
+ProductionService.CreateStorySource(ctx, episode, input) (domain.StorySource, error)
+```
+
+#### 3. Contracts
+
+- `CreateStorySourceRequest` fields:
+  - `content_text` string, required, non-blank, max 20000 runes.
+  - `source_type` optional enum-like string; unsupported values normalize to `novel`.
+  - `title` optional string.
+  - `language` optional string, defaults to `zh-CN`.
+- `StoryAnalysis` response includes:
+  - `story_source_id` string, empty only for development fallback/default source.
+  - `outline` JSON array of `{ code, title, summary, visual_goal }`.
+  - `agent_outputs` JSON array of `{ role, status, output, highlights }`.
+- Local deterministic analysis may generate staged outputs without provider secrets, but downstream C/S/P seeds must still be derived from the selected source text.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Blank `content_text` | Return `domain.ErrInvalidInput`; HTTP maps to `400 invalid_request`. |
+| `content_text` exceeds 20000 runes | Return `domain.ErrInvalidInput`; do not persist partial source. |
+| Unknown episode id | Repository/service returns not found; HTTP maps to `404 not_found`. |
+| No story source at worker completion | Use explicit default local source and leave `story_source_id` empty. |
+| JSONB output cannot encode/decode | Return the real error; do not write success-shaped partial analysis. |
+
+#### 5. Good/Base/Bad Cases
+
+- Good: user saves novel text, starts story analysis, worker writes an analysis linked by `story_source_id` with non-empty `outline` and `agent_outputs`.
+- Base: local dev without saved text still produces deterministic default output so Studio can test the flow.
+- Bad: hardcoding fixed seeds for every story or keeping novel text only in React local state.
+
+#### 6. Tests Required
+
+- HTTP route test saves a story source, lists sources, starts analysis, processes queued jobs, and asserts linked source id plus non-empty outline/agent outputs.
+- Go tests/build must pass after migration, repo, service, and DTO changes.
+- Studio lint/build must pass after DTO/client/hook/UI changes.
+- OpenAPI parse and GET/POST-only route scan must pass.
+
+#### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+Summary: "No-op story analyst extracted MVP seeds..."
+CharacterSeeds: []string{"C01 protagonist"}
+```
+
+#### Correct
+
+```go
+source, err := s.production.LatestStorySource(ctx, generationJob.EpisodeID)
+analysis := analyzeStorySource(source)
+```
+
+The correct form keeps source text as durable input and lets local deterministic analysis be replaced by provider-backed agents later without changing the API shape.
 
 #### 7. Wrong vs Correct
 

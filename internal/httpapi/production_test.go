@@ -136,6 +136,30 @@ func TestStoryAnalysisReadRoutes(t *testing.T) {
 	router, productionService := testRouterWithProductionService()
 	episode := createTestEpisode(t, router)
 
+	sourceResp := httptest.NewRecorder()
+	sourceReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/episodes/"+episode.ID+"/story-sources",
+		body(`{"source_type":"novel","title":"天门试炼","content_text":"云澜在天门前发现玉佩线索。白璃提醒他宗门长老已经隐瞒真相。黑龙压境时，云澜必须守护同伴并完成试炼。","language":"zh-CN"}`),
+	)
+	router.ServeHTTP(sourceResp, sourceReq)
+	if sourceResp.Code != http.StatusCreated {
+		t.Fatalf("expected source 201, got %d: %s", sourceResp.Code, sourceResp.Body.String())
+	}
+	var sourcePayload struct {
+		StorySource storySourceResponse `json:"story_source"`
+	}
+	decodeBody(t, sourceResp, &sourcePayload)
+	if sourcePayload.StorySource.Title != "天门试炼" {
+		t.Fatalf("expected saved source title, got %q", sourcePayload.StorySource.Title)
+	}
+	sourceListResp := httptest.NewRecorder()
+	sourceListReq := httptest.NewRequest(http.MethodGet, "/api/v1/episodes/"+episode.ID+"/story-sources", nil)
+	router.ServeHTTP(sourceListResp, sourceListReq)
+	if sourceListResp.Code != http.StatusOK {
+		t.Fatalf("expected source list 200, got %d: %s", sourceListResp.Code, sourceListResp.Body.String())
+	}
+
 	startResp := httptest.NewRecorder()
 	startReq := httptest.NewRequest(
 		http.MethodPost,
@@ -170,6 +194,12 @@ func TestStoryAnalysisReadRoutes(t *testing.T) {
 	}
 	if got := payload.StoryAnalyses[0].CharacterSeeds; len(got) == 0 {
 		t.Fatalf("expected character seeds, got %+v", payload.StoryAnalyses[0])
+	}
+	if payload.StoryAnalyses[0].StorySourceID != sourcePayload.StorySource.ID {
+		t.Fatalf("expected analysis linked to source %q, got %q", sourcePayload.StorySource.ID, payload.StoryAnalyses[0].StorySourceID)
+	}
+	if len(payload.StoryAnalyses[0].Outline) == 0 || len(payload.StoryAnalyses[0].AgentOutputs) < 5 {
+		t.Fatalf("expected outline and multi-agent outputs, got %+v", payload.StoryAnalyses[0])
 	}
 
 	detailResp := httptest.NewRecorder()

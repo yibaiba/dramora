@@ -35,6 +35,7 @@ Current query keys:
 ['projects']
 ['episodes', projectId]
 ['generation-jobs']
+['story-sources', episodeId]
 ['story-analyses', episodeId]
 ['story-analysis', analysisId]
 ['approval-gates', episodeId]
@@ -131,6 +132,75 @@ const storyMapReady = Boolean(storyMap) &&
 ```
 
 The correct form distinguishes an empty persisted story-map container from a usable production map.
+
+---
+
+## Scenario: Novel source input and multi-agent analysis display
+
+### 1. Scope / Trigger
+
+- Trigger: Studio lets users save novel/story source text and inspect deterministic multi-agent story analysis outputs.
+- Applies when adding story source forms, analysis result panels, API DTOs, or story-analysis readiness logic.
+
+### 2. Signatures
+
+Required hook boundary:
+
+```ts
+useStorySources(episodeId)
+useCreateStorySource(episodeId)
+useStoryAnalyses(episodeId)
+```
+
+Frontend command routes stay in `src/api/client.ts`:
+
+```text
+GET  /api/v1/episodes/{episodeId}/story-sources
+POST /api/v1/episodes/{episodeId}/story-sources
+```
+
+### 3. Contracts
+
+- Source form state is component-local until submit; canonical source rows come from `['story-sources', episodeId]`.
+- `useCreateStorySource` invalidates `['story-sources', episodeId]` after success.
+- Analysis display reads `StoryAnalysis.outline` and `StoryAnalysis.agent_outputs`; do not derive fake agent output in components.
+- Story source save requires an active episode and non-blank `content_text`; disabled controls must use semantic disabled state.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| No active episode | Disable source save and analysis commands. |
+| Blank source text | Disable submit; backend still validates and returns `400 invalid_request`. |
+| No analysis rows | Show an empty analysis result state, not fake generated content. |
+| Analysis rows exist | Render outline/person/scene/prop lists from API DTO fields. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: save source with `useCreateStorySource`, then start analysis and display `analysis.outline`.
+- Base: latest source label reads from `sources[0]` because backend returns newest first.
+- Bad: storing generated outline only in React state or duplicating API DTO types in components.
+
+### 6. Tests Required
+
+- `cd apps/studio && npm run lint -- --quiet && npm run build`.
+- API contract changes require OpenAPI parse and GET/POST-only route/client scan.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```ts
+const fakeAgents = ['故事分析', '人物分析']
+```
+
+#### Correct
+
+```ts
+analysis.agent_outputs.map((agent) => agentRoleLabel(agent.role))
+```
+
+The correct form keeps Studio a projection of server state and avoids success-shaped UI when backend artifacts are missing.
 
 ---
 

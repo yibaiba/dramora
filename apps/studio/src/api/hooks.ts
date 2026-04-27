@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEpisode,
   createProject,
+  createStorySource,
   approveApprovalGate,
   generateShotPromptPack,
   getExport,
@@ -14,6 +15,7 @@ import {
   listApprovalGates,
   listGenerationJobs,
   listProjects,
+  listStorySources,
   listStoryAnalyses,
   listStoryboardShots,
   lockAsset,
@@ -33,6 +35,7 @@ import {
 import type {
   CreateEpisodeRequest,
   CreateProjectRequest,
+  CreateStorySourceRequest,
   Export,
   SaveShotPromptPackRequest,
   SaveTimelineRequest,
@@ -108,6 +111,22 @@ export function useStoryAnalysis(analysisId?: string) {
     enabled: Boolean(analysisId),
     queryFn: () => getStoryAnalysis(analysisId ?? ''),
     queryKey: ['story-analysis', analysisId],
+  })
+}
+
+export function useStorySources(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => listStorySources(episodeId ?? ''),
+    queryKey: ['story-sources', episodeId],
+  })
+}
+
+export function useCreateStorySource(episodeId?: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CreateStorySourceRequest) => createStorySource(episodeId ?? '', request),
+    onSuccess: (source) => queryClient.invalidateQueries({ queryKey: ['story-sources', source.episode_id] }),
   })
 }
 

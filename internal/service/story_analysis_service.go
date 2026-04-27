@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,7 +17,11 @@ func (s *ProductionService) completeGeneratedStoryAnalysis(
 	if err := generationJob.Status.ValidateTransition(domain.GenerationJobStatusSucceeded); err != nil {
 		return domain.StoryAnalysis{}, err
 	}
-	analysisParams, err := generatedStoryAnalysisParams(generationJob)
+	source, err := s.latestStorySourceOrDefault(ctx, generationJob)
+	if err != nil {
+		return domain.StoryAnalysis{}, err
+	}
+	analysisParams, err := generatedStoryAnalysisParams(generationJob, source)
 	if err != nil {
 		return domain.StoryAnalysis{}, err
 	}
@@ -64,23 +69,51 @@ func (s *ProductionService) latestStoryAnalysis(ctx context.Context, episodeID s
 	return analyses[0], nil
 }
 
-func generatedStoryAnalysisParams(generationJob domain.GenerationJob) (repo.CreateStoryAnalysisParams, error) {
+func (s *ProductionService) latestStorySourceOrDefault(
+	ctx context.Context,
+	generationJob domain.GenerationJob,
+) (domain.StorySource, error) {
+	source, err := s.production.LatestStorySource(ctx, generationJob.EpisodeID)
+	if errors.Is(err, domain.ErrNotFound) {
+		return defaultStorySource(generationJob), nil
+	}
+	return source, err
+}
+
+func defaultStorySource(generationJob domain.GenerationJob) domain.StorySource {
+	return domain.StorySource{
+		ProjectID:   generationJob.ProjectID,
+		EpisodeID:   generationJob.EpisodeID,
+		Title:       "默认故事样例",
+		ContentText: "少年在云端宗门发现天门试炼的秘密。对立势力逼近，他必须在守护同伴和追寻身世之间做出选择。最终主角凭借关键线索完成试炼。",
+		Language:    "zh-CN",
+	}
+}
+
+func generatedStoryAnalysisParams(
+	generationJob domain.GenerationJob,
+	source domain.StorySource,
+) (repo.CreateStoryAnalysisParams, error) {
 	id, err := domain.NewID()
 	if err != nil {
 		return repo.CreateStoryAnalysisParams{}, err
 	}
+	analysis := analyzeStorySource(source)
 
 	return repo.CreateStoryAnalysisParams{
 		ID:              id,
 		ProjectID:       generationJob.ProjectID,
 		EpisodeID:       generationJob.EpisodeID,
+		StorySourceID:   source.ID,
 		WorkflowRunID:   generationJob.WorkflowRunID,
 		GenerationJobID: generationJob.ID,
 		Status:          domain.StoryAnalysisStatusGenerated,
-		Summary:         "No-op story analyst extracted MVP seeds for character, scene, prop, and beat planning.",
-		Themes:          []string{"identity", "choice", "visual contrast"},
-		CharacterSeeds:  []string{"C01 protagonist", "C02 opposing force"},
-		SceneSeeds:      []string{"S01 opening scene", "S02 conflict scene", "S03 resolution scene"},
-		PropSeeds:       []string{"P01 signature item", "P02 story clue"},
+		Summary:         analysis.summary,
+		Themes:          analysis.themes,
+		CharacterSeeds:  analysis.characterSeeds,
+		SceneSeeds:      analysis.sceneSeeds,
+		PropSeeds:       analysis.propSeeds,
+		Outline:         analysis.outline,
+		AgentOutputs:    analysis.agentOutputs,
 	}, nil
 }

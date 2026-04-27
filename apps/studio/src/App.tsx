@@ -31,6 +31,7 @@ import {
   useApproveApprovalGate,
   useCreateEpisode,
   useCreateProject,
+  useCreateStorySource,
   useEpisodeApprovalGates,
   useEpisodeAssets,
   useEpisodes,
@@ -51,6 +52,7 @@ import {
   useStartShotVideoGeneration,
   useStartStoryAnalysis,
   useStoryAnalyses,
+  useStorySources,
   useStoryboardShots,
   useStoryMap,
   useUpdateStoryboardShot,
@@ -64,6 +66,7 @@ import type {
   Project,
   SaveTimelineRequest,
   ShotPromptPack,
+  StoryAnalysis,
   StoryMap,
   StoryboardShot,
 } from './api/types'
@@ -691,6 +694,7 @@ function StoryboardWorkspace({
         shotsCount={displayShots.filter((shot) => Boolean(shot.id)).length}
         storyMapReady={storyMapReady}
       />
+      <NovelAnalysisPanel activeEpisode={activeEpisode} analyses={analyses} />
       <ShotGrid
         displayShots={displayShots}
         onAddLocalShot={onAddLocalShot}
@@ -769,6 +773,104 @@ function ProductionFlowPanel({
         </div>
       </div>
     </section>
+  )
+}
+
+function NovelAnalysisPanel({
+  activeEpisode,
+  analyses,
+}: {
+  activeEpisode?: Episode
+  analyses: StoryAnalysis[]
+}) {
+  const createSource = useCreateStorySource(activeEpisode?.id)
+  const { data: sources = [] } = useStorySources(activeEpisode?.id)
+  const [sourceTitle, setSourceTitle] = useState('')
+  const [sourceText, setSourceText] = useState('')
+  const latestAnalysis = analyses[0]
+  const latestSource = sources[0]
+  const submitSource = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    if (!activeEpisode || sourceText.trim() === '') return
+    createSource.mutate(
+      { content_text: sourceText, language: 'zh-CN', source_type: 'novel', title: sourceTitle },
+      { onSuccess: () => {
+        setSourceTitle('')
+        setSourceText('')
+      } },
+    )
+  }
+
+  return (
+    <section className="novel-analysis-panel" aria-label="小说多 Agent 解析">
+      <form className="novel-source-card" onSubmit={submitSource}>
+        <div className="panel-title-row">
+          <div>
+            <span>小说输入</span>
+            <strong>多 Agent 剧情拆解</strong>
+          </div>
+          <small>{latestSource ? `最新：${latestSource.title || '未命名素材'}` : '等待原文'}</small>
+        </div>
+        <label>
+          <span>素材标题</span>
+          <input disabled={!activeEpisode || createSource.isPending} onChange={(event) => setSourceTitle(event.target.value)} placeholder="例如：天门试炼 第一章" value={sourceTitle} />
+        </label>
+        <label>
+          <span>小说或故事原文</span>
+          <textarea disabled={!activeEpisode || createSource.isPending} onChange={(event) => setSourceText(event.target.value)} placeholder="粘贴本集小说片段，保存后启动故事解析，worker 会生成大纲、人物、场景和道具。" rows={5} value={sourceText} />
+        </label>
+        <button className="primary-inline-action" disabled={!activeEpisode || sourceText.trim() === '' || createSource.isPending} type="submit">
+          <BookOpenText aria-hidden="true" />
+          保存故事源
+        </button>
+      </form>
+      <AnalysisResultCard analysis={latestAnalysis} />
+    </section>
+  )
+}
+
+function AnalysisResultCard({ analysis }: { analysis?: StoryAnalysis }) {
+  if (!analysis) {
+    return (
+      <div className="analysis-result-card empty">
+        <strong>等待解析结果</strong>
+        <span>保存故事源并启动故事解析后，这里会展示大纲、人物、场景、道具和 Agent 输出。</span>
+      </div>
+    )
+  }
+  return (
+    <div className="analysis-result-card">
+      <div className="panel-title-row">
+        <div>
+          <span>解析结果 v{analysis.version}</span>
+          <strong>{analysis.summary}</strong>
+        </div>
+      </div>
+      <div className="analysis-columns">
+        <AnalysisList title="剧情大纲" values={analysis.outline.map((beat) => `${beat.code} ${beat.title}：${beat.summary}`)} />
+        <AnalysisList title="人物" values={analysis.character_seeds} />
+        <AnalysisList title="场景" values={analysis.scene_seeds} />
+        <AnalysisList title="道具" values={analysis.prop_seeds} />
+      </div>
+      <div className="agent-output-row">
+        {analysis.agent_outputs.map((agent) => (
+          <span className="agent-chip" key={agent.role}>
+            {agentRoleLabel(agent.role)} · {agent.status}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AnalysisList({ title, values }: { title: string; values: string[] }) {
+  return (
+    <div className="analysis-list">
+      <strong>{title}</strong>
+      {values.slice(0, 4).map((value) => (
+        <span key={value}>{value}</span>
+      ))}
+    </div>
   )
 }
 
@@ -1349,6 +1451,17 @@ function jobTaskLabel(taskType: string): string {
     first_last_frame_to_video: '首尾帧视频',
   }
   return labels[taskType] ?? taskType.replaceAll('_', ' ')
+}
+
+function agentRoleLabel(role: string): string {
+  const labels: Record<string, string> = {
+    character_analyst: '人物分析',
+    outline_planner: '大纲规划',
+    prop_analyst: '道具分析',
+    scene_analyst: '场景分析',
+    story_analyst: '故事分析',
+  }
+  return labels[role] ?? role.replaceAll('_', ' ')
 }
 
 function jobStatusLabel(status: GenerationJob['status']): string {

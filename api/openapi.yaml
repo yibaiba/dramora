@@ -152,6 +152,49 @@ paths:
                     $ref: "#/components/schemas/GenerationJob"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/story-sources:
+    get:
+      summary: List source story or novel text for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Story source list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_sources:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/StorySource"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      summary: Create a source story or novel text version for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStorySourceRequest"
+      responses:
+        "201":
+          description: Created story source
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_source:
+                    $ref: "#/components/schemas/StorySource"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/story-analyses:
     get:
       summary: List completed story analysis artifacts for an episode
@@ -779,6 +822,24 @@ components:
         review_note:
           type: string
           description: Optional human review note.
+    CreateStorySourceRequest:
+      type: object
+      required:
+        - content_text
+      properties:
+        source_type:
+          type: string
+          enum: [idea, outline, novel, script, file, url]
+          default: novel
+        title:
+          type: string
+        content_text:
+          type: string
+          minLength: 1
+          maxLength: 20000
+        language:
+          type: string
+          default: zh-CN
     Project:
       type: object
       required:
@@ -967,12 +1028,46 @@ components:
         updated_at:
           type: string
           format: date-time
+    StorySource:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - source_type
+        - title
+        - content_text
+        - language
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        source_type:
+          type: string
+        title:
+          type: string
+        content_text:
+          type: string
+        language:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     StoryAnalysis:
       type: object
       required:
         - id
         - project_id
         - episode_id
+        - story_source_id
         - workflow_run_id
         - generation_job_id
         - version
@@ -982,6 +1077,8 @@ components:
         - character_seeds
         - scene_seeds
         - prop_seeds
+        - outline
+        - agent_outputs
         - created_at
         - updated_at
       properties:
@@ -990,6 +1087,8 @@ components:
         project_id:
           type: string
         episode_id:
+          type: string
+        story_source_id:
           type: string
         workflow_run_id:
           type: string
@@ -1018,12 +1117,46 @@ components:
           type: array
           items:
             type: string
+        outline:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryBeat"
+        agent_outputs:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryAgentOutput"
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    StoryBeat:
+      type: object
+      required: [code, title, summary, visual_goal]
+      properties:
+        code:
+          type: string
+        title:
+          type: string
+        summary:
+          type: string
+        visual_goal:
+          type: string
+    StoryAgentOutput:
+      type: object
+      required: [role, status, output, highlights]
+      properties:
+        role:
+          type: string
+        status:
+          type: string
+        output:
+          type: string
+        highlights:
+          type: array
+          items:
+            type: string
     StoryMap:
       type: object
       properties:

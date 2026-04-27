@@ -11,6 +11,9 @@ import (
 )
 
 type ProductionRepository interface {
+	CreateStorySource(ctx context.Context, params CreateStorySourceParams) (domain.StorySource, error)
+	ListStorySources(ctx context.Context, episodeID string) ([]domain.StorySource, error)
+	LatestStorySource(ctx context.Context, episodeID string) (domain.StorySource, error)
 	CreateStoryAnalysisRun(ctx context.Context, params CreateStoryAnalysisRunParams) (StoryAnalysisRun, error)
 	GetWorkflowRun(ctx context.Context, workflowRunID string) (domain.WorkflowRun, error)
 	ListGenerationJobs(ctx context.Context) ([]domain.GenerationJob, error)
@@ -44,6 +47,16 @@ type ProductionRepository interface {
 	GetExport(ctx context.Context, exportID string) (domain.Export, error)
 	ListExportsByStatus(ctx context.Context, status domain.ExportStatus, limit int) ([]domain.Export, error)
 	AdvanceExportStatus(ctx context.Context, params AdvanceExportStatusParams) (domain.Export, error)
+}
+
+type CreateStorySourceParams struct {
+	ID          string
+	ProjectID   string
+	EpisodeID   string
+	SourceType  string
+	Title       string
+	ContentText string
+	Language    string
 }
 
 type CreateStoryAnalysisRunParams struct {
@@ -113,6 +126,7 @@ type CreateStoryAnalysisParams struct {
 	ID              string
 	ProjectID       string
 	EpisodeID       string
+	StorySourceID   string
 	WorkflowRunID   string
 	GenerationJobID string
 	Status          domain.StoryAnalysisStatus
@@ -121,6 +135,8 @@ type CreateStoryAnalysisParams struct {
 	CharacterSeeds  []string
 	SceneSeeds      []string
 	PropSeeds       []string
+	Outline         []domain.StoryBeat
+	AgentOutputs    []domain.StoryAgentOutput
 }
 
 type CompleteStoryAnalysisJobParams struct {

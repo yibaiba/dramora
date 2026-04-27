@@ -84,7 +84,7 @@ func (s *ProductionService) StartStoryAnalysis(
 		GenerationJobID: generationJobID,
 		ProjectID:       episode.ProjectID,
 		EpisodeID:       episode.ID,
-		RequestKey:      "story-analysis:" + episode.ID,
+		RequestKey:      "story-analysis:" + episode.ID + ":" + generationJobID,
 		Provider:        "internal",
 		Model:           "story-analyst-agent",
 		Prompt:          "Analyze episode story source and extract characters, scenes, props, and beats.",

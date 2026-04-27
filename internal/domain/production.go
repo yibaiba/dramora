@@ -55,6 +55,7 @@ type StoryAnalysis struct {
 	ID              string
 	ProjectID       string
 	EpisodeID       string
+	StorySourceID   string
 	WorkflowRunID   string
 	GenerationJobID string
 	Version         int
@@ -64,8 +65,36 @@ type StoryAnalysis struct {
 	CharacterSeeds  []string
 	SceneSeeds      []string
 	PropSeeds       []string
+	Outline         []StoryBeat
+	AgentOutputs    []StoryAgentOutput
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
+}
+
+type StorySource struct {
+	ID          string
+	ProjectID   string
+	EpisodeID   string
+	SourceType  string
+	Title       string
+	ContentText string
+	Language    string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+}
+
+type StoryBeat struct {
+	Code       string `json:"code"`
+	Title      string `json:"title"`
+	Summary    string `json:"summary"`
+	VisualGoal string `json:"visual_goal"`
+}
+
+type StoryAgentOutput struct {
+	Role       string   `json:"role"`
+	Status     string   `json:"status"`
+	Output     string   `json:"output"`
+	Highlights []string `json:"highlights"`
 }
 
 type Asset struct {

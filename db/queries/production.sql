@@ -105,23 +105,25 @@ RETURNING id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id
 
 -- name: CreateStoryAnalysis :one
 INSERT INTO story_analyses (
-    id, project_id, episode_id, workflow_run_id, generation_job_id, version,
-    status, summary, themes, character_seeds, scene_seeds, prop_seeds
+    id, project_id, episode_id, story_source_id, workflow_run_id, generation_job_id, version,
+    status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs
 )
 VALUES (
-    $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+    $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid,
     COALESCE((SELECT MAX(version) + 1 FROM story_analyses WHERE episode_id = $3::uuid), 1),
-    $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb
+    $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb
 )
 RETURNING id::text, project_id::text, episode_id::text,
+    COALESCE(story_source_id::text, ''),
     COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-    version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+    version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
     created_at, updated_at;
 
 -- name: ListStoryAnalyses :many
 SELECT id::text, project_id::text, episode_id::text,
+       COALESCE(story_source_id::text, ''),
        COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
        created_at, updated_at
 FROM story_analyses
 WHERE episode_id = $1::uuid
@@ -129,8 +131,9 @@ ORDER BY version DESC, created_at DESC;
 
 -- name: GetStoryAnalysis :one
 SELECT id::text, project_id::text, episode_id::text,
+       COALESCE(story_source_id::text, ''),
        COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
        created_at, updated_at
 FROM story_analyses
 WHERE id = $1::uuid;

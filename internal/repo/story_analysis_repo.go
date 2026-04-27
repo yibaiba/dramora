@@ -85,12 +85,13 @@ func createStoryAnalysisWithPayloads(
 	ctx context.Context,
 	queryer storyAnalysisQueryer,
 	params CreateStoryAnalysisParams,
-	payloads [4]string,
+	payloads [6]string,
 ) (domain.StoryAnalysis, error) {
 	analysis, err := scanStoryAnalysis(queryer.QueryRow(ctx, createStoryAnalysisSQL,
 		params.ID,
 		params.ProjectID,
 		params.EpisodeID,
+		nullableUUID(params.StorySourceID),
 		nullableUUID(params.WorkflowRunID),
 		nullableUUID(params.GenerationJobID),
 		params.Status,
@@ -99,6 +100,8 @@ func createStoryAnalysisWithPayloads(
 		payloads[1],
 		payloads[2],
 		payloads[3],
+		payloads[4],
+		payloads[5],
 	))
 	if isForeignKeyViolation(err) {
 		return domain.StoryAnalysis{}, domain.ErrNotFound
@@ -106,18 +109,15 @@ func createStoryAnalysisWithPayloads(
 	return analysis, err
 }
 
-func storyAnalysisPayloads(params CreateStoryAnalysisParams) ([4]string, error) {
-	values := [][]string{
-		params.Themes,
-		params.CharacterSeeds,
-		params.SceneSeeds,
-		params.PropSeeds,
-	}
-	var payloads [4]string
-	for index, value := range values {
+func storyAnalysisPayloads(params CreateStoryAnalysisParams) ([6]string, error) {
+	var payloads [6]string
+	for index, value := range []any{
+		params.Themes, params.CharacterSeeds, params.SceneSeeds,
+		params.PropSeeds, params.Outline, params.AgentOutputs,
+	} {
 		payload, err := json.Marshal(value)
 		if err != nil {
-			return [4]string{}, err
+			return [6]string{}, err
 		}
 		payloads[index] = string(payload)
 	}

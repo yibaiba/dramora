@@ -114,6 +114,7 @@ export type StoryAnalysis = {
   id: string
   project_id: string
   episode_id: string
+  story_source_id: string
   workflow_run_id: string
   generation_job_id: string
   version: number
@@ -123,8 +124,36 @@ export type StoryAnalysis = {
   character_seeds: string[]
   scene_seeds: string[]
   prop_seeds: string[]
+  outline: StoryBeat[]
+  agent_outputs: StoryAgentOutput[]
   created_at: string
   updated_at: string
+}
+
+export type StorySource = {
+  id: string
+  project_id: string
+  episode_id: string
+  source_type: 'idea' | 'outline' | 'novel' | 'script' | 'file' | 'url'
+  title: string
+  content_text: string
+  language: string
+  created_at: string
+  updated_at: string
+}
+
+export type StoryBeat = {
+  code: string
+  title: string
+  summary: string
+  visual_goal: string
+}
+
+export type StoryAgentOutput = {
+  role: string
+  status: string
+  output: string
+  highlights: string[]
 }
 
 export type StoryMap = {
@@ -236,6 +265,13 @@ export type Export = {
 export type CreateProjectRequest = {
   name: string
   description?: string
+}
+
+export type CreateStorySourceRequest = {
+  source_type?: StorySource['source_type']
+  title?: string
+  content_text: string
+  language?: string
 }
 
 export type StartStoryAnalysisResponse = {

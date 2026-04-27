@@ -12,6 +12,27 @@ VALUES ($1::uuid, $2::uuid, $3::uuid, $4, '{"kind":"story_analysis"}'::jsonb)
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), status, created_at, updated_at
 `
 
+const createStorySourceSQL = `
+INSERT INTO story_sources (id, project_id, episode_id, source_type, title, content_text, language)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, $7)
+RETURNING id::text, project_id::text, episode_id::text, source_type, title, content_text, language, created_at, updated_at
+`
+
+const listStorySourcesSQL = `
+SELECT id::text, project_id::text, episode_id::text, source_type, title, content_text, language, created_at, updated_at
+FROM story_sources
+WHERE episode_id = $1::uuid
+ORDER BY created_at DESC, id DESC
+`
+
+const latestStorySourceSQL = `
+SELECT id::text, project_id::text, episode_id::text, source_type, title, content_text, language, created_at, updated_at
+FROM story_sources
+WHERE episode_id = $1::uuid
+ORDER BY created_at DESC, id DESC
+LIMIT 1
+`
+
 const createGenerationJobSQL = `
 INSERT INTO generation_jobs (
     id, project_id, episode_id, workflow_run_id, request_key, provider, model, task_type, status, prompt
@@ -129,24 +150,26 @@ RETURNING id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id
 
 const createStoryAnalysisSQL = `
 INSERT INTO story_analyses (
-    id, project_id, episode_id, workflow_run_id, generation_job_id, version,
-    status, summary, themes, character_seeds, scene_seeds, prop_seeds
+    id, project_id, episode_id, story_source_id, workflow_run_id, generation_job_id, version,
+    status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs
 )
 VALUES (
-    $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid,
+    $1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6::uuid,
     COALESCE((SELECT MAX(version) + 1 FROM story_analyses WHERE episode_id = $3::uuid), 1),
-    $6, $7, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb
+    $7, $8, $9::jsonb, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb, $14::jsonb
 )
 RETURNING id::text, project_id::text, episode_id::text,
+    COALESCE(story_source_id::text, ''),
     COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-    version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+    version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
     created_at, updated_at
 `
 
 const listStoryAnalysesSQL = `
 SELECT id::text, project_id::text, episode_id::text,
+       COALESCE(story_source_id::text, ''),
        COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
        created_at, updated_at
 FROM story_analyses
 WHERE episode_id = $1::uuid
@@ -155,8 +178,9 @@ ORDER BY version DESC, created_at DESC
 
 const getStoryAnalysisSQL = `
 SELECT id::text, project_id::text, episode_id::text,
+       COALESCE(story_source_id::text, ''),
        COALESCE(workflow_run_id::text, ''), COALESCE(generation_job_id::text, ''),
-       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds,
+       version, status, summary, themes, character_seeds, scene_seeds, prop_seeds, outline, agent_outputs,
        created_at, updated_at
 FROM story_analyses
 WHERE id = $1::uuid

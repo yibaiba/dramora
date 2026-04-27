@@ -1,6 +1,7 @@
 import type {
   CreateEpisodeRequest,
   CreateProjectRequest,
+  CreateStorySourceRequest,
   Episode,
   ApprovalGate,
   ApprovalGateReviewRequest,
@@ -14,6 +15,7 @@ import type {
   ShotPromptPack,
   StartStoryAnalysisResponse,
   StoryAnalysis,
+  StorySource,
   StoryMap,
   StoryboardShot,
   UpdateStoryboardShotRequest,
@@ -81,6 +83,19 @@ export async function startStoryAnalysis(episodeId: string): Promise<StartStoryA
   return fetchJSON<StartStoryAnalysisResponse>(`/api/v1/episodes/${episodeId}/story-analysis/start`, {
     method: 'POST',
   })
+}
+
+export async function createStorySource(episodeId: string, request: CreateStorySourceRequest): Promise<StorySource> {
+  const payload = await fetchJSON<{ story_source: StorySource }>(`/api/v1/episodes/${episodeId}/story-sources`, {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.story_source
+}
+
+export async function listStorySources(episodeId: string): Promise<StorySource[]> {
+  const payload = await fetchJSON<{ story_sources: StorySource[] }>(`/api/v1/episodes/${episodeId}/story-sources`)
+  return payload.story_sources
 }
 
 export async function listStoryAnalyses(episodeId: string): Promise<StoryAnalysis[]> {
