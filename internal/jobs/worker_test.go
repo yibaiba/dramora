@@ -37,8 +37,28 @@ func TestWorkerRunOnceRequiresExecutor(t *testing.T) {
 	}
 }
 
+func TestWorkerRunOnceReturnsGenerationSummaryWhenExportsFail(t *testing.T) {
+	t.Parallel()
+
+	executor := &fakeExecutor{
+		exportErr:         errors.New("export failed"),
+		exportSummary:     ExecutionSummary{Processed: 1, Failed: 1},
+		generationSummary: ExecutionSummary{Processed: 2, Succeeded: 2},
+	}
+	worker := NewWorker(slog.Default(), executor)
+
+	summary, err := worker.RunOnce(context.Background())
+	if err == nil {
+		t.Fatal("expected export error")
+	}
+	if summary.Processed != 2 || summary.Succeeded != 2 || summary.Failed != 0 {
+		t.Fatalf("expected generation-only summary, got %+v", summary)
+	}
+}
+
 type fakeExecutor struct {
 	called            bool
+	exportErr         error
 	exportSummary     ExecutionSummary
 	generationSummary ExecutionSummary
 }
@@ -55,5 +75,5 @@ func (e *fakeExecutor) ProcessQueuedExports(_ context.Context, limit int) (Execu
 	if limit != DefaultExecutionLimit {
 		return ExecutionSummary{}, errors.New("unexpected limit")
 	}
-	return e.exportSummary, nil
+	return e.exportSummary, e.exportErr
 }

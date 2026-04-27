@@ -35,10 +35,10 @@ func (w *Worker) RunOnce(ctx context.Context) (ExecutionSummary, error) {
 		return generationSummary, err
 	}
 	exportSummary, err := w.executor.ProcessQueuedExports(ctx, DefaultExecutionLimit)
-	summary := MergeExecutionSummaries(generationSummary, exportSummary)
 	if err != nil {
-		return summary, err
+		return generationSummary, err
 	}
+	summary := MergeExecutionSummaries(generationSummary, exportSummary)
 	w.logger.Info("worker batch complete",
 		"processed", summary.Processed,
 		"succeeded", summary.Succeeded,

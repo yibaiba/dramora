@@ -22,7 +22,7 @@ INSERT INTO generation_jobs (
 )
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb)
 ON CONFLICT (request_key) DO UPDATE
-SET updated_at = generation_jobs.updated_at
+SET updated_at = now()
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, created_at, updated_at;
 
@@ -64,7 +64,7 @@ INSERT INTO approval_gates (
 )
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7::uuid, $8)
 ON CONFLICT (episode_id, gate_type, subject_type, subject_id) DO UPDATE
-SET updated_at = approval_gates.updated_at
+SET updated_at = now()
 RETURNING id::text, project_id::text, episode_id::text, COALESCE(workflow_run_id::text, ''),
        gate_type, subject_type, subject_id::text, status, reviewed_by, review_note,
        COALESCE(reviewed_at, '0001-01-01T00:00:00Z'::timestamptz), created_at, updated_at;
