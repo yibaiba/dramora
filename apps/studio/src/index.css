@@ -333,6 +333,25 @@ h1 {
   background: rgba(37, 99, 235, 0.12);
 }
 
+.timeline-duration-field {
+  display: grid;
+  gap: 0.35rem;
+  max-width: 16rem;
+  margin-bottom: 0.85rem;
+  color: #cbd5e1;
+  font-size: 0.82rem;
+}
+
+.timeline-duration-field input,
+.clip-block input {
+  min-height: 44px;
+  padding: 0 0.6rem;
+  color: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 0.65rem;
+  background: rgba(2, 6, 23, 0.55);
+}
+
 .project-list,
 .episode-list,
 .agent-list,
@@ -750,11 +769,28 @@ h1 {
 }
 
 .clip-block {
-  padding: 0.65rem 1rem;
+  display: grid;
+  grid-template-columns: minmax(5rem, 1fr) repeat(2, minmax(6rem, 8rem)) auto;
+  gap: 0.55rem;
+  align-items: end;
+  padding: 0.65rem;
   color: #bfdbfe;
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 0.75rem;
   background: rgba(37, 99, 235, 0.12);
+}
+
+.clip-block strong,
+.clip-block label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.clip-block span {
+  color: #cbd5e1;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .clip-strip {
@@ -842,7 +878,8 @@ h1 {
   }
 
   .inline-form,
-  .track-row {
+  .track-row,
+  .clip-block {
     grid-template-columns: 1fr;
   }
 }

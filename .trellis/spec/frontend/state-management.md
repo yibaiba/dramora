@@ -14,7 +14,7 @@ Use TanStack Query for server state and Zustand for shared local Studio/editor s
 
 - Server state: projects, episodes, generation jobs, workflow runs, timelines.
 - Shared local state: selected project, local event rail, future playhead/zoom/selection.
-- Component state: input fields, temporary hover/open states.
+- Component state: input fields, temporary hover/open states, and unsaved timeline editor drafts.
 - URL state: introduce routing/deep links after page structure stabilizes.
 
 ---
@@ -50,6 +50,8 @@ Mutations invalidate the relevant query key after success.
 
 Agent Board should derive display state from `['generation-jobs']` instead of copying job rows into Zustand. Filter jobs by the selected project or episode in component memoization, then map job statuses to SOP step labels.
 
+Timeline editor draft state should stay component-local until the user explicitly saves through `useSaveEpisodeTimeline`. The canonical timeline remains the `['timeline', episodeId]` query result; when deriving an initial editable draft from server state, use keyed component remounting or explicit user actions instead of synchronously copying query data in an effect.
+
 ---
 
 ## Common Mistakes
@@ -58,3 +60,4 @@ Agent Board should derive display state from `['generation-jobs']` instead of co
 - Do not call API client functions directly from multiple panels.
 - Do not keep selected project only in component state because Agent Board, Timeline, and Jobs need shared context.
 - Do not hard-code Agent Board status once a matching server job exists; derive it from generation job rows.
+- Do not copy timeline server state into local editor state with `useEffect` setters; React lint treats that as cascading render work.

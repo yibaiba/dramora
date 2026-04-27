@@ -91,6 +91,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Missing generation job/workflow/timeline row | repository returns `domain.ErrNotFound`; HTTP maps to 404. |
 | Starting story analysis | create `workflow_runs`, `generation_jobs`, and `generation_job_events` in one DB transaction. |
 | Saving episode timeline | upsert `timelines` by `episode_id`, set status to `saved`, and increment version on updates. |
+| Saving invalid timeline graph | reject blank track kind/name, blank clip kind, negative timings, or clips that exceed timeline duration with `domain.ErrInvalidInput`; HTTP maps to 400. |
 | Worker advances generation job | update `generation_jobs.status` and insert a matching `generation_job_events` row in one DB transaction. |
 | Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
 | Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
@@ -114,6 +115,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - PostgreSQL integration tests should be added before relying on complex JSONB/transaction behavior.
 - Production read routes should test empty list and 404 behavior until create/start endpoints exist.
 - Timeline save routes should test save-then-read behavior through the HTTP layer.
+- Timeline save routes should test invalid graph timing through the HTTP layer.
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
 - Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.

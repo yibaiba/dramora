@@ -1168,6 +1168,7 @@ components:
           format: date-time
     SaveTimelineRequest:
       type: object
+      required: [duration_ms]
       properties:
         duration_ms:
           type: integer
@@ -1208,11 +1209,14 @@ components:
           type: integer
     SaveTimelineTrackRequest:
       type: object
+      required: [kind, name, position]
       properties:
         kind:
           type: string
+          minLength: 1
         name:
           type: string
+          minLength: 1
         position:
           type: integer
         clips:
@@ -1221,11 +1225,13 @@ components:
             $ref: "#/components/schemas/SaveTimelineClipRequest"
     SaveTimelineClipRequest:
       type: object
+      required: [kind, start_ms, duration_ms]
       properties:
         asset_id:
           type: string
         kind:
           type: string
+          minLength: 1
         start_ms:
           type: integer
           minimum: 0

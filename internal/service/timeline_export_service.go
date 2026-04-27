@@ -26,6 +26,9 @@ func (s *ProductionService) SaveEpisodeTimeline(
 	if input.DurationMS < 0 {
 		return domain.Timeline{}, fmt.Errorf("%w: duration_ms must be non-negative", domain.ErrInvalidInput)
 	}
+	if err := validateTimelineInput(input); err != nil {
+		return domain.Timeline{}, err
+	}
 
 	id, err := domain.NewID()
 	if err != nil {
@@ -111,4 +114,41 @@ func timelineClipParams(inputs []SaveTimelineClipInput) ([]repo.SaveTimelineClip
 		})
 	}
 	return clips, nil
+}
+
+func validateTimelineInput(input SaveTimelineInput) error {
+	for _, track := range input.Tracks {
+		if err := validateTimelineTrack(track, input.DurationMS); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTimelineTrack(track SaveTimelineTrackInput, durationMS int) error {
+	if strings.TrimSpace(track.Kind) == "" {
+		return fmt.Errorf("%w: track kind is required", domain.ErrInvalidInput)
+	}
+	if strings.TrimSpace(track.Name) == "" {
+		return fmt.Errorf("%w: track name is required", domain.ErrInvalidInput)
+	}
+	for _, clip := range track.Clips {
+		if err := validateTimelineClip(clip, durationMS); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTimelineClip(clip SaveTimelineClipInput, durationMS int) error {
+	if strings.TrimSpace(clip.Kind) == "" {
+		return fmt.Errorf("%w: clip kind is required", domain.ErrInvalidInput)
+	}
+	if clip.StartMS < 0 || clip.DurationMS < 0 || clip.TrimStartMS < 0 {
+		return fmt.Errorf("%w: clip timing must be non-negative", domain.ErrInvalidInput)
+	}
+	if durationMS > 0 && clip.StartMS+clip.DurationMS > durationMS {
+		return fmt.Errorf("%w: clip exceeds timeline duration", domain.ErrInvalidInput)
+	}
+	return nil
 }

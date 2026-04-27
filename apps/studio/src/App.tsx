@@ -57,7 +57,7 @@ import type {
   StoryMap,
   StoryMapItem,
   StoryboardShot,
-  TimelineTrack,
+  Timeline,
 } from './api/types'
 
 const productionSteps = [
@@ -78,6 +78,28 @@ type AgentStep = {
   name: string
   status: AgentStepStatus
   statusLabel: string
+}
+
+type TimelineDraft = {
+  duration_ms: number
+  tracks: TimelineDraftTrack[]
+}
+
+type TimelineDraftTrack = {
+  id: string
+  kind: string
+  name: string
+  position: number
+  clips: TimelineDraftClip[]
+}
+
+type TimelineDraftClip = {
+  id: string
+  asset_id?: string
+  kind: string
+  start_ms: number
+  duration_ms: number
+  trim_start_ms: number
 }
 
 const activeGenerationStatuses: GenerationJobStatus[] = [
@@ -816,55 +838,214 @@ function AssetCandidateGrid({ activeEpisode, assets }: { activeEpisode?: Episode
 function TimelineEditor({ activeEpisode }: { activeEpisode?: Episode }) {
   const { data: timeline } = useEpisodeTimeline(activeEpisode?.id)
   const { data: shots = [] } = useStoryboardShots(activeEpisode?.id)
+  const { data: assets = [] } = useEpisodeAssets(activeEpisode?.id)
+  const initialDraft = useMemo(() => (timeline ? timelineDraftFromTimeline(timeline) : emptyTimelineDraft()), [timeline])
+  const draftKey = timeline ? `${timeline.id}-${timeline.version}` : (activeEpisode?.id ?? 'no-episode')
+
+  return (
+    <TimelineDraftEditor
+      activeEpisode={activeEpisode}
+      assets={assets}
+      initialDraft={initialDraft}
+      key={draftKey}
+      shots={shots}
+      timeline={timeline}
+    />
+  )
+}
+
+function TimelineDraftEditor({
+  activeEpisode,
+  assets,
+  initialDraft,
+  shots,
+  timeline,
+}: {
+  activeEpisode?: Episode
+  assets: Asset[]
+  initialDraft: TimelineDraft
+  shots: StoryboardShot[]
+  timeline?: Timeline
+}) {
   const saveTimeline = useSaveEpisodeTimeline()
   const startExport = useStartEpisodeExport()
-
-  const saveShotTimeline = () => {
-    if (!activeEpisode) return
-    saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(shots) })
-  }
+  const draft = useTimelineDraftState({ activeEpisode, assets, initialDraft, saveTimeline, shots })
 
   return (
     <section className="panel timeline-panel" aria-labelledby="timeline-title">
-      <PanelTitle icon={Film} title="Timeline editor" subtitle="Tracks, clips, and export handoff" id="timeline-title" />
-      <PanelToolbar>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || saveTimeline.isPending}
-          onClick={saveShotTimeline}
-          type="button"
-        >
-          Save shot timeline
-        </button>
-        <button
-          className="secondary-action"
-          disabled={!activeEpisode || !timeline || startExport.isPending}
-          onClick={() => activeEpisode && startExport.mutate(activeEpisode.id)}
-          type="button"
-        >
-          Start export
-        </button>
-        {startExport.data ? <span className="export-status">Export {startExport.data.status}</span> : null}
-      </PanelToolbar>
+      <PanelTitle
+        icon={Film}
+        title="Timeline editor"
+        subtitle={timeline ? `Saved v${timeline.version}` : 'Tracks, clips, and export handoff'}
+        id="timeline-title"
+      />
+      <TimelineEditorToolbar
+        activeEpisode={activeEpisode}
+        canBuildFromStoryboard={shots.length > 0}
+        canStartExport={Boolean(timeline)}
+        draft={draft}
+        startExport={startExport}
+        saveTimelinePending={saveTimeline.isPending}
+      />
+      <TimelineDurationField durationMS={draft.durationMS} onChange={draft.changeDuration} />
       <div className="timeline-stage">
         <div className="playhead" aria-hidden="true" />
-        <TimelineTracks activeEpisode={activeEpisode} tracks={timeline?.tracks ?? []} />
+        <TimelineTracks
+          activeEpisode={activeEpisode}
+          onClipChange={draft.updateClip}
+          onClipRemove={draft.removeClip}
+          tracks={draft.tracks}
+        />
       </div>
     </section>
   )
 }
 
-function buildTimelineRequest(shots: StoryboardShot[]): SaveTimelineRequest {
+function useTimelineDraftState({
+  activeEpisode,
+  assets,
+  initialDraft,
+  saveTimeline,
+  shots,
+}: {
+  activeEpisode?: Episode
+  assets: Asset[]
+  initialDraft: TimelineDraft
+  saveTimeline: ReturnType<typeof useSaveEpisodeTimeline>
+  shots: StoryboardShot[]
+}) {
+  const [durationMS, setDurationMS] = useState(initialDraft.duration_ms)
+  const [tracks, setTracks] = useState<TimelineDraftTrack[]>(initialDraft.tracks)
+  const readyAssets = useMemo(() => assets.filter((asset) => asset.status === 'ready'), [assets])
+
+  const buildFromStoryboard = () => {
+    const draft = timelineDraftFromShots(shots)
+    setDurationMS(draft.duration_ms)
+    setTracks(draft.tracks)
+  }
+  const addLockedAssetClip = () => {
+    const asset = readyAssets[0]
+    if (!asset) return
+    const updatedTracks = appendAssetClip(tracks, asset)
+    setTracks(updatedTracks)
+    setDurationMS((currentDuration) => Math.max(currentDuration, nextClipStart(firstTrackClips(updatedTracks))))
+  }
+  const saveDraftTimeline = () => {
+    if (!activeEpisode) return
+    saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(durationMS, tracks) })
+  }
+
+  return {
+    addLockedAssetClip,
+    buildFromStoryboard,
+    canAddLockedAsset: readyAssets.length > 0,
+    changeDuration: (value: string) => setDurationMS(parseTimelineNumber(value)),
+    durationMS,
+    removeClip: (trackID: string, clipID: string) =>
+      setTracks((currentTracks) => removeTimelineDraftClip(currentTracks, trackID, clipID)),
+    saveDraftTimeline,
+    tracks,
+    updateClip: (trackID: string, clipID: string, patch: Partial<TimelineDraftClip>) =>
+      setTracks((currentTracks) => updateTimelineDraftClip(currentTracks, trackID, clipID, patch)),
+  }
+}
+
+function TimelineEditorToolbar({
+  activeEpisode,
+  canBuildFromStoryboard,
+  canStartExport,
+  draft,
+  saveTimelinePending,
+  startExport,
+}: {
+  activeEpisode?: Episode
+  canBuildFromStoryboard: boolean
+  canStartExport: boolean
+  draft: ReturnType<typeof useTimelineDraftState>
+  saveTimelinePending: boolean
+  startExport: ReturnType<typeof useStartEpisodeExport>
+}) {
+  return (
+    <PanelToolbar>
+      <button
+        className="secondary-action"
+        disabled={!activeEpisode || !canBuildFromStoryboard}
+        onClick={draft.buildFromStoryboard}
+        type="button"
+      >
+        Build from storyboard
+      </button>
+      <button
+        className="secondary-action"
+        disabled={!activeEpisode || !draft.canAddLockedAsset}
+        onClick={draft.addLockedAssetClip}
+        type="button"
+      >
+        Add locked asset
+      </button>
+      <button className="secondary-action" disabled={!activeEpisode || saveTimelinePending} onClick={draft.saveDraftTimeline} type="button">
+        Save edits
+      </button>
+      <button
+        className="secondary-action"
+        disabled={!activeEpisode || !canStartExport || startExport.isPending}
+        onClick={() => activeEpisode && startExport.mutate(activeEpisode.id)}
+        type="button"
+      >
+        Start export
+      </button>
+      {startExport.data ? <span className="export-status">Export {startExport.data.status}</span> : null}
+    </PanelToolbar>
+  )
+}
+
+function TimelineDurationField({ durationMS, onChange }: { durationMS: number; onChange: (value: string) => void }) {
+  return (
+    <label className="timeline-duration-field">
+      <span>Timeline duration</span>
+      <input
+        min={0}
+        onChange={(event) => onChange(event.target.value)}
+        step={500}
+        type="number"
+        value={durationMS}
+      />
+    </label>
+  )
+}
+
+function buildTimelineRequest(durationMS: number, tracks: TimelineDraftTrack[]): SaveTimelineRequest {
+  return {
+    duration_ms: durationMS,
+    tracks: tracks.map((track) => ({
+      clips: track.clips.map((clip) => ({
+        asset_id: clip.asset_id,
+        duration_ms: clip.duration_ms,
+        kind: clip.kind,
+        start_ms: clip.start_ms,
+        trim_start_ms: clip.trim_start_ms,
+      })),
+      kind: track.kind,
+      name: track.name,
+      position: track.position,
+    })),
+  }
+}
+
+function timelineDraftFromShots(shots: StoryboardShot[]): TimelineDraft {
   const sourceShots = shots.length > 0 ? shots : [{ duration_ms: 15_000 }]
   return {
     duration_ms: sourceShots.reduce((total, shot) => total + shot.duration_ms, 0),
     tracks: [
       {
         clips: sourceShots.map((shot, index) => ({
-          kind: 'video',
-          start_ms: sourceShots.slice(0, index).reduce((total, item) => total + item.duration_ms, 0),
           duration_ms: shot.duration_ms,
+          id: `shot-${index}`,
+          kind: 'shot',
+          start_ms: sourceShots.slice(0, index).reduce((total, item) => total + item.duration_ms, 0),
+          trim_start_ms: 0,
         })),
+        id: 'storyboard-video',
         kind: 'video',
         name: 'Storyboard video',
         position: 1,
@@ -873,9 +1054,101 @@ function buildTimelineRequest(shots: StoryboardShot[]): SaveTimelineRequest {
   }
 }
 
-function TimelineTracks({ activeEpisode, tracks }: { activeEpisode?: Episode; tracks: TimelineTrack[] }) {
+function timelineDraftFromTimeline(timeline: Timeline): TimelineDraft {
+  return {
+    duration_ms: timeline.duration_ms,
+    tracks: timeline.tracks.map((track) => ({
+      clips: track.clips.map((clip) => ({
+        asset_id: clip.asset_id || undefined,
+        duration_ms: clip.duration_ms,
+        id: clip.id,
+        kind: clip.kind,
+        start_ms: clip.start_ms,
+        trim_start_ms: clip.trim_start_ms,
+      })),
+      id: track.id,
+      kind: track.kind,
+      name: track.name,
+      position: track.position,
+    })),
+  }
+}
+
+function emptyTimelineDraft(): TimelineDraft {
+  return { duration_ms: 0, tracks: [] }
+}
+
+function appendAssetClip(tracks: TimelineDraftTrack[], asset: Asset): TimelineDraftTrack[] {
+  const [firstTrack, ...restTracks] = tracks.length > 0 ? tracks : [defaultVideoTrack()]
+  const startMS = nextClipStart(firstTrack.clips)
+  const clip = {
+    asset_id: asset.id,
+    duration_ms: 3000,
+    id: `asset-${asset.id}-${startMS}`,
+    kind: asset.kind,
+    start_ms: startMS,
+    trim_start_ms: 0,
+  }
+  return [{ ...firstTrack, clips: [...firstTrack.clips, clip] }, ...restTracks]
+}
+
+function defaultVideoTrack(): TimelineDraftTrack {
+  return { clips: [], id: 'video-track-draft', kind: 'video', name: 'Video', position: 1 }
+}
+
+function firstTrackClips(tracks: TimelineDraftTrack[]): TimelineDraftClip[] {
+  return tracks[0]?.clips ?? []
+}
+
+function nextClipStart(clips: TimelineDraftClip[]): number {
+  return clips.reduce((maxEnd, clip) => Math.max(maxEnd, clip.start_ms + clip.duration_ms), 0)
+}
+
+function updateTimelineDraftClip(
+  tracks: TimelineDraftTrack[],
+  trackID: string,
+  clipID: string,
+  patch: Partial<TimelineDraftClip>,
+): TimelineDraftTrack[] {
+  return tracks.map((track) => {
+    if (track.id !== trackID) return track
+    return {
+      ...track,
+      clips: track.clips.map((clip) => (clip.id === clipID ? { ...clip, ...patch } : clip)),
+    }
+  })
+}
+
+function removeTimelineDraftClip(
+  tracks: TimelineDraftTrack[],
+  trackID: string,
+  clipID: string,
+): TimelineDraftTrack[] {
+  return tracks.map((track) => {
+    if (track.id !== trackID) return track
+    return { ...track, clips: track.clips.filter((clip) => clip.id !== clipID) }
+  })
+}
+
+function parseTimelineNumber(value: string): number {
+  const parsed = Number.parseInt(value, 10)
+  if (Number.isNaN(parsed)) return 0
+  return Math.max(0, parsed)
+}
+
+function TimelineTracks({
+  activeEpisode,
+  onClipChange,
+  onClipRemove,
+  tracks,
+}: {
+  activeEpisode?: Episode
+  onClipChange: (trackID: string, clipID: string, patch: Partial<TimelineDraftClip>) => void
+  onClipRemove: (trackID: string, clipID: string) => void
+  tracks: TimelineDraftTrack[]
+}) {
   if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before saving timeline clips." />
-  if (tracks.length === 0) return <EmptyState title="No timeline tracks" text="Save a shot timeline after seeding storyboard shots." />
+  if (tracks.length === 0) return <EmptyState title="No timeline tracks" text="Build from storyboard or add locked assets." />
 
   return (
     <>
@@ -884,14 +1157,56 @@ function TimelineTracks({ activeEpisode, tracks }: { activeEpisode?: Episode; tr
           <span>{track.name}</span>
           <div className="clip-strip">
             {track.clips.map((clip) => (
-              <div className="clip-block" key={clip.id}>
-                {clip.kind} · {Math.round(clip.duration_ms / 1000)}s
-              </div>
+              <TimelineClipEditor
+                clip={clip}
+                key={clip.id}
+                onChange={(patch) => onClipChange(track.id, clip.id, patch)}
+                onRemove={() => onClipRemove(track.id, clip.id)}
+              />
             ))}
           </div>
         </div>
       ))}
     </>
+  )
+}
+
+function TimelineClipEditor({
+  clip,
+  onChange,
+  onRemove,
+}: {
+  clip: TimelineDraftClip
+  onChange: (patch: Partial<TimelineDraftClip>) => void
+  onRemove: () => void
+}) {
+  return (
+    <article className="clip-block">
+      <strong>{clip.kind}</strong>
+      <label>
+        <span>Start</span>
+        <input
+          min={0}
+          onChange={(event) => onChange({ start_ms: parseTimelineNumber(event.target.value) })}
+          step={500}
+          type="number"
+          value={clip.start_ms}
+        />
+      </label>
+      <label>
+        <span>Length</span>
+        <input
+          min={0}
+          onChange={(event) => onChange({ duration_ms: parseTimelineNumber(event.target.value) })}
+          step={500}
+          type="number"
+          value={clip.duration_ms}
+        />
+      </label>
+      <button className="secondary-action" onClick={onRemove} type="button">
+        Remove
+      </button>
+    </article>
   )
 }
 

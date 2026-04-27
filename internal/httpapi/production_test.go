@@ -117,6 +117,17 @@ func TestSaveEpisodeTimelineRoute(t *testing.T) {
 	if getResp.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", getResp.Code, getResp.Body.String())
 	}
+
+	invalidResp := httptest.NewRecorder()
+	invalidReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/episodes/"+episode.ID+"/timeline",
+		body(`{"duration_ms":1000,"tracks":[{"kind":"video","name":"Video","position":1,"clips":[{"kind":"shot","start_ms":900,"duration_ms":200}]}]}`),
+	)
+	router.ServeHTTP(invalidResp, invalidReq)
+	if invalidResp.Code != http.StatusBadRequest {
+		t.Fatalf("expected invalid timeline 400, got %d: %s", invalidResp.Code, invalidResp.Body.String())
+	}
 }
 
 func TestStoryAnalysisReadRoutes(t *testing.T) {
