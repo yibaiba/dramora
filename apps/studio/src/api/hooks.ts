@@ -3,6 +3,7 @@ import {
   createEpisode,
   createProject,
   getExport,
+  getEpisodeTimeline,
   getStoryAnalysis,
   getStoryMap,
   listEpisodes,
@@ -128,6 +129,14 @@ export function useSaveEpisodeTimeline() {
     mutationFn: ({ episodeId, request }: { episodeId: string; request: SaveTimelineRequest }) =>
       saveEpisodeTimeline(episodeId, request),
     onSuccess: (timeline) => queryClient.invalidateQueries({ queryKey: ['timeline', timeline.episode_id] }),
+  })
+}
+
+export function useEpisodeTimeline(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => getEpisodeTimeline(episodeId ?? ''),
+    queryKey: ['timeline', episodeId],
   })
 }
 

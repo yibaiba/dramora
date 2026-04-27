@@ -121,6 +121,11 @@ export async function saveEpisodeTimeline(episodeId: string, request: SaveTimeli
   return payload.timeline
 }
 
+export async function getEpisodeTimeline(episodeId: string): Promise<Timeline> {
+  const payload = await fetchJSON<{ timeline: Timeline }>(`/api/v1/episodes/${episodeId}/timeline`)
+  return payload.timeline
+}
+
 export async function startEpisodeExport(episodeId: string): Promise<Export> {
   const payload = await fetchJSON<{ export: Export }>(`/api/v1/episodes/${episodeId}/exports`, {
     method: 'POST',

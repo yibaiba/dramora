@@ -337,6 +337,7 @@ h1 {
 .agent-list,
 .analysis-metrics,
 .analysis-tags,
+.panel-toolbar,
 .jobs-list,
 .event-log {
   display: grid;
@@ -348,6 +349,8 @@ h1 {
 .episode-row,
 .agent-step,
 .analysis-card,
+.story-map-card,
+.shot-card,
 .job-row {
   width: 100%;
   padding: 0.8rem;
@@ -380,7 +383,9 @@ h1 {
 .episode-row span,
 .agent-step strong,
 .analysis-card p,
+.story-map-card span,
 .asset-card span,
+.shot-card h3,
 .job-row strong {
   color: #f8fafc;
 }
@@ -514,7 +519,9 @@ h1 {
 }
 
 .kanban-grid,
-.asset-grid {
+.asset-grid,
+.story-map-grid,
+.shot-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.65rem;
@@ -547,6 +554,83 @@ h1 {
   background:
     linear-gradient(135deg, rgba(96, 165, 250, 0.28), rgba(249, 115, 22, 0.2)),
     repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 9px);
+}
+
+.panel-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 0.85rem;
+}
+
+.story-map-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.story-map-column {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+}
+
+.story-map-column h3,
+.shot-card h3 {
+  margin: 0;
+  color: #dbeafe;
+  font-size: 0.95rem;
+}
+
+.story-map-column > small,
+.story-map-card small,
+.shot-card small,
+.export-status {
+  color: #94a3b8;
+  line-height: 1.55;
+}
+
+.story-map-card {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.story-map-card strong,
+.shot-card-header strong {
+  color: #fed7aa;
+}
+
+.shot-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 0.85rem;
+}
+
+.shot-card {
+  display: grid;
+  gap: 0.55rem;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(15, 23, 42, 0.48)),
+    rgba(2, 6, 23, 0.32);
+}
+
+.shot-card p {
+  margin: 0;
+  color: #cbd5e1;
+  line-height: 1.5;
+}
+
+.shot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.shot-card-header span,
+.export-status {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(34, 197, 94, 0.24);
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.08);
 }
 
 .timeline-stage {
@@ -589,6 +673,12 @@ h1 {
   border: 1px solid rgba(96, 165, 250, 0.2);
   border-radius: 0.75rem;
   background: rgba(37, 99, 235, 0.12);
+}
+
+.clip-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .jobs-rail {

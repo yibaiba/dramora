@@ -346,10 +346,19 @@ Verified:
 - `cd apps/studio && npm run lint -- --quiet`
 - `cd apps/studio && npm run build`
 
-Next implementation slice:
+Studio core panels slice status: complete.
 
-- Add richer Studio panels for the new C/S/P, storyboard, timeline clip, and export APIs.
-- Defer freeform canvas and advanced timeline editing until asset candidate generation exists.
+Implemented:
+
+- C/S/P Asset Library panel backed by `useStoryMap` and `useSeedStoryMap`.
+- Storyboard Kanban panel backed by `useStoryboardShots` and `useSeedStoryboardShots`.
+- Timeline editor action that saves storyboard-derived tracks/clips through `POST /episodes/{episodeId}/timeline`.
+- Export action that starts the episode export scaffold and displays queued export status.
+- Added `GET /episodes/{episodeId}/timeline` Studio hook so timeline save/load round trips through TanStack Query.
+
+Deferred:
+
+- Freeform canvas, advanced trimming/splitting, and manual clip drag editing until asset candidate generation exists.
 
 Remaining core modules slice status: complete.
 

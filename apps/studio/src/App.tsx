@@ -15,19 +15,36 @@ import {
   WandSparkles,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, ReactNode } from 'react'
 import {
   useCreateEpisode,
   useCreateProject,
+  useEpisodeTimeline,
   useEpisodes,
   useGenerationJobs,
   useProjects,
   useSaveEpisodeTimeline,
+  useSeedStoryboardShots,
+  useSeedStoryMap,
   useStoryAnalyses,
+  useStoryboardShots,
+  useStoryMap,
+  useStartEpisodeExport,
   useStartStoryAnalysis,
 } from './api/hooks'
 import { useStudioStore } from './state/studioStore'
-import type { Episode, GenerationJob, GenerationJobStatus, Project, StoryAnalysis } from './api/types'
+import type {
+  Episode,
+  GenerationJob,
+  GenerationJobStatus,
+  Project,
+  SaveTimelineRequest,
+  StoryAnalysis,
+  StoryMap,
+  StoryMapItem,
+  StoryboardShot,
+  TimelineTrack,
+} from './api/types'
 
 const productionSteps = [
   { name: 'Producer', taskType: 'production_plan', detail: '目标、预算、审批点' },
@@ -67,8 +84,6 @@ const storyboardColumns = [
   { title: 'Review', count: 0, tone: 'green' },
 ]
 
-const assetTypes = ['C01 主角', 'S01 夜幕街区', 'P01 黑曜石戒指', 'Keyframe 001']
-
 function App() {
   const { data: projects = [], isLoading: projectsLoading } = useProjects()
   const { selectedProjectId, selectProject, logEvent } = useStudioStore()
@@ -76,6 +91,8 @@ function App() {
     () => projects.find((project) => project.id === selectedProjectId) ?? projects[0],
     [projects, selectedProjectId],
   )
+  const { data: selectedEpisodes = [] } = useEpisodes(selectedProject?.id)
+  const activeEpisode = selectedEpisodes[0]
 
   useEffect(() => {
     if (!selectedProjectId && selectedProject) {
@@ -95,12 +112,12 @@ function App() {
             isLoading={projectsLoading}
             onSelect={selectProject}
           />
-          <EpisodeCommandCenter project={selectedProject} onLog={logEvent} />
-          <StoryAnalysisPanel project={selectedProject} />
+          <EpisodeCommandCenter project={selectedProject} episodes={selectedEpisodes} onLog={logEvent} />
+          <StoryAnalysisPanel activeEpisode={activeEpisode} project={selectedProject} />
           <AgentBoard project={selectedProject} />
-          <StoryboardKanban />
-          <AssetLibrary />
-          <TimelineEditor project={selectedProject} />
+          <StoryboardKanban activeEpisode={activeEpisode} />
+          <AssetLibrary activeEpisode={activeEpisode} />
+          <TimelineEditor activeEpisode={activeEpisode} />
         </div>
       </section>
       <JobsRail />
@@ -239,8 +256,15 @@ function ProjectPanel({
   )
 }
 
-function EpisodeCommandCenter({ project, onLog }: { project?: Project; onLog: (message: string) => void }) {
-  const { data: episodes = [] } = useEpisodes(project?.id)
+function EpisodeCommandCenter({
+  episodes,
+  onLog,
+  project,
+}: {
+  episodes: Episode[]
+  onLog: (message: string) => void
+  project?: Project
+}) {
   const createEpisode = useCreateEpisode(project?.id)
   const startStoryAnalysis = useStartStoryAnalysis()
   const saveTimeline = useSaveEpisodeTimeline()
@@ -356,9 +380,7 @@ function AgentBoard({ project }: { project?: Project }) {
   )
 }
 
-function StoryAnalysisPanel({ project }: { project?: Project }) {
-  const { data: episodes = [] } = useEpisodes(project?.id)
-  const activeEpisode = episodes[0]
+function StoryAnalysisPanel({ activeEpisode, project }: { activeEpisode?: Episode; project?: Project }) {
   const { data: analyses = [], isLoading } = useStoryAnalyses(activeEpisode?.id)
   const latestAnalysis = analyses[0]
 
@@ -458,53 +480,218 @@ function agentStatusFromJob(status: GenerationJobStatus): AgentStepStatus {
   return 'waiting'
 }
 
-function StoryboardKanban() {
+function StoryboardKanban({ activeEpisode }: { activeEpisode?: Episode }) {
+  const { data: shots = [], isLoading } = useStoryboardShots(activeEpisode?.id)
+  const seedStoryboard = useSeedStoryboardShots()
+  const columns = buildStoryboardColumns(shots)
+
   return (
     <section className="panel" aria-labelledby="storyboard-title">
-      <PanelTitle icon={Boxes} title="Storyboard Kanban" subtitle="Shot state map" id="storyboard-title" />
+      <PanelTitle
+        icon={Boxes}
+        title="Storyboard Kanban"
+        subtitle={isLoading ? 'Loading shot cards' : 'Scene-to-shot prompt cards'}
+        id="storyboard-title"
+      />
+      <PanelToolbar>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || seedStoryboard.isPending}
+          onClick={() => activeEpisode && seedStoryboard.mutate(activeEpisode.id)}
+          type="button"
+        >
+          Seed storyboard
+        </button>
+      </PanelToolbar>
       <div className="kanban-grid">
-        {storyboardColumns.map((column) => (
+        {columns.map((column) => (
           <div className={`kanban-column ${column.tone}`} key={column.title}>
             <span>{column.title}</span>
             <strong>{column.count}</strong>
           </div>
         ))}
       </div>
+      <ShotList activeEpisode={activeEpisode} shots={shots} />
     </section>
   )
 }
 
-function AssetLibrary() {
+function buildStoryboardColumns(shots: StoryboardShot[]) {
+  return storyboardColumns.map((column) => {
+    if (column.title === 'Prompt ready') return { ...column, count: shots.length }
+    if (column.title === 'Planned') return { ...column, count: 0 }
+    return column
+  })
+}
+
+function ShotList({ activeEpisode, shots }: { activeEpisode?: Episode; shots: StoryboardShot[] }) {
+  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before seeding storyboard shots." />
+  if (shots.length === 0) return <EmptyState title="No shot cards" text="Seed the storyboard after generating the story map." />
+
+  return (
+    <div className="shot-grid" aria-label="Storyboard shot cards">
+      {shots.map((shot) => (
+        <ShotCard key={shot.id} shot={shot} />
+      ))}
+    </div>
+  )
+}
+
+function ShotCard({ shot }: { shot: StoryboardShot }) {
+  return (
+    <article className="shot-card">
+      <div className="shot-card-header">
+        <strong>{shot.code}</strong>
+        <span>{Math.round(shot.duration_ms / 1000)}s</span>
+      </div>
+      <h3>{shot.title}</h3>
+      <p>{shot.description}</p>
+      <small>{shot.prompt}</small>
+    </article>
+  )
+}
+
+function AssetLibrary({ activeEpisode }: { activeEpisode?: Episode }) {
+  const { data: storyMap, isLoading } = useStoryMap(activeEpisode?.id)
+  const seedStoryMap = useSeedStoryMap()
+
   return (
     <section className="panel" aria-labelledby="asset-library-title">
-      <PanelTitle icon={Library} title="Asset library" subtitle="C/S/P and keyframe candidates" id="asset-library-title" />
-      <div className="asset-grid">
-        {assetTypes.map((asset) => (
-          <div className="asset-card" key={asset}>
-            <div className="asset-preview" />
-            <span>{asset}</span>
-            <small>candidate grid ready</small>
-          </div>
-        ))}
+      <PanelTitle
+        icon={Library}
+        title="Asset library"
+        subtitle={isLoading ? 'Loading C/S/P map' : 'Character, scene, and prop map'}
+        id="asset-library-title"
+      />
+      <PanelToolbar>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || seedStoryMap.isPending}
+          onClick={() => activeEpisode && seedStoryMap.mutate(activeEpisode.id)}
+          type="button"
+        >
+          Seed C/S/P map
+        </button>
+      </PanelToolbar>
+      <StoryMapGrid activeEpisode={activeEpisode} storyMap={storyMap} />
+    </section>
+  )
+}
+
+function StoryMapGrid({
+  activeEpisode,
+  storyMap,
+}: {
+  activeEpisode?: Episode
+  storyMap?: StoryMap
+}) {
+  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before seeding C/S/P assets." />
+  if (!storyMap) return <EmptyState title="No story map" text="Seed C/S/P map after story analysis succeeds." />
+
+  return (
+    <div className="story-map-grid" aria-label="Character scene prop map">
+      <StoryMapColumn title="Characters" items={storyMap.characters} emptyText="No character seeds yet" />
+      <StoryMapColumn title="Scenes" items={storyMap.scenes} emptyText="No scene seeds yet" />
+      <StoryMapColumn title="Props" items={storyMap.props} emptyText="No prop seeds yet" />
+    </div>
+  )
+}
+
+function StoryMapColumn({ emptyText, items, title }: { emptyText: string; items: StoryMapItem[]; title: string }) {
+  return (
+    <div className="story-map-column">
+      <h3>{title}</h3>
+      {items.length === 0 ? <small>{emptyText}</small> : null}
+      {items.map((item) => (
+        <article className="story-map-card" key={item.id}>
+          <strong>{item.code}</strong>
+          <span>{item.name}</span>
+          <small>{item.description}</small>
+        </article>
+      ))}
+    </div>
+  )
+}
+
+function TimelineEditor({ activeEpisode }: { activeEpisode?: Episode }) {
+  const { data: timeline } = useEpisodeTimeline(activeEpisode?.id)
+  const { data: shots = [] } = useStoryboardShots(activeEpisode?.id)
+  const saveTimeline = useSaveEpisodeTimeline()
+  const startExport = useStartEpisodeExport()
+
+  const saveShotTimeline = () => {
+    if (!activeEpisode) return
+    saveTimeline.mutate({ episodeId: activeEpisode.id, request: buildTimelineRequest(shots) })
+  }
+
+  return (
+    <section className="panel timeline-panel" aria-labelledby="timeline-title">
+      <PanelTitle icon={Film} title="Timeline editor" subtitle="Tracks, clips, and export handoff" id="timeline-title" />
+      <PanelToolbar>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || saveTimeline.isPending}
+          onClick={saveShotTimeline}
+          type="button"
+        >
+          Save shot timeline
+        </button>
+        <button
+          className="secondary-action"
+          disabled={!activeEpisode || !timeline || startExport.isPending}
+          onClick={() => activeEpisode && startExport.mutate(activeEpisode.id)}
+          type="button"
+        >
+          Start export
+        </button>
+        {startExport.data ? <span className="export-status">Export {startExport.data.status}</span> : null}
+      </PanelToolbar>
+      <div className="timeline-stage">
+        <div className="playhead" aria-hidden="true" />
+        <TimelineTracks activeEpisode={activeEpisode} tracks={timeline?.tracks ?? []} />
       </div>
     </section>
   )
 }
 
-function TimelineEditor({ project }: { project?: Project }) {
+function buildTimelineRequest(shots: StoryboardShot[]): SaveTimelineRequest {
+  const sourceShots = shots.length > 0 ? shots : [{ duration_ms: 15_000 }]
+  return {
+    duration_ms: sourceShots.reduce((total, shot) => total + shot.duration_ms, 0),
+    tracks: [
+      {
+        clips: sourceShots.map((shot, index) => ({
+          kind: 'video',
+          start_ms: sourceShots.slice(0, index).reduce((total, item) => total + item.duration_ms, 0),
+          duration_ms: shot.duration_ms,
+        })),
+        kind: 'video',
+        name: 'Storyboard video',
+        position: 1,
+      },
+    ],
+  }
+}
+
+function TimelineTracks({ activeEpisode, tracks }: { activeEpisode?: Episode; tracks: TimelineTrack[] }) {
+  if (!activeEpisode) return <EmptyState title="No episode selected" text="Create an episode before saving timeline clips." />
+  if (tracks.length === 0) return <EmptyState title="No timeline tracks" text="Save a shot timeline after seeding storyboard shots." />
+
   return (
-    <section className="panel timeline-panel" aria-labelledby="timeline-title">
-      <PanelTitle icon={Film} title="Timeline editor" subtitle="Narrow MVP editor foundation" id="timeline-title" />
-      <div className="timeline-stage">
-        <div className="playhead" aria-hidden="true" />
-        {['Video', 'Keyframe', 'Voice', 'Subtitle'].map((track) => (
-          <div className="track-row" key={track}>
-            <span>{track}</span>
-            <div className="clip-block">{project ? 'Waiting for generated clips' : 'Select a project'}</div>
+    <>
+      {tracks.map((track) => (
+        <div className="track-row" key={track.id}>
+          <span>{track.name}</span>
+          <div className="clip-strip">
+            {track.clips.map((clip) => (
+              <div className="clip-block" key={clip.id}>
+                {clip.kind} · {Math.round(clip.duration_ms / 1000)}s
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-    </section>
+        </div>
+      ))}
+    </>
   )
 }
 
@@ -553,6 +740,10 @@ function PanelTitle({
       </div>
     </div>
   )
+}
+
+function PanelToolbar({ children }: { children: ReactNode }) {
+  return <div className="panel-toolbar">{children}</div>
 }
 
 function EmptyState({ text, title }: { text: string; title: string }) {
