@@ -85,7 +85,7 @@ func TestSeedanceAdapterPollsArkTaskWhenKeyPresent(t *testing.T) {
 		authHeader = r.Header.Get("authorization")
 		requestPath = r.URL.Path
 		w.Header().Set("content-type", "application/json")
-		_, _ = w.Write([]byte(`{"id":"ark-task-1","status":"succeeded"}`))
+		_, _ = w.Write([]byte(`{"id":"ark-task-1","status":"succeeded","content":{"video_url":"https://cdn.example.test/result.mp4"}}`))
 	}))
 	defer server.Close()
 
@@ -96,6 +96,9 @@ func TestSeedanceAdapterPollsArkTaskWhenKeyPresent(t *testing.T) {
 	}
 	if task.Mode != "ark" || task.ID != "ark-task-1" || task.Status != "succeeded" {
 		t.Fatalf("unexpected task: %+v", task)
+	}
+	if task.ResultURI != "https://cdn.example.test/result.mp4" {
+		t.Fatalf("expected result URI from poll payload, got %+v", task)
 	}
 	if authHeader != "Bearer test-key" {
 		t.Fatalf("expected bearer auth header, got %q", authHeader)

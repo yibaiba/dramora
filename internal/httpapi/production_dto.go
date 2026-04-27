@@ -25,6 +25,7 @@ type generationJobResponse struct {
 	Model         string                     `json:"model"`
 	TaskType      string                     `json:"task_type"`
 	Status        domain.GenerationJobStatus `json:"status"`
+	ResultAssetID string                     `json:"result_asset_id"`
 	CreatedAt     time.Time                  `json:"created_at"`
 	UpdatedAt     time.Time                  `json:"updated_at"`
 }
@@ -206,6 +207,7 @@ func generationJobDTO(job domain.GenerationJob) generationJobResponse {
 		Model:         job.Model,
 		TaskType:      job.TaskType,
 		Status:        job.Status,
+		ResultAssetID: job.ResultAssetID,
 		CreatedAt:     job.CreatedAt,
 		UpdatedAt:     job.UpdatedAt,
 	}

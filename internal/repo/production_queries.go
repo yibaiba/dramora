@@ -19,6 +19,7 @@ INSERT INTO generation_jobs (
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10)
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 `
 
@@ -30,6 +31,7 @@ VALUES ($1::uuid, $2, $3)
 const listGenerationJobsSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 FROM generation_jobs
 ORDER BY created_at DESC, id
@@ -39,6 +41,7 @@ LIMIT 100
 const getGenerationJobSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 FROM generation_jobs
 WHERE id = $1::uuid
@@ -53,12 +56,14 @@ ON CONFLICT (request_key) DO UPDATE
 SET updated_at = now()
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 `
 
 const listGenerationJobsByStatusSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 FROM generation_jobs
 WHERE status = $1
@@ -70,11 +75,13 @@ const advanceGenerationJobStatusSQL = `
 UPDATE generation_jobs
 SET status = $3,
     provider_task_id = COALESCE(NULLIF($4, ''), provider_task_id),
+    result_asset_id = COALESCE(NULLIF($5, '')::uuid, result_asset_id),
     updated_at = now()
 WHERE id = $1::uuid
   AND status = $2
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
        created_at, updated_at
 `
 

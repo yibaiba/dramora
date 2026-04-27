@@ -48,6 +48,7 @@ func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 		&job.Prompt,
 		&paramsPayload,
 		&job.ProviderTaskID,
+		&job.ResultAssetID,
 		&job.CreatedAt,
 		&job.UpdatedAt,
 	); err != nil {

@@ -48,6 +48,7 @@ export type GenerationJob = {
   model: string
   task_type: string
   status: GenerationJobStatus
+  result_asset_id: string
   created_at: string
   updated_at: string
 }

@@ -74,9 +74,10 @@ type SeedanceRequestInput struct {
 }
 
 type SeedanceGenerationTask struct {
-	ID     string
-	Status string
-	Mode   string
+	ID        string
+	Status    string
+	Mode      string
+	ResultURI string
 }
 
 func NewSeedanceAdapterFromEnv() *SeedanceAdapter {
@@ -155,13 +156,18 @@ func (a *SeedanceAdapter) PollGeneration(ctx context.Context, taskID string) (Se
 		return SeedanceGenerationTask{}, fmt.Errorf("seedance task id is required")
 	}
 	if a.Mode() == "fake" {
-		return SeedanceGenerationTask{ID: taskID, Status: "succeeded", Mode: "fake"}, nil
+		return SeedanceGenerationTask{
+			ID:        taskID,
+			Status:    "succeeded",
+			Mode:      "fake",
+			ResultURI: "manmu://providers/seedance/tasks/" + taskID + "/video.mp4",
+		}, nil
 	}
-	status, err := a.pollArkGeneration(ctx, taskID)
+	status, resultURI, err := a.pollArkGeneration(ctx, taskID)
 	if err != nil {
 		return SeedanceGenerationTask{}, err
 	}
-	return SeedanceGenerationTask{ID: taskID, Status: status, Mode: "ark"}, nil
+	return SeedanceGenerationTask{ID: taskID, Status: status, Mode: "ark", ResultURI: resultURI}, nil
 }
 
 func BuildSeedanceGenerationRequest(input SeedanceRequestInput) SeedanceGenerationRequest {
@@ -220,42 +226,78 @@ func (a *SeedanceAdapter) submitArkGeneration(
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return "", "", fmt.Errorf("seedance ark request failed with status %d", response.StatusCode)
 	}
-	return decodeArkTask(response)
+	id, status, _, err := decodeArkTask(response)
+	return id, status, err
 }
 
-func (a *SeedanceAdapter) pollArkGeneration(ctx context.Context, taskID string) (string, error) {
+func (a *SeedanceAdapter) pollArkGeneration(ctx context.Context, taskID string) (string, string, error) {
 	taskURL := strings.TrimRight(a.baseURL, "/") + "/" + url.PathEscape(taskID)
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, taskURL, nil)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	request.Header.Set("authorization", "Bearer "+a.apiKey)
 	response, err := a.client.Do(request)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("seedance ark poll failed with status %d", response.StatusCode)
+		return "", "", fmt.Errorf("seedance ark poll failed with status %d", response.StatusCode)
 	}
-	_, status, err := decodeArkTask(response)
-	return status, err
+	_, status, resultURI, err := decodeArkTask(response)
+	return status, resultURI, err
 }
 
-func decodeArkTask(response *http.Response) (string, string, error) {
-	var payload struct {
-		ID     string `json:"id"`
-		TaskID string `json:"task_id"`
-		Status string `json:"status"`
-	}
+func decodeArkTask(response *http.Response) (string, string, string, error) {
+	var payload map[string]any
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	id := defaultString(payload.ID, payload.TaskID)
+	id := defaultString(stringMapParam(payload, "id"), stringMapParam(payload, "task_id"))
 	if id == "" {
-		return "", "", fmt.Errorf("seedance ark response missing task id")
+		return "", "", "", fmt.Errorf("seedance ark response missing task id")
 	}
-	return id, defaultString(payload.Status, "submitted"), nil
+	return id, defaultString(stringMapParam(payload, "status"), "submitted"), firstMediaURI(payload), nil
+}
+
+func firstMediaURI(value any) string {
+	switch item := value.(type) {
+	case map[string]any:
+		for _, key := range []string{"video_url", "output_url", "download_url", "file_url", "url", "uri"} {
+			if uri := mediaURI(item[key]); uri != "" {
+				return uri
+			}
+		}
+		for _, child := range item {
+			if uri := firstMediaURI(child); uri != "" {
+				return uri
+			}
+		}
+	case []any:
+		for _, child := range item {
+			if uri := firstMediaURI(child); uri != "" {
+				return uri
+			}
+		}
+	}
+	return ""
+}
+
+func mediaURI(value any) string {
+	uri, ok := value.(string)
+	if !ok {
+		return ""
+	}
+	if strings.HasPrefix(uri, "http://") || strings.HasPrefix(uri, "https://") || strings.HasPrefix(uri, "s3://") || strings.HasPrefix(uri, "manmu://") {
+		return uri
+	}
+	return ""
+}
+
+func stringMapParam(payload map[string]any, key string) string {
+	value, _ := payload[key].(string)
+	return value
 }
 
 func envOrDefault(key string, fallback string) string {

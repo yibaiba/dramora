@@ -71,6 +71,7 @@ func (r *MemoryProductionRepository) CreateStoryAnalysisRun(
 		Status:        domain.GenerationJobStatusQueued,
 		Prompt:        params.Prompt,
 		Params:        map[string]any{},
+		ResultAssetID: "",
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}
@@ -190,9 +191,34 @@ func (r *MemoryProductionRepository) AdvanceGenerationJobStatus(
 	if params.ProviderTaskID != "" {
 		job.ProviderTaskID = params.ProviderTaskID
 	}
+	if params.ResultAssetID != "" {
+		job.ResultAssetID = params.ResultAssetID
+	}
 	job.UpdatedAt = time.Now().UTC()
 	r.jobs[job.ID] = job
 	return job, nil
+}
+
+func (r *MemoryProductionRepository) CompleteGenerationJobWithResult(
+	_ context.Context,
+	params CompleteGenerationJobWithResultParams,
+) (domain.GenerationJob, domain.Asset, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	job, ok := r.jobs[params.Job.ID]
+	if !ok || job.Status != params.Job.From {
+		return domain.GenerationJob{}, domain.Asset{}, domain.ErrNotFound
+	}
+	asset := r.findOrCreateAssetLocked(params.Asset)
+	job.Status = params.Job.To
+	job.ResultAssetID = asset.ID
+	if params.Job.ProviderTaskID != "" {
+		job.ProviderTaskID = params.Job.ProviderTaskID
+	}
+	job.UpdatedAt = time.Now().UTC()
+	r.jobs[job.ID] = job
+	return job, asset, nil
 }
 
 func (r *MemoryProductionRepository) ListApprovalGates(
@@ -572,12 +598,16 @@ func (r *MemoryProductionRepository) CreateAsset(
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	return r.findOrCreateAssetLocked(params), nil
+}
+
+func (r *MemoryProductionRepository) findOrCreateAssetLocked(params CreateAssetParams) domain.Asset {
 	for _, existing := range r.assets {
 		if existing.EpisodeID == params.EpisodeID &&
 			existing.Kind == params.Kind &&
 			existing.Purpose == params.Purpose &&
 			existing.URI == params.URI {
-			return existing, nil
+			return existing
 		}
 	}
 
@@ -588,7 +618,7 @@ func (r *MemoryProductionRepository) CreateAsset(
 		CreatedAt: now, UpdatedAt: now,
 	}
 	r.assets[asset.ID] = asset
-	return asset, nil
+	return asset
 }
 
 func (r *MemoryProductionRepository) ListAssetsByEpisode(_ context.Context, episodeID string) ([]domain.Asset, error) {

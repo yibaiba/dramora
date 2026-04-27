@@ -792,6 +792,7 @@ components:
         - model
         - task_type
         - status
+        - result_asset_id
         - created_at
         - updated_at
       properties:
@@ -827,6 +828,8 @@ components:
             - timed_out
             - canceling
             - canceled
+        result_asset_id:
+          type: string
         created_at:
           type: string
           format: date-time

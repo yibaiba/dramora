@@ -23,6 +23,7 @@ type GenerationJob struct {
 	Prompt         string
 	Params         map[string]any
 	ProviderTaskID string
+	ResultAssetID  string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

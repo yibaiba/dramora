@@ -25,6 +25,40 @@ func (r *PostgresProductionRepository) CreateAsset(
 	return asset, mapForeignKeyViolation(err)
 }
 
+func (r *PostgresProductionRepository) CompleteGenerationJobWithResult(
+	ctx context.Context,
+	params CompleteGenerationJobWithResultParams,
+) (domain.GenerationJob, domain.Asset, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.GenerationJob{}, domain.Asset{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	asset, err := scanAsset(tx.QueryRow(ctx, createAssetSQL,
+		params.Asset.ID,
+		params.Asset.ProjectID,
+		params.Asset.EpisodeID,
+		params.Asset.Kind,
+		params.Asset.Purpose,
+		params.Asset.URI,
+		params.Asset.Status,
+	))
+	if err != nil {
+		return domain.GenerationJob{}, domain.Asset{}, mapForeignKeyViolation(err)
+	}
+	jobParams := params.Job
+	jobParams.ResultAssetID = asset.ID
+	job, err := advanceGenerationJobStatusTx(ctx, tx, jobParams)
+	if err != nil {
+		return domain.GenerationJob{}, domain.Asset{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.GenerationJob{}, domain.Asset{}, err
+	}
+	return job, asset, nil
+}
+
 func (r *PostgresProductionRepository) ListAssetsByEpisode(
 	ctx context.Context,
 	episodeID string,

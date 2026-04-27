@@ -18,6 +18,7 @@ type ProductionRepository interface {
 	GetGenerationJob(ctx context.Context, generationJobID string) (domain.GenerationJob, error)
 	CreateGenerationJob(ctx context.Context, params CreateGenerationJobParams) (domain.GenerationJob, error)
 	AdvanceGenerationJobStatus(ctx context.Context, params AdvanceGenerationJobStatusParams) (domain.GenerationJob, error)
+	CompleteGenerationJobWithResult(ctx context.Context, params CompleteGenerationJobWithResultParams) (domain.GenerationJob, domain.Asset, error)
 	ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error)
 	GetApprovalGate(ctx context.Context, gateID string) (domain.ApprovalGate, error)
 	SaveApprovalGate(ctx context.Context, params SaveApprovalGateParams) (domain.ApprovalGate, error)
@@ -81,7 +82,13 @@ type AdvanceGenerationJobStatusParams struct {
 	From           domain.GenerationJobStatus
 	To             domain.GenerationJobStatus
 	ProviderTaskID string
+	ResultAssetID  string
 	EventMessage   string
+}
+
+type CompleteGenerationJobWithResultParams struct {
+	Job   AdvanceGenerationJobStatusParams
+	Asset CreateAssetParams
 }
 
 type SaveApprovalGateParams struct {
@@ -369,6 +376,7 @@ func advanceGenerationJobStatusTx(
 		params.From,
 		params.To,
 		params.ProviderTaskID,
+		params.ResultAssetID,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.GenerationJob{}, domain.ErrNotFound

@@ -96,7 +96,7 @@ func (s *ProductionService) processGenerationJob(ctx context.Context, generation
 	case domain.GenerationJobStatusSubmitted, domain.GenerationJobStatusPolling:
 		return s.pollSeedanceGenerationJob(ctx, generationJob)
 	case domain.GenerationJobStatusDownloading, domain.GenerationJobStatusPostprocessing:
-		return s.completeSeedanceGenerationJob(ctx, generationJob)
+		return s.resumeSeedanceGenerationJob(ctx, generationJob)
 	default:
 		return nil
 	}
@@ -144,16 +144,16 @@ func (s *ProductionService) submitSeedanceGenerationJob(ctx context.Context, gen
 }
 
 func (s *ProductionService) pollSeedanceGenerationJob(ctx context.Context, generationJob domain.GenerationJob) error {
-	if strings.TrimSpace(generationJob.ProviderTaskID) == "" {
-		return fmt.Errorf("%w: seedance provider task id is required", domain.ErrInvalidInput)
-	}
-	task, err := s.seedance.PollGeneration(ctx, generationJob.ProviderTaskID)
+	task, err := s.pollSeedanceTask(ctx, generationJob)
 	if err != nil {
 		return err
 	}
 	switch seedanceTaskState(task.Status) {
 	case "succeeded":
-		return s.completeSeedanceGenerationJob(ctx, generationJob)
+		if strings.TrimSpace(task.ResultURI) == "" {
+			return fmt.Errorf("%w: seedance result uri is required", domain.ErrInvalidInput)
+		}
+		return s.completeSeedanceGenerationJob(ctx, generationJob, task.ResultURI)
 	case "failed":
 		_, err := s.advanceGenerationJob(ctx, generationJob, domain.GenerationJobStatusFailed, "", "seedance provider task failed")
 		return err
@@ -166,42 +166,91 @@ func (s *ProductionService) pollSeedanceGenerationJob(ctx context.Context, gener
 	}
 }
 
-func (s *ProductionService) completeSeedanceGenerationJob(ctx context.Context, generationJob domain.GenerationJob) error {
-	current := generationJob
-	steps := []struct {
-		status  domain.GenerationJobStatus
-		message string
-	}{
-		{domain.GenerationJobStatusDownloading, "seedance worker collecting generated output"},
-		{domain.GenerationJobStatusPostprocessing, "seedance worker postprocessing generated output"},
-		{domain.GenerationJobStatusSucceeded, "seedance worker completed generation job"},
+func (s *ProductionService) resumeSeedanceGenerationJob(ctx context.Context, generationJob domain.GenerationJob) error {
+	if generationJob.Status != domain.GenerationJobStatusDownloading || generationJob.ResultAssetID != "" {
+		return s.completeSeedanceGenerationJob(ctx, generationJob, "")
 	}
-	for _, step := range remainingGenerationSteps(current.Status, steps) {
-		next, err := s.advanceGenerationJob(ctx, current, step.status, "", step.message)
+	task, err := s.pollSeedanceTask(ctx, generationJob)
+	if err != nil {
+		return err
+	}
+	if seedanceTaskState(task.Status) != "succeeded" {
+		return fmt.Errorf("%w: seedance downloading job is not complete", domain.ErrInvalidInput)
+	}
+	if strings.TrimSpace(task.ResultURI) == "" {
+		return fmt.Errorf("%w: seedance result uri is required", domain.ErrInvalidInput)
+	}
+	return s.completeSeedanceGenerationJob(ctx, generationJob, task.ResultURI)
+}
+
+func (s *ProductionService) pollSeedanceTask(
+	ctx context.Context,
+	generationJob domain.GenerationJob,
+) (provider.SeedanceGenerationTask, error) {
+	if strings.TrimSpace(generationJob.ProviderTaskID) == "" {
+		return provider.SeedanceGenerationTask{}, fmt.Errorf("%w: seedance provider task id is required", domain.ErrInvalidInput)
+	}
+	return s.seedance.PollGeneration(ctx, generationJob.ProviderTaskID)
+}
+
+func (s *ProductionService) completeSeedanceGenerationJob(
+	ctx context.Context,
+	generationJob domain.GenerationJob,
+	resultURI string,
+) error {
+	current := generationJob
+	if current.Status == domain.GenerationJobStatusSubmitted || current.Status == domain.GenerationJobStatusPolling {
+		next, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusDownloading, "", "seedance worker collecting generated output")
 		if err != nil {
 			return err
 		}
 		current = next
 	}
+	if current.Status == domain.GenerationJobStatusDownloading {
+		next, err := s.completeGenerationDownload(ctx, current, resultURI)
+		if err != nil {
+			return err
+		}
+		current = next
+	}
+	if current.Status == domain.GenerationJobStatusPostprocessing {
+		_, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusSucceeded, "", "seedance worker completed generation job")
+		return err
+	}
 	return nil
 }
 
-func remainingGenerationSteps(
-	currentStatus domain.GenerationJobStatus,
-	steps []struct {
-		status  domain.GenerationJobStatus
-		message string
-	},
-) []struct {
-	status  domain.GenerationJobStatus
-	message string
-} {
-	for index, step := range steps {
-		if currentStatus == step.status {
-			return steps[index+1:]
-		}
+func (s *ProductionService) completeGenerationDownload(
+	ctx context.Context,
+	generationJob domain.GenerationJob,
+	resultURI string,
+) (domain.GenerationJob, error) {
+	if generationJob.ResultAssetID != "" {
+		return s.advanceGenerationJob(ctx, generationJob, domain.GenerationJobStatusPostprocessing, "", "seedance worker postprocessing generated output")
 	}
-	return steps
+	if strings.TrimSpace(resultURI) == "" {
+		return domain.GenerationJob{}, fmt.Errorf("%w: seedance result uri is required", domain.ErrInvalidInput)
+	}
+	assetID, err := domain.NewID()
+	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	job, _, err := s.production.CompleteGenerationJobWithResult(ctx, repo.CompleteGenerationJobWithResultParams{
+		Job: repo.AdvanceGenerationJobStatusParams{
+			ID: generationJob.ID, From: generationJob.Status, To: domain.GenerationJobStatusPostprocessing,
+			EventMessage: "seedance worker downloaded result asset",
+		},
+		Asset: repo.CreateAssetParams{
+			ID: assetID, ProjectID: generationJob.ProjectID, EpisodeID: generationJob.EpisodeID,
+			Kind: "video", Purpose: "generated_video", URI: generationResultAssetURI(generationJob, resultURI),
+			Status: domain.AssetStatusReady,
+		},
+	})
+	return job, err
+}
+
+func generationResultAssetURI(generationJob domain.GenerationJob, resultURI string) string {
+	return strings.TrimSpace(resultURI)
 }
 
 func (s *ProductionService) processGenerationJobNoop(ctx context.Context, generationJob domain.GenerationJob) error {

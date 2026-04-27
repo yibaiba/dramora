@@ -81,6 +81,7 @@ Build the next Manmu core slice around Seedance/SD2 fast video generation: provi
 - [x] `sd2 fast` provider preset is visible through backend capabilities and Studio prompt pack UI.
 - [x] Worker submits Seedance video jobs asynchronously and persists provider task ids.
 - [x] Worker polls submitted/polling Seedance jobs and advances completed output through postprocessing.
+- [x] Worker creates a ready video result asset and writes `generation_jobs.result_asset_id` before completion.
 - [x] Studio shows export worker status with polling after `Start export`.
 - [x] No real API key or provider secret is committed.
 - [x] Backend tests cover prompt pack generation and provider adapter payload normalization.
@@ -145,3 +146,4 @@ Recommended MVP sequence:
 - Added real Seedance worker boundary: queued SD2 video jobs advance to `submitting`, call the provider adapter, persist `provider_task_id`, then poll submitted/polling jobs and complete fake/finished provider tasks via `downloading -> postprocessing -> succeeded`.
 - Expanded generation job repository reads to include `prompt`, `params`, and `provider_task_id` so worker execution uses the persisted prompt pack payload instead of rebuilding provider input in HTTP handlers.
 - Added Studio export status polling through `useExport(exportId)` and an accessible timeline export status card for queued/rendering/succeeded/failed/canceled states.
+- Added provider result asset persistence: Seedance poll extracts a provider result URI, the worker creates a ready `video` asset during the `downloading` step, and `generation_jobs.result_asset_id` is persisted and exposed in the generation job DTO.
