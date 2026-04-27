@@ -260,6 +260,40 @@ paths:
                       $ref: "#/components/schemas/StoryboardShot"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}/prompt-pack:
+    get:
+      summary: Get the latest provider-specific prompt pack for a storyboard shot
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      responses:
+        "200":
+          description: Shot prompt pack
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompt_pack:
+                    $ref: "#/components/schemas/ShotPromptPack"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}/prompt-pack:generate:
+    post:
+      summary: Generate an SD2 fast prompt pack for a storyboard shot
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      responses:
+        "201":
+          description: Generated shot prompt pack
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompt_pack:
+                    $ref: "#/components/schemas/ShotPromptPack"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/assets:
     get:
       summary: List asset candidates for an episode
@@ -492,6 +526,12 @@ components:
         type: string
     AssetID:
       name: assetId
+      in: path
+      required: true
+      schema:
+        type: string
+    ShotID:
+      name: shotId
       in: path
       required: true
       schema:
@@ -795,6 +835,95 @@ components:
         updated_at:
           type: string
           format: date-time
+    ShotPromptPack:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - shot_id
+        - provider
+        - model
+        - preset
+        - task_type
+        - direct_prompt
+        - negative_prompt
+        - time_slices
+        - reference_bindings
+        - params
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        shot_id:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        preset:
+          type: string
+        task_type:
+          type: string
+          enum: [text_to_video, image_to_video, first_last_frame_to_video]
+        direct_prompt:
+          type: string
+        negative_prompt:
+          type: string
+        time_slices:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptTimeSlice"
+        reference_bindings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PromptReferenceBinding"
+        params:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    PromptTimeSlice:
+      type: object
+      required: [start_ms, end_ms, prompt, camera_work, shot_size, visual_focus]
+      properties:
+        start_ms:
+          type: integer
+        end_ms:
+          type: integer
+        prompt:
+          type: string
+        camera_work:
+          type: string
+        shot_size:
+          type: string
+        visual_focus:
+          type: string
+    PromptReferenceBinding:
+      type: object
+      required: [token, role, asset_id, kind, uri]
+      properties:
+        token:
+          type: string
+          example: "@image2"
+        role:
+          type: string
+          enum: [first_frame, last_frame, reference_image]
+        asset_id:
+          type: string
+        kind:
+          type: string
+        uri:
+          type: string
     Asset:
       type: object
       required:

@@ -11,6 +11,8 @@ func capabilitiesHandler(version string) http.HandlerFunc {
 				"episodes",
 				"workflow_status",
 				"generation_jobs",
+				"sd2_fast_prompt_packs",
+				"seedance_image_to_video",
 				"timeline",
 				"sse",
 			},

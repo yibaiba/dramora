@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 
@@ -80,6 +81,17 @@ func (r *PostgresProductionRepository) ListStoryboardShots(
 	}
 	defer rows.Close()
 	return scanStoryboardShots(rows)
+}
+
+func (r *PostgresProductionRepository) GetStoryboardShot(
+	ctx context.Context,
+	shotID string,
+) (domain.StoryboardShot, error) {
+	shot, err := scanStoryboardShot(r.pool.QueryRow(ctx, getStoryboardShotSQL, shotID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.StoryboardShot{}, domain.ErrNotFound
+	}
+	return shot, err
 }
 
 func saveStoryMapTx(ctx context.Context, tx pgx.Tx, params SaveStoryMapParams) (StoryMap, error) {

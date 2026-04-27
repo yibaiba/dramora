@@ -267,6 +267,42 @@ WHERE episode_id = $1::uuid
 ORDER BY position, code
 `
 
+const getStoryboardShotSQL = `
+SELECT id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
+       COALESCE(scene_id::text, ''), code, title, description, prompt, position, duration_ms, created_at, updated_at
+FROM storyboard_shots
+WHERE id = $1::uuid
+`
+
+const upsertShotPromptPackSQL = `
+INSERT INTO shot_prompt_packs (
+    id, project_id, episode_id, shot_id, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params
+)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb)
+ON CONFLICT (shot_id, preset) DO UPDATE
+SET provider = EXCLUDED.provider,
+    model = EXCLUDED.model,
+    task_type = EXCLUDED.task_type,
+    direct_prompt = EXCLUDED.direct_prompt,
+    negative_prompt = EXCLUDED.negative_prompt,
+    time_slices = EXCLUDED.time_slices,
+    reference_bindings = EXCLUDED.reference_bindings,
+    params = EXCLUDED.params,
+    updated_at = now()
+RETURNING id::text, project_id::text, episode_id::text, shot_id::text, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params, created_at, updated_at
+`
+
+const getShotPromptPackSQL = `
+SELECT id::text, project_id::text, episode_id::text, shot_id::text, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params, created_at, updated_at
+FROM shot_prompt_packs
+WHERE shot_id = $1::uuid
+ORDER BY updated_at DESC
+LIMIT 1
+`
+
 const createExportSQL = `
 INSERT INTO exports (id, timeline_id, status, format)
 VALUES ($1::uuid, $2::uuid, $3, $4)

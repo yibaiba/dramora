@@ -220,3 +220,79 @@ The correct form preserves the project convention while still expressing a state
 - `apps/api/main.go`: thin process entrypoint.
 - `internal/httpapi/router.go`: route composition.
 - `internal/domain/status.go`: pure domain status contracts.
+
+---
+
+## Scenario: Hybrid provider adapter boundary
+
+### 1. Scope / Trigger
+
+- Trigger: external model providers need testable adapters that can run without credentials locally but use real APIs when runtime secrets are configured.
+- Applies to provider code under `internal/provider` and service/job orchestration that prepares provider requests.
+
+### 2. Signatures
+
+Provider adapter construction:
+
+```go
+func NewSeedanceAdapterFromEnv() *provider.SeedanceAdapter
+func NewSeedanceAdapter(apiKey string, baseURL string, client *http.Client) *provider.SeedanceAdapter
+func (a *SeedanceAdapter) SubmitGeneration(ctx context.Context, input SeedanceRequestInput) (SeedanceGenerationTask, error)
+```
+
+Runtime environment:
+
+```text
+ARK_API_KEY          optional; empty means fake mode
+ARK_API_BASE_URL     optional; defaults to the Ark generation task URL
+```
+
+### 3. Contracts
+
+- `internal/provider` owns external HTTP payloads and provider-specific response decoding.
+- Domain structs must not import provider SDKs or HTTP types.
+- Empty `ARK_API_KEY` means fake mode and must remain usable in tests/local dev.
+- Non-empty `ARK_API_KEY` enables Ark POST submission mode; never commit real keys or examples that look like real keys.
+- Provider errors must be returned explicitly and must not include secret values in client-facing messages.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| `ARK_API_KEY` empty | Adapter returns fake queued task metadata without network I/O. |
+| `ARK_API_KEY` set | Adapter sends `POST` to configured Ark base URL with bearer auth. |
+| Ark response status is non-2xx | Return an explicit provider error; do not mark generation succeeded. |
+| Ark response lacks task id | Return an error instead of fabricating a real task id. |
+| Provider request needs image references | Normalize them to content entries and reference tokens inside `internal/provider`. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: unit tests use `httptest.Server` to assert bearer auth and payload shape without real Ark credentials.
+- Base: fake mode returns deterministic task metadata for local smoke tests.
+- Bad: route handler imports a provider SDK or reads `ARK_API_KEY` directly.
+
+### 6. Tests Required
+
+- Adapter request builder tests should assert model id, task type, duration defaults, and `@image2` reference preservation.
+- Hybrid mode tests should assert fake mode without key and Ark POST mode with an injected HTTP client/server.
+- Go validation must pass with `GOTOOLCHAIN=local`; do not add dependencies that upgrade Go or Chi incidentally.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+func (api *api) generateVideo(w http.ResponseWriter, r *http.Request) {
+    key := os.Getenv("ARK_API_KEY")
+    // build provider HTTP request in the handler
+}
+```
+
+#### Correct
+
+```go
+adapter := provider.NewSeedanceAdapterFromEnv()
+task, err := adapter.SubmitGeneration(ctx, input)
+```
+
+Provider integration stays behind `internal/provider`; handlers and domain code only see project-owned service/domain contracts.

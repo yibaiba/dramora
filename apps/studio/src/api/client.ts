@@ -7,6 +7,7 @@ import type {
   GenerationJob,
   Project,
   SaveTimelineRequest,
+  ShotPromptPack,
   StartStoryAnalysisResponse,
   StoryAnalysis,
   StoryMap,
@@ -112,6 +113,19 @@ export async function seedStoryboardShots(episodeId: string): Promise<Storyboard
     { method: 'POST' },
   )
   return payload.storyboard_shots
+}
+
+export async function getShotPromptPack(shotId: string): Promise<ShotPromptPack> {
+  const payload = await fetchJSON<{ prompt_pack: ShotPromptPack }>(`/api/v1/storyboard-shots/${shotId}/prompt-pack`)
+  return payload.prompt_pack
+}
+
+export async function generateShotPromptPack(shotId: string): Promise<ShotPromptPack> {
+  const payload = await fetchJSON<{ prompt_pack: ShotPromptPack }>(
+    `/api/v1/storyboard-shots/${shotId}/prompt-pack:generate`,
+    { method: 'POST' },
+  )
+  return payload.prompt_pack
 }
 
 export async function listEpisodeAssets(episodeId: string): Promise<Asset[]> {

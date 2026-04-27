@@ -351,6 +351,7 @@ h1 {
 .analysis-card,
 .story-map-card,
 .shot-card,
+.prompt-pack-preview,
 .job-row {
   width: 100%;
   padding: 0.8rem;
@@ -621,6 +622,42 @@ h1 {
   margin: 0;
   color: #cbd5e1;
   line-height: 1.5;
+}
+
+.prompt-pack-actions,
+.prompt-pack-preview,
+.reference-token-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.prompt-pack-preview {
+  padding: 0.7rem;
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.prompt-pack-preview p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+}
+
+.prompt-pack-meta,
+.reference-token-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.prompt-pack-meta span,
+.reference-token-list span {
+  padding: 0.3rem 0.5rem;
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.12);
+  font-size: 0.78rem;
 }
 
 .shot-card-header {

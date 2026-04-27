@@ -92,6 +92,41 @@ type storyboardShotResponse struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
+type promptTimeSliceResponse struct {
+	StartMS     int    `json:"start_ms"`
+	EndMS       int    `json:"end_ms"`
+	Prompt      string `json:"prompt"`
+	CameraWork  string `json:"camera_work"`
+	ShotSize    string `json:"shot_size"`
+	VisualFocus string `json:"visual_focus"`
+}
+
+type promptReferenceBindingResponse struct {
+	Token   string `json:"token"`
+	Role    string `json:"role"`
+	AssetID string `json:"asset_id"`
+	Kind    string `json:"kind"`
+	URI     string `json:"uri"`
+}
+
+type shotPromptPackResponse struct {
+	ID                string                           `json:"id"`
+	ProjectID         string                           `json:"project_id"`
+	EpisodeID         string                           `json:"episode_id"`
+	ShotID            string                           `json:"shot_id"`
+	Provider          string                           `json:"provider"`
+	Model             string                           `json:"model"`
+	Preset            string                           `json:"preset"`
+	TaskType          string                           `json:"task_type"`
+	DirectPrompt      string                           `json:"direct_prompt"`
+	NegativePrompt    string                           `json:"negative_prompt"`
+	TimeSlices        []promptTimeSliceResponse        `json:"time_slices"`
+	ReferenceBindings []promptReferenceBindingResponse `json:"reference_bindings"`
+	Params            map[string]any                   `json:"params"`
+	CreatedAt         time.Time                        `json:"created_at"`
+	UpdatedAt         time.Time                        `json:"updated_at"`
+}
+
 type assetResponse struct {
 	ID        string             `json:"id"`
 	ProjectID string             `json:"project_id"`
@@ -245,6 +280,39 @@ func storyboardShotDTOs(items []domain.StoryboardShot) []storyboardShotResponse 
 			Description: item.Description, Prompt: item.Prompt,
 			Position: item.Position, DurationMS: item.DurationMS,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+		})
+	}
+	return responses
+}
+
+func shotPromptPackDTO(item domain.ShotPromptPack) shotPromptPackResponse {
+	return shotPromptPackResponse{
+		ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+		ShotID: item.ShotID, Provider: item.Provider, Model: item.Model,
+		Preset: item.Preset, TaskType: item.TaskType, DirectPrompt: item.DirectPrompt,
+		NegativePrompt: item.NegativePrompt, TimeSlices: promptTimeSliceDTOs(item.TimeSlices),
+		ReferenceBindings: promptReferenceBindingDTOs(item.ReferenceBindings), Params: item.Params,
+		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+	}
+}
+
+func promptTimeSliceDTOs(items []domain.PromptTimeSlice) []promptTimeSliceResponse {
+	responses := make([]promptTimeSliceResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, promptTimeSliceResponse{
+			StartMS: item.StartMS, EndMS: item.EndMS, Prompt: item.Prompt,
+			CameraWork: item.CameraWork, ShotSize: item.ShotSize, VisualFocus: item.VisualFocus,
+		})
+	}
+	return responses
+}
+
+func promptReferenceBindingDTOs(items []domain.PromptReferenceBinding) []promptReferenceBindingResponse {
+	responses := make([]promptReferenceBindingResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, promptReferenceBindingResponse{
+			Token: item.Token, Role: item.Role, AssetID: item.AssetID,
+			Kind: item.Kind, URI: item.URI,
 		})
 	}
 	return responses

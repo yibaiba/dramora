@@ -2,8 +2,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   createEpisode,
   createProject,
+  generateShotPromptPack,
   getExport,
   getEpisodeTimeline,
+  getShotPromptPack,
   getStoryAnalysis,
   getStoryMap,
   listEpisodeAssets,
@@ -123,6 +125,23 @@ export function useSeedStoryboardShots() {
   return useMutation({
     mutationFn: (episodeId: string) => seedStoryboardShots(episodeId),
     onSuccess: (_shots, episodeId) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] }),
+  })
+}
+
+export function useShotPromptPack(shotId?: string) {
+  return useQuery({
+    enabled: Boolean(shotId),
+    queryFn: () => getShotPromptPack(shotId ?? ''),
+    queryKey: ['shot-prompt-pack', shotId],
+    retry: false,
+  })
+}
+
+export function useGenerateShotPromptPack() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (shotId: string) => generateShotPromptPack(shotId),
+    onSuccess: (pack) => queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] }),
   })
 }
 

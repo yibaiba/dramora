@@ -229,12 +229,51 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	if lockedPayload.Asset.Status != "ready" {
 		t.Fatalf("expected locked asset ready, got %q", lockedPayload.Asset.Status)
 	}
+	if len(assetsPayload.Assets) > 1 {
+		secondLockResp := httptest.NewRecorder()
+		secondLockReq := httptest.NewRequest(http.MethodPost, "/api/v1/assets/"+assetsPayload.Assets[1].ID+":lock", nil)
+		router.ServeHTTP(secondLockResp, secondLockReq)
+		if secondLockResp.Code != http.StatusOK {
+			t.Fatalf("expected second lock 200, got %d: %s", secondLockResp.Code, secondLockResp.Body.String())
+		}
+	}
 
 	shotResp := httptest.NewRecorder()
 	shotReq := httptest.NewRequest(http.MethodPost, "/api/v1/episodes/"+episode.ID+"/storyboard-shots:seed", nil)
 	router.ServeHTTP(shotResp, shotReq)
 	if shotResp.Code != http.StatusCreated {
 		t.Fatalf("expected storyboard 201, got %d: %s", shotResp.Code, shotResp.Body.String())
+	}
+	var shotPayload struct {
+		StoryboardShots []storyboardShotResponse `json:"storyboard_shots"`
+	}
+	decodeBody(t, shotResp, &shotPayload)
+	if len(shotPayload.StoryboardShots) == 0 {
+		t.Fatal("expected seeded storyboard shots")
+	}
+
+	promptResp := httptest.NewRecorder()
+	promptReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+"/prompt-pack:generate",
+		nil,
+	)
+	router.ServeHTTP(promptResp, promptReq)
+	if promptResp.Code != http.StatusCreated {
+		t.Fatalf("expected prompt pack 201, got %d: %s", promptResp.Code, promptResp.Body.String())
+	}
+	var promptPayload struct {
+		PromptPack shotPromptPackResponse `json:"prompt_pack"`
+	}
+	decodeBody(t, promptResp, &promptPayload)
+	if promptPayload.PromptPack.Preset != "sd2_fast" {
+		t.Fatalf("expected sd2_fast preset, got %q", promptPayload.PromptPack.Preset)
+	}
+	if promptPayload.PromptPack.TaskType != "image_to_video" {
+		t.Fatalf("expected image-to-video prompt pack, got %q", promptPayload.PromptPack.TaskType)
+	}
+	if len(promptPayload.PromptPack.ReferenceBindings) < 2 || promptPayload.PromptPack.ReferenceBindings[1].Token != "@image2" {
+		t.Fatalf("expected image references including @image2, got %+v", promptPayload.PromptPack.ReferenceBindings)
 	}
 
 	timelineResp := httptest.NewRecorder()

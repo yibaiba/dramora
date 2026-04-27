@@ -141,6 +141,41 @@ export type StoryboardShot = {
   updated_at: string
 }
 
+export type PromptTimeSlice = {
+  start_ms: number
+  end_ms: number
+  prompt: string
+  camera_work: string
+  shot_size: string
+  visual_focus: string
+}
+
+export type PromptReferenceBinding = {
+  token: string
+  role: 'first_frame' | 'last_frame' | 'reference_image'
+  asset_id: string
+  kind: string
+  uri: string
+}
+
+export type ShotPromptPack = {
+  id: string
+  project_id: string
+  episode_id: string
+  shot_id: string
+  provider: string
+  model: string
+  preset: string
+  task_type: 'text_to_video' | 'image_to_video' | 'first_last_frame_to_video'
+  direct_prompt: string
+  negative_prompt: string
+  time_slices: PromptTimeSlice[]
+  reference_bindings: PromptReferenceBinding[]
+  params: Record<string, string | number | boolean>
+  created_at: string
+  updated_at: string
+}
+
 export type Asset = {
   id: string
   project_id: string

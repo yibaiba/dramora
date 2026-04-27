@@ -26,9 +26,11 @@ import {
   useLockAsset,
   useProjects,
   useSaveEpisodeTimeline,
+  useGenerateShotPromptPack,
   useSeedEpisodeAssets,
   useSeedStoryboardShots,
   useSeedStoryMap,
+  useShotPromptPack,
   useStoryAnalyses,
   useStoryboardShots,
   useStoryMap,
@@ -43,6 +45,7 @@ import type {
   GenerationJobStatus,
   Project,
   SaveTimelineRequest,
+  ShotPromptPack,
   StoryAnalysis,
   StoryMap,
   StoryMapItem,
@@ -542,6 +545,10 @@ function ShotList({ activeEpisode, shots }: { activeEpisode?: Episode; shots: St
 }
 
 function ShotCard({ shot }: { shot: StoryboardShot }) {
+  const { data: promptPack } = useShotPromptPack(shot.id)
+  const generatePromptPack = useGenerateShotPromptPack()
+  const activePromptPack = generatePromptPack.data?.shot_id === shot.id ? generatePromptPack.data : promptPack
+
   return (
     <article className="shot-card">
       <div className="shot-card-header">
@@ -551,7 +558,45 @@ function ShotCard({ shot }: { shot: StoryboardShot }) {
       <h3>{shot.title}</h3>
       <p>{shot.description}</p>
       <small>{shot.prompt}</small>
+      <div className="prompt-pack-actions">
+        <button
+          className="secondary-action"
+          disabled={generatePromptPack.isPending}
+          onClick={() => generatePromptPack.mutate(shot.id)}
+          type="button"
+        >
+          Generate SD2 pack
+        </button>
+        {activePromptPack ? <PromptPackPreview pack={activePromptPack} /> : null}
+      </div>
     </article>
+  )
+}
+
+function PromptPackPreview({ pack }: { pack: ShotPromptPack }) {
+  const copyPrompt = () => {
+    void navigator.clipboard.writeText(pack.direct_prompt)
+  }
+
+  return (
+    <div className="prompt-pack-preview">
+      <div className="prompt-pack-meta">
+        <span>{pack.preset}</span>
+        <span>{pack.task_type.replaceAll('_', ' ')}</span>
+        <span>{pack.reference_bindings.length} refs</span>
+      </div>
+      <p>{pack.direct_prompt}</p>
+      <div className="reference-token-list" aria-label="SD2 reference bindings">
+        {pack.reference_bindings.map((ref) => (
+          <span key={ref.asset_id}>
+            {ref.token} · {ref.role} · {ref.kind}
+          </span>
+        ))}
+      </div>
+      <button className="secondary-action" onClick={copyPrompt} type="button">
+        Copy prompt
+      </button>
+    </div>
   )
 }
 

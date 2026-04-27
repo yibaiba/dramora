@@ -19,6 +19,7 @@ type MemoryProductionRepository struct {
 	scenes    map[string]domain.Scene
 	props     map[string]domain.Prop
 	shots     map[string]domain.StoryboardShot
+	prompts   map[string]domain.ShotPromptPack
 	assets    map[string]domain.Asset
 	exports   map[string]domain.Export
 }
@@ -33,6 +34,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		scenes:    make(map[string]domain.Scene),
 		props:     make(map[string]domain.Prop),
 		shots:     make(map[string]domain.StoryboardShot),
+		prompts:   make(map[string]domain.ShotPromptPack),
 		assets:    make(map[string]domain.Asset),
 		exports:   make(map[string]domain.Export),
 	}
@@ -360,6 +362,75 @@ func (r *MemoryProductionRepository) ListStoryboardShots(
 		return shots[i].Position < shots[j].Position
 	})
 	return shots, nil
+}
+
+func (r *MemoryProductionRepository) GetStoryboardShot(
+	_ context.Context,
+	shotID string,
+) (domain.StoryboardShot, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	shot, ok := r.shots[shotID]
+	if !ok {
+		return domain.StoryboardShot{}, domain.ErrNotFound
+	}
+	return shot, nil
+}
+
+func (r *MemoryProductionRepository) SaveShotPromptPack(
+	_ context.Context,
+	params SaveShotPromptPackParams,
+) (domain.ShotPromptPack, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	now := time.Now().UTC()
+	pack, ok := r.prompts[params.ShotID]
+	if !ok {
+		pack.ID = params.ID
+		pack.CreatedAt = now
+	}
+	pack.ProjectID = params.ProjectID
+	pack.EpisodeID = params.EpisodeID
+	pack.ShotID = params.ShotID
+	pack.Provider = params.Provider
+	pack.Model = params.Model
+	pack.Preset = params.Preset
+	pack.TaskType = params.TaskType
+	pack.DirectPrompt = params.DirectPrompt
+	pack.NegativePrompt = params.NegativePrompt
+	pack.TimeSlices = append([]domain.PromptTimeSlice{}, params.TimeSlices...)
+	pack.ReferenceBindings = append([]domain.PromptReferenceBinding{}, params.ReferenceBindings...)
+	pack.Params = cloneMap(params.Params)
+	pack.UpdatedAt = now
+	r.prompts[params.ShotID] = pack
+	return pack, nil
+}
+
+func (r *MemoryProductionRepository) GetShotPromptPack(
+	_ context.Context,
+	shotID string,
+) (domain.ShotPromptPack, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	pack, ok := r.prompts[shotID]
+	if !ok {
+		return domain.ShotPromptPack{}, domain.ErrNotFound
+	}
+	return pack, nil
+}
+
+func cloneMap(values map[string]any) map[string]any {
+	if values == nil {
+		return map[string]any{}
+	}
+	cloned := make(map[string]any, len(values))
+	for key, value := range values {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (r *MemoryProductionRepository) nextStoryAnalysisVersion(episodeID string) int {

@@ -222,6 +222,30 @@ func scanStoryboardShot(row rowScanner) (domain.StoryboardShot, error) {
 	return item, err
 }
 
+func scanShotPromptPack(row rowScanner) (domain.ShotPromptPack, error) {
+	var item domain.ShotPromptPack
+	var timeSlices, referenceBindings, params []byte
+	err := row.Scan(
+		&item.ID, &item.ProjectID, &item.EpisodeID, &item.ShotID, &item.Provider,
+		&item.Model, &item.Preset, &item.TaskType, &item.DirectPrompt,
+		&item.NegativePrompt, &timeSlices, &referenceBindings, &params,
+		&item.CreatedAt, &item.UpdatedAt,
+	)
+	if err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(timeSlices, &item.TimeSlices); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(referenceBindings, &item.ReferenceBindings); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(params, &item.Params); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	return item, nil
+}
+
 func scanTimelineTracks(rows rowsScanner) ([]domain.TimelineTrack, error) {
 	items := make([]domain.TimelineTrack, 0)
 	for rows.Next() {

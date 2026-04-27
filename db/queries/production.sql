@@ -174,6 +174,12 @@ FROM storyboard_shots
 WHERE episode_id = $1::uuid
 ORDER BY position, code;
 
+-- name: GetStoryboardShot :one
+SELECT id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
+       COALESCE(scene_id::text, ''), code, title, description, prompt, position, duration_ms, created_at, updated_at
+FROM storyboard_shots
+WHERE id = $1::uuid;
+
 -- name: UpsertStoryboardShot :one
 INSERT INTO storyboard_shots (
     id, project_id, episode_id, story_analysis_id, scene_id, code, title, description, prompt, position, duration_ms
@@ -190,6 +196,33 @@ SET story_analysis_id = EXCLUDED.story_analysis_id,
     updated_at = now()
 RETURNING id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
        COALESCE(scene_id::text, ''), code, title, description, prompt, position, duration_ms, created_at, updated_at;
+
+-- name: UpsertShotPromptPack :one
+INSERT INTO shot_prompt_packs (
+    id, project_id, episode_id, shot_id, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params
+)
+VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10, $11::jsonb, $12::jsonb, $13::jsonb)
+ON CONFLICT (shot_id, preset) DO UPDATE
+SET provider = EXCLUDED.provider,
+    model = EXCLUDED.model,
+    task_type = EXCLUDED.task_type,
+    direct_prompt = EXCLUDED.direct_prompt,
+    negative_prompt = EXCLUDED.negative_prompt,
+    time_slices = EXCLUDED.time_slices,
+    reference_bindings = EXCLUDED.reference_bindings,
+    params = EXCLUDED.params,
+    updated_at = now()
+RETURNING id::text, project_id::text, episode_id::text, shot_id::text, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params, created_at, updated_at;
+
+-- name: GetShotPromptPack :one
+SELECT id::text, project_id::text, episode_id::text, shot_id::text, provider, model, preset, task_type,
+    direct_prompt, negative_prompt, time_slices, reference_bindings, params, created_at, updated_at
+FROM shot_prompt_packs
+WHERE shot_id = $1::uuid
+ORDER BY updated_at DESC
+LIMIT 1;
 
 -- name: ListTimelineTracks :many
 SELECT id::text, timeline_id::text, kind, name, position, created_at, updated_at

@@ -123,6 +123,41 @@ type StoryboardShot struct {
 	UpdatedAt       time.Time
 }
 
+type PromptTimeSlice struct {
+	StartMS     int
+	EndMS       int
+	Prompt      string
+	CameraWork  string
+	ShotSize    string
+	VisualFocus string
+}
+
+type PromptReferenceBinding struct {
+	Token   string
+	Role    string
+	AssetID string
+	Kind    string
+	URI     string
+}
+
+type ShotPromptPack struct {
+	ID                string
+	ProjectID         string
+	EpisodeID         string
+	ShotID            string
+	Provider          string
+	Model             string
+	Preset            string
+	TaskType          string
+	DirectPrompt      string
+	NegativePrompt    string
+	TimeSlices        []PromptTimeSlice
+	ReferenceBindings []PromptReferenceBinding
+	Params            map[string]any
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+}
+
 type TimelineTrack struct {
 	ID         string
 	TimelineID string

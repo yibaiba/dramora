@@ -55,6 +55,7 @@ db/migrations/000002_create_projects.up.sql
 db/migrations/000003_create_production_core.up.sql
 db/migrations/000004_create_story_analyses.up.sql
 db/migrations/000005_create_story_maps_and_shots.up.sql
+db/migrations/000006_create_shot_prompt_packs.up.sql
 ```
 
 Repository constructors:
@@ -74,6 +75,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - `db/queries/*.sql` is the sqlc source of truth even when hand-written pgx repositories exist.
 - Media payloads must be object URIs in `assets.uri`, never base64 blobs.
 - MVP asset candidate locking uses `assets.status = 'ready'`; draft candidates remain `assets.status = 'draft'`.
+- SD2/Seedance prompt packs are stored in `shot_prompt_packs` as the source-of-truth prompt artifact before video generation jobs are submitted.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
 
@@ -94,6 +96,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Storyboard shots are seeded | create or update episode-scoped shot cards from scene maps and latest story analysis. |
 | Asset candidates are seeded | create idempotent episode-scoped assets from C/S/P map rows with object-style URIs. |
 | Asset candidate is locked | update the asset status to `ready` and return the updated asset. |
+| Shot prompt pack is generated | upsert one `shot_prompt_packs` row by `(shot_id, preset)` with JSONB time slices, reference bindings, and provider params. |
 | Timeline graph is saved | upsert timeline metadata, then replace tracks/clips in a repository transaction. |
 
 #### 5. Good/Base/Bad Cases
@@ -112,6 +115,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - Worker execution should be service-tested with the memory repo and later integration-tested against PostgreSQL before real providers run.
 - Story analysis artifact read routes should test generated artifact list/detail behavior through the HTTP layer.
 - Core map/asset/storyboard/timeline/export routes should test the end-to-end seed/lock/save/start route chain through the HTTP layer.
+- Prompt pack routes should test SD2 preset, image-to-video task type, and `@image2` reference binding when multiple assets are locked.
 
 #### 7. Wrong vs Correct
 
@@ -130,6 +134,89 @@ project, err := api.projectService.GetProject(r.Context(), projectID)
 ```
 
 Handlers call services; services call repositories; repositories own SQL.
+
+---
+
+### Scenario: SD2 shot prompt pack persistence
+
+#### 1. Scope / Trigger
+
+- Trigger: storyboard shots need provider-specific SD2/Seedance prompt artifacts before video generation jobs are submitted.
+- Applies when adding or changing prompt pack routes, DTOs, SQL, Studio hooks, or prompt rendering logic.
+
+#### 2. Signatures
+
+Database migration:
+
+```text
+db/migrations/000006_create_shot_prompt_packs.up.sql
+```
+
+Frontend-facing API:
+
+```text
+GET  /api/v1/storyboard-shots/{shotId}/prompt-pack
+POST /api/v1/storyboard-shots/{shotId}/prompt-pack:generate
+```
+
+Repository/service signatures:
+
+```go
+SaveShotPromptPack(ctx context.Context, params repo.SaveShotPromptPackParams) (domain.ShotPromptPack, error)
+GetShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error)
+GenerateShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error)
+```
+
+#### 3. Contracts
+
+- `shot_prompt_packs` is the source-of-truth artifact for model-ready prompt text and provider params.
+- The unique key is `(shot_id, preset)` so regenerating `sd2_fast` updates the same shot/preset artifact.
+- `time_slices`, `reference_bindings`, and `params` are JSONB; do not split these flexible provider payloads into columns until querying needs emerge.
+- `reference_bindings` uses SD2-compatible tokens such as `@image1` and `@image2`; locked `assets.status = 'ready'` rows are eligible references.
+- The first locked image reference may be role `first_frame`; additional image refs should be role `reference_image`.
+- Prompt pack generation reads from existing shot and asset state; it must not synchronously call video generation providers from HTTP handlers.
+
+#### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Missing/blank `shotId` | Service returns `domain.ErrInvalidInput`; HTTP maps to 400 `invalid_request`. |
+| Shot does not exist | Repository returns `domain.ErrNotFound`; HTTP maps to 404 `not_found`. |
+| Prompt pack has not been generated | `GET /prompt-pack` returns 404, not an empty fake success. |
+| Multiple locked assets exist | Prompt pack includes deterministic `@image1`, `@image2`, ... bindings up to provider max. |
+| Prompt pack is regenerated | Upsert by `(shot_id, preset)` and update prompt JSONB/params without creating duplicates. |
+| SQL JSON marshal/unmarshal fails | Return the error; do not silently drop prompt fields. |
+
+#### 5. Good/Base/Bad Cases
+
+- Good: `POST /storyboard-shots/{shotId}/prompt-pack:generate` stores an `sd2_fast` prompt pack with time slices, reference bindings, and provider params.
+- Base: no locked assets still produces a text-to-video prompt pack with empty `reference_bindings`.
+- Bad: handler constructs SQL or calls Ark video generation synchronously while serving prompt-pack generation.
+
+#### 6. Tests Required
+
+- HTTP route test should cover the seed story analysis → story map → asset lock → storyboard → prompt pack chain.
+- Assert generated prompt pack has `preset = "sd2_fast"`, `task_type = "image_to_video"` when references exist, and `@image2` when at least two assets are locked.
+- Provider payload tests should cover request normalization separately in `internal/provider`; repository tests can remain memory-backed until PostgreSQL integration tests are introduced.
+- OpenAPI, `db/queries/*.sql`, Studio DTOs/client/hooks, and README examples must change in the same slice as route changes.
+
+#### 7. Wrong vs Correct
+
+##### Wrong
+
+```go
+// Handler directly submits a long-running provider request.
+task, err := seedanceClient.GenerateVideo(r.Context(), prompt)
+```
+
+##### Correct
+
+```go
+pack, err := api.productionService.GenerateShotPromptPack(r.Context(), shotID)
+writeJSON(w, http.StatusCreated, Envelope{"prompt_pack": shotPromptPackDTO(pack)})
+```
+
+Prompt pack generation is a fast source-of-truth write; actual video submission belongs in asynchronous generation job execution.
 
 ---
 
