@@ -1,0 +1,9 @@
+{"file": ".trellis/workflow.md", "reason": "Project workflow and conventions"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend development guide"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Need component split and accessibility rules for page extraction"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Need shared vs local state boundaries while moving to route pages"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Need validation and dark studio UI requirements"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Need DTO/type import constraints during refactor"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Need backend route and package boundary rules for storyboard workspace endpoint"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Need storyboard, prompt-pack, approval, and route-chain contracts for aggregate workspace read model"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Need backend validation commands and code quality rules for Go changes"}
