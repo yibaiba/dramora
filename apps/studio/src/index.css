@@ -1688,6 +1688,24 @@ p {
   color: #eef2ff;
 }
 
+.blackboard-chip-current {
+  border-color: rgba(56, 189, 248, 0.55);
+  background: rgba(56, 189, 248, 0.16);
+  color: #e0f2fe;
+}
+
+.blackboard-chip-warn {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(248, 113, 113, 0.14);
+  color: #fee2e2;
+}
+
+.blackboard-chip-ready {
+  border-color: rgba(74, 222, 128, 0.5);
+  background: rgba(34, 197, 94, 0.14);
+  color: #dcfce7;
+}
+
 .recovery-card {
   display: flex;
   flex-direction: column;

@@ -51,6 +51,7 @@ import { demoReferences } from '../mockData'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
 import { RecoveryPanel } from '../components/RecoveryPanel'
+import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import type { InspectorTab, ShotDraft, StudioShot, ViewMode } from '../types'
 import type {
   ApprovalGateOverview,
@@ -350,38 +351,13 @@ export function StoryboardPage() {
             ) : null}
           </div>
           {assetsGraphHandoff.reviewContext ? (
-            <div className="blackboard-chip-row">
-              <span className="blackboard-chip">
-                Storyboard 待跟进 {assetsGraphHandoff.reviewContext.storyboardPendingCount}
-              </span>
-              {assetsGraphHandoff.reviewContext.assetsGraphPendingCount > 0 ? (
-                <Link
-                  className="blackboard-chip blackboard-chip-link"
-                  to={studioRoutePaths.assetsGraph}
-                  title="去 Assets / Graph 处理待跟进"
-                >
-                  Assets / Graph 待跟进 {assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
-                </Link>
-              ) : (
-                <span className="blackboard-chip">
-                  Assets / Graph 待跟进 {assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
-                </span>
-              )}
-              {assetsGraphHandoff.reviewContext.totalReturnedCount > 0 ? (
-                <Link
-                  className="blackboard-chip blackboard-chip-link"
-                  to={studioRoutePaths.storyAnalysis}
-                  state={buildStoryAnalysisFollowUpReturnState(assetsGraphHandoff, 'Storyboard')}
-                  title="回到解析查看本轮回传历史"
-                >
-                  累计回传 {assetsGraphHandoff.reviewContext.totalReturnedCount}
-                </Link>
-              ) : (
-                <span className="blackboard-chip">
-                  累计回传 {assetsGraphHandoff.reviewContext.totalReturnedCount}
-                </span>
-              )}
-            </div>
+            <ReviewSummaryChips
+              currentSide="storyboard"
+              storyboardPendingCount={assetsGraphHandoff.reviewContext.storyboardPendingCount}
+              assetsGraphPendingCount={assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
+              totalReturnedCount={assetsGraphHandoff.reviewContext.totalReturnedCount}
+              storyAnalysisLinkState={buildStoryAnalysisFollowUpReturnState(assetsGraphHandoff, 'Storyboard')}
+            />
           ) : null}
         </>
       ) : null}
