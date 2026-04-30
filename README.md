@@ -47,7 +47,6 @@ Example local environment:
 
 ```bash
 export MANMU_DATABASE_URL='postgres://manmu:manmu@localhost:5432/manmu?sslmode=disable'
-export MANMU_DEFAULT_ORGANIZATION_ID='00000000-0000-0000-0000-000000000001'
 # Optional: enables real Ark submission mode in the Seedance adapter boundary.
 export ARK_API_KEY='...'
 ```

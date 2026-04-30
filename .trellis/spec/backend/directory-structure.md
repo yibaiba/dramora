@@ -88,7 +88,6 @@ Environment keys:
 | `MANMU_READ_HEADER_TIMEOUT` | No | `5s` | HTTP read header timeout; duration or integer seconds. |
 | `MANMU_SHUTDOWN_TIMEOUT` | No | `10s` | Graceful shutdown timeout; duration or integer seconds. |
 | `MANMU_DATABASE_URL` | No | empty | PostgreSQL URL. Empty uses in-memory repositories for local smoke tests. |
-| `MANMU_DEFAULT_ORGANIZATION_ID` | No | `00000000-0000-0000-0000-000000000001` | Default org used before auth/multitenancy UI exists. |
 | `MANMU_INLINE_WORKER` | No | `true` when `MANMU_ENV=local`, otherwise `false` | Run the worker loop inside the API process so local Studio actions auto-complete queued jobs. |
 | `MANMU_WORKER_QUEUES` | No | `default` | Comma-separated worker queues. |
 

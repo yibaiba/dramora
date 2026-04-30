@@ -8,7 +8,6 @@ var sqliteMigrations = []string{
 		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 	)`,
-	`INSERT OR IGNORE INTO organizations (id, name) VALUES ('00000000-0000-0000-0000-000000000001', 'Default Organization')`,
 
 	// users
 	`CREATE TABLE IF NOT EXISTS users (
@@ -379,4 +378,11 @@ var sqliteMigrations = []string{
 		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_invitations_org_status ON organization_invitations (organization_id, status)`,
+
+	// 弱化历史 default organization 种子（仅在无引用时清理）。
+	`DELETE FROM organizations
+		WHERE id = '00000000-0000-0000-0000-000000000001'
+		  AND NOT EXISTS (SELECT 1 FROM organization_members WHERE organization_id = '00000000-0000-0000-0000-000000000001')
+		  AND NOT EXISTS (SELECT 1 FROM projects WHERE organization_id = '00000000-0000-0000-0000-000000000001')
+		  AND NOT EXISTS (SELECT 1 FROM organization_invitations WHERE organization_id = '00000000-0000-0000-0000-000000000001')`,
 }
