@@ -1,4 +1,5 @@
 import {
+  Activity,
   BookOpenText,
   Boxes,
   Download,
@@ -17,6 +18,7 @@ export const studioRoutePaths = {
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
+  workerMetrics: '/admin/worker-metrics',
 } as const
 
 export type StudioNavItem = {
@@ -77,5 +79,12 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'organizationInvitations',
     label: 'Invitations',
     path: studioRoutePaths.organizationInvitations,
+  },
+  {
+    description: '查看 worker 组织上下文跳过指标（owner / admin）。',
+    icon: Activity,
+    key: 'workerMetrics',
+    label: 'Worker Metrics',
+    path: studioRoutePaths.workerMetrics,
   },
 ]

@@ -4830,3 +4830,77 @@ p {
   font-size: 0.72rem;
   color: rgb(148, 163, 184);
 }
+
+.worker-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.worker-metric-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.worker-metric-card.has-skips {
+  border-color: rgba(248, 113, 113, 0.55);
+  background: rgba(127, 29, 29, 0.25);
+}
+
+.worker-metric-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(148, 163, 184);
+}
+
+.worker-metric-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: rgb(226, 232, 240);
+}
+
+.worker-metric-hint {
+  font-size: 0.72rem;
+  color: rgb(148, 163, 184);
+}
+
+.worker-metrics-last dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+  margin: 0;
+}
+
+.worker-metrics-last dt {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgb(148, 163, 184);
+  margin-bottom: 0.25rem;
+}
+
+.worker-metrics-last dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgb(226, 232, 240);
+  word-break: break-word;
+}
+
+.worker-metrics-empty-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.78rem;
+  color: rgb(134, 239, 172);
+}
+
+.worker-metrics-warn-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.78rem;
+  color: rgb(252, 165, 165);
+}

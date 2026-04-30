@@ -31,6 +31,7 @@ import type {
   StoryboardWorkspace,
   StoryboardShot,
   TestProviderResult,
+  WorkerMetricsSnapshot,
   WorkflowRun,
   UpdateStoryboardShotRequest,
   Timeline,
@@ -378,6 +379,13 @@ export async function testProviderConfig(capability: string): Promise<TestProvid
     method: 'POST',
   })
   return payload.test_result
+}
+
+export async function fetchWorkerMetrics(): Promise<WorkerMetricsSnapshot> {
+  const payload = await fetchJSON<{ worker_metrics: WorkerMetricsSnapshot }>(
+    '/api/v1/admin/worker-metrics',
+  )
+  return payload.worker_metrics
 }
 
 // org invitations (owner/admin only)

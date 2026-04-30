@@ -517,3 +517,11 @@ export type TestProviderResult = {
   latency_ms: number
   error?: string
 }
+
+export type WorkerMetricsSnapshot = {
+  generation_org_unresolved_skips: number
+  export_org_unresolved_skips: number
+  last_skip_kind?: string
+  last_skip_reason?: string
+  last_skip_at?: string
+}

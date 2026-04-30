@@ -11,6 +11,7 @@ import { InvitationsPage } from './studio/pages/InvitationsPage'
 import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
 import { TimelineExportPage } from './studio/pages/TimelineExportPage'
+import { WorkerMetricsPage } from './studio/pages/WorkerMetricsPage'
 
 function App() {
   const session = useAuthStore((state) => state.session)
@@ -55,6 +56,7 @@ function App() {
         <Route path="timeline-export" element={<TimelineExportPage />} />
         <Route path="admin/settings" element={<AdminSettingsPage />} />
         <Route path="admin/invitations" element={<InvitationsPage />} />
+        <Route path="admin/worker-metrics" element={<WorkerMetricsPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

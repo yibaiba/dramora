@@ -44,6 +44,7 @@ import {
 	startEpisodeExport,
 	startStoryAnalysis,
 	testProviderConfig,
+	fetchWorkerMetrics,
 	updateStoryboardShot,
 } from './client'
 import type {
@@ -481,6 +482,15 @@ export function useSaveProviderConfig() {
 export function useTestProviderConfig() {
   return useMutation({
     mutationFn: (capability: string) => testProviderConfig(capability),
+  })
+}
+
+export function useWorkerMetrics(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: fetchWorkerMetrics,
+    queryKey: ['admin', 'worker-metrics'],
+    refetchInterval: enabled ? 15000 : false,
   })
 }
 
