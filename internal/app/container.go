@@ -33,6 +33,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var sqliteDB *repo.SQLiteDB
 
 	var providerService *service.ProviderService
+	var workerMetricsRepo repo.WorkerMetricsRepository
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -43,6 +44,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		projectRepo = repo.NewPostgresProjectRepository(openedDB.Pool)
 		productionRepo = repo.NewPostgresProductionRepository(openedDB.Pool)
 		identityRepo = repo.NewPostgresIdentityRepository(openedDB.Pool)
+		workerMetricsRepo = repo.NewPostgresWorkerMetricsRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -54,6 +56,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		productionRepo = repo.NewSQLiteProductionRepository(openedDB.DB)
 		identityRepo = repo.NewSQLiteIdentityRepository(openedDB.DB)
 		providerService = service.NewProviderService(repo.NewSQLiteProviderConfigRepository(openedDB.DB))
+		workerMetricsRepo = repo.NewSQLiteWorkerMetricsRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
 	}
 
@@ -64,6 +67,13 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	projectSvc := service.NewProjectService(projectRepo)
 	productionSvc.SetProjectService(projectSvc)
+
+	if workerMetricsRepo != nil {
+		productionSvc.SetWorkerMetricsRepository(workerMetricsRepo, logger)
+		if err := productionSvc.LoadWorkerMetrics(ctx); err != nil {
+			logger.Warn("load worker metrics failed", "err", err)
+		}
+	}
 
 	return &Container{
 		cfg:               cfg,

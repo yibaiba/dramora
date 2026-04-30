@@ -379,6 +379,15 @@ var sqliteMigrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_invitations_org_status ON organization_invitations (organization_id, status)`,
 
+	// Phase 2: worker_metric_state — restart-survivable counters for worker observability.
+	`CREATE TABLE IF NOT EXISTS worker_metric_state (
+		metric_kind TEXT PRIMARY KEY,
+		counter INTEGER NOT NULL DEFAULT 0,
+		last_reason TEXT,
+		last_at TEXT,
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+
 	// 弱化历史 default organization 种子（仅在无引用时清理）。
 	`DELETE FROM organizations
 		WHERE id = '00000000-0000-0000-0000-000000000001'

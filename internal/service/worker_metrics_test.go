@@ -59,3 +59,46 @@ func TestProductionServiceWorkerMetricsRecordsOrgUnresolvedSkips(t *testing.T) {
 		t.Fatal("expected LastSkipAt to be populated")
 	}
 }
+
+func TestProductionServicePersistsAndReloadsWorkerMetrics(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	metricsRepo := repo.NewMemoryWorkerMetricsRepository()
+
+	// First service instance: simulate a process that records skips and writes
+	// them through to the persistent store.
+	first := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	first.SetWorkerMetricsRepository(metricsRepo, nil)
+
+	first.metrics.recordGenerationSkip("project lookup failed")
+	first.metrics.recordGenerationSkip("project lookup failed")
+	first.metrics.recordExportSkip("timeline lookup failed")
+
+	rows, err := metricsRepo.LoadAll(ctx)
+	if err != nil {
+		t.Fatalf("load all: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 metric rows persisted, got %d", len(rows))
+	}
+
+	// Second service instance: simulate a process restart that loads the prior
+	// state from persistence and resumes counters.
+	second := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	second.SetWorkerMetricsRepository(metricsRepo, nil)
+	if err := second.LoadWorkerMetrics(ctx); err != nil {
+		t.Fatalf("load worker metrics: %v", err)
+	}
+
+	snap := second.WorkerMetrics()
+	if snap.GenerationOrgUnresolvedSkips != 2 {
+		t.Fatalf("expected GenerationOrgUnresolvedSkips=2 after reload, got %d", snap.GenerationOrgUnresolvedSkips)
+	}
+	if snap.ExportOrgUnresolvedSkips != 1 {
+		t.Fatalf("expected ExportOrgUnresolvedSkips=1 after reload, got %d", snap.ExportOrgUnresolvedSkips)
+	}
+	if snap.LastSkipKind == "" || snap.LastSkipAt.IsZero() {
+		t.Fatalf("expected last skip metadata to be restored, got %+v", snap)
+	}
+}
