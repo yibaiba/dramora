@@ -1,0 +1,70 @@
+# Dramora Worker Metrics — Prometheus 告警示例
+#
+# 基于 /metrics 暴露的以下指标编写：
+#   - dramora_worker_org_unresolved_skips_total{kind="generation"|"export"} (counter)
+#   - dramora_worker_last_skip_timestamp_seconds (gauge, unix 秒)
+#   - dramora_worker_last_skip_info{kind, reason} (gauge, 始终为 1)
+#
+# 这些规则只是参考阈值；正式部署应根据实际生产负载与窗口调整。
+# 加载方式（示例）：将本文件包含到 Prometheus 配置的 rule_files 列表，
+# 然后在 Alertmanager 中配置对应路由 / 接收人。
+
+groups:
+  - name: dramora-worker-metrics
+    interval: 30s
+    rules:
+      # 任一类型的 skip 在过去 5 分钟内出现新增（rate > 0），表明 worker
+      # 当前正在因解析组织上下文失败而跳过 job，需要人工介入。
+      - alert: DramoraWorkerOrgSkipBurst
+        expr: |
+          sum by (kind) (
+            rate(dramora_worker_org_unresolved_skips_total[5m])
+          ) > 0
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "Worker {{ $labels.kind }} 类型 skip 持续增长"
+          description: |
+            过去 5 分钟内 worker 跳过了 {{ $labels.kind }} 类型 job
+            (速率 {{ printf "%.2f" $value }}/s)。请检查 worker 日志中
+            "skip generation/export job" 警告，确认 job 关联的 project /
+             organization 是否被删除或迁移。
+
+      # 最近一次 skip 距今多少秒；作为 recording rule 提供给看板使用。
+      - record: dramora:worker_last_skip_age_seconds
+        expr: |
+          time() - max(dramora_worker_last_skip_timestamp_seconds)
+
+      # 半小时内累计 skip 超过 20 次，认为是高频异常，立即升级告警等级。
+      - alert: DramoraWorkerOrgSkipHighFrequency
+        expr: |
+          sum(
+            increase(dramora_worker_org_unresolved_skips_total[30m])
+          ) > 20
+        for: 10m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker 在 30 分钟内跳过的 job 超过 20 个"
+          description: |
+            最近 30 分钟内 worker 累计跳过 {{ printf "%.0f" $value }} 个
+            job。强烈建议立即排查 jobs 表中残留的孤儿 generation_jobs /
+            exports，并检查 organization / project 数据完整性。
+
+      # /metrics 长时间不可达：依赖 prometheus 自带的 up{} 指标。
+      # 这里给出范例，实际 job_name 需与 scrape_configs 中保持一致。
+      - alert: DramoraMetricsEndpointDown
+        expr: up{job="dramora-worker"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Dramora /metrics 端点不可达"
+          description: |
+            Prometheus 已连续 5 分钟无法抓取 {{ $labels.instance }} 的
+            /metrics 端点；worker 可观测性中断，需立即检查 API 进程状态、
+            网络与反向代理配置。
