@@ -19,6 +19,29 @@ export type GenerationJobStatus =
 export type AssetStatus = 'draft' | 'generating' | 'ready' | 'failed' | 'archived'
 export type ApprovalGateStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'canceled'
 
+export type AuthUser = {
+  id: string
+  email: string
+  display_name: string
+}
+
+export type AuthSession = {
+  token: string
+  user: AuthUser
+  organization_id: string
+  role: string
+  expires_at: string
+}
+
+export type LoginRequest = {
+  email: string
+  password: string
+}
+
+export type RegisterRequest = LoginRequest & {
+  display_name: string
+}
+
 export type Project = {
   id: string
   organization_id: string
@@ -58,8 +81,31 @@ export type WorkflowRun = {
   project_id: string
   episode_id: string
   status: 'draft' | 'running' | 'waiting_approval' | 'succeeded' | 'failed' | 'canceled'
+  checkpoint_summary?: WorkflowCheckpointSummary
+  node_runs?: WorkflowNodeRun[]
   created_at: string
   updated_at: string
+}
+
+export type WorkflowCheckpointSummary = {
+  sequence: number
+  saved_at: string
+  completed_nodes: number
+  waiting_nodes: number
+  running_nodes: number
+  failed_nodes: number
+  skipped_nodes: number
+  blackboard_roles: string[]
+}
+
+export type WorkflowNodeRun = {
+  node_id: string
+  kind: string
+  status: 'pending' | 'running' | 'waiting_approval' | 'succeeded' | 'failed' | 'skipped' | 'canceled'
+  summary: string
+  highlights: string[]
+  error_message: string
+  upstream_node_ids: string[]
 }
 
 export type ApprovalGate = {
@@ -162,6 +208,29 @@ export type StoryMap = {
   props: StoryMapItem[]
 }
 
+export type CharacterBiblePalette = {
+  skin: string
+  hair: string
+  accent: string
+  eyes: string
+  costume: string
+}
+
+export type CharacterBibleReferenceAsset = {
+  angle: string
+  asset_id: string
+}
+
+export type CharacterBible = {
+  anchor: string
+  palette: CharacterBiblePalette
+  expressions: string[]
+  reference_angles: string[]
+  reference_assets: CharacterBibleReferenceAsset[]
+  wardrobe: string
+  notes: string
+}
+
 export type StoryMapItem = {
   id: string
   project_id: string
@@ -169,8 +238,13 @@ export type StoryMapItem = {
   code: string
   name: string
   description: string
+  character_bible?: CharacterBible
   created_at: string
   updated_at: string
+}
+
+export type SaveCharacterBibleRequest = {
+  character_bible: CharacterBible
 }
 
 export type StoryboardShot = {
@@ -186,6 +260,39 @@ export type StoryboardShot = {
   duration_ms: number
   created_at: string
   updated_at: string
+}
+
+export type StoryboardShotPromptPackSummary = {
+  id: string
+  shot_id: string
+  provider: string
+  model: string
+  preset: string
+  task_type: ShotPromptPack['task_type']
+  updated_at: string
+}
+
+export type StoryboardWorkspaceShot = StoryboardShot & {
+  scene: StoryMapItem | null
+  prompt_pack: StoryboardShotPromptPackSummary | null
+  latest_generation_job: GenerationJob | null
+}
+
+export type StoryboardWorkspaceSummary = {
+  analysis_count: number
+  story_map_ready: boolean
+  ready_assets_count: number
+  pending_approval_gates_count: number
+}
+
+export type StoryboardWorkspace = {
+  episode_id: string
+  summary: StoryboardWorkspaceSummary
+  story_map: StoryMap
+  storyboard_shots: StoryboardWorkspaceShot[]
+  assets: Asset[]
+  approval_gates: ApprovalGate[]
+  generation_jobs: GenerationJob[]
 }
 
 export type UpdateStoryboardShotRequest = {
@@ -307,4 +414,39 @@ export type CreateEpisodeRequest = {
 export type ApprovalGateReviewRequest = {
   reviewed_by?: string
   review_note?: string
+}
+
+export type ProviderCapability = 'chat' | 'image' | 'video' | 'audio'
+
+export type ProviderConfig = {
+  id: string
+  capability: ProviderCapability
+  base_url: string
+  api_key: string
+  model: string
+  credits_per_unit: number
+  credit_unit: string
+  timeout_ms: number
+  max_retries: number
+  is_enabled: boolean
+  updated_at: string
+  updated_by: string
+}
+
+export type SaveProviderConfigRequest = {
+  capability: ProviderCapability
+  base_url: string
+  api_key: string
+  model: string
+  credits_per_unit: number
+  credit_unit: string
+  timeout_ms: number
+  max_retries: number
+}
+
+export type TestProviderResult = {
+  ok: boolean
+  model: string
+  latency_ms: number
+  error?: string
 }

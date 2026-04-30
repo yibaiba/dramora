@@ -1,0 +1,101 @@
+import type { StudioShot } from './types'
+
+export const demoShots: StudioShot[] = [
+  {
+    code: '01',
+    description: '开场建立镜，交代天门与主角位置。',
+    durationMS: 4200,
+    key: 'demo-01',
+    progress: 100,
+    prompt:
+      '航拍视角，云海翻涌，远处天门洞开，金色朝阳洒落，少年独立山崖，衣袂飘扬，史诗感，国漫风格，细节丰富，光影戏剧化。',
+    sceneCode: 'SC01',
+    sceneName: '云海初现',
+    status: 'prompt_ready',
+    tags: ['云澜', '白璃', '长老'],
+    thumbnail: 'thumb-cloud',
+    title: '天门洞开',
+  },
+  {
+    code: '02',
+    description: '主角中近景，承接立誓情绪。',
+    durationMS: 3600,
+    key: 'demo-02',
+    progress: 72,
+    prompt:
+      '中近景，少年云澜回头凝视远方，风吹乱发，眼神坚定，背景云雾和宗门剪影，电影级景深，稳定角色一致性。',
+    sceneCode: 'SC01',
+    sceneName: '少年立志',
+    status: 'generating',
+    tags: ['云澜'],
+    thumbnail: 'thumb-hero',
+    title: '少年立誓',
+  },
+  {
+    code: '03',
+    description: '女主登场镜，强调角色辨识度。',
+    durationMS: 4800,
+    key: 'demo-03',
+    progress: 0,
+    prompt:
+      '白璃从桃花雨中出现，银白长发，轻甲飘带，镜头缓慢推进，柔光，高级国漫角色设计，保持面部一致性。',
+    sceneCode: 'SC01',
+    sceneName: '白璃登场',
+    status: 'queued',
+    tags: ['白璃'],
+    thumbnail: 'thumb-muse',
+    title: '白璃回眸',
+  },
+  {
+    code: '04',
+    description: '宗门环境大全景，用于世界观铺垫。',
+    durationMS: 5500,
+    key: 'demo-04',
+    progress: 100,
+    prompt:
+      '宗门全景，云端建筑群漂浮在山巅，仙鹤穿过云层，大远景，恢弘构图，金紫色晚霞，电影级环境细节。',
+    sceneCode: 'SC02',
+    sceneName: '宗门全景',
+    status: 'prompt_ready',
+    tags: ['云澜', '长老', '弟子'],
+    thumbnail: 'thumb-temple',
+    title: '云端宗门',
+  },
+  {
+    code: '05',
+    description: '试炼动作镜，突出剑光和节奏。',
+    durationMS: 3900,
+    key: 'demo-05',
+    progress: 45,
+    prompt:
+      '试炼场上剑光爆发，少年拔剑迎敌，蓝紫能量划破画面，快速推轨镜头，动势强烈，角色动作清晰。',
+    sceneCode: 'SC02',
+    sceneName: '试炼开始',
+    status: 'generating',
+    tags: ['云澜', '对手'],
+    thumbnail: 'thumb-battle',
+    title: '剑光破云',
+  },
+  {
+    code: '06',
+    description: '威胁登场镜，制造压迫感和悬念。',
+    durationMS: 5100,
+    key: 'demo-06',
+    progress: 0,
+    prompt:
+      '黑色异兽从云雾中压境，巨大龙翼遮天，火光映照山门，低角度仰拍，压迫感，暗黑史诗氛围。',
+    sceneCode: 'SC03',
+    sceneName: '异兽现世',
+    status: 'queued',
+    tags: ['异兽'],
+    thumbnail: 'thumb-beast',
+    title: '黑龙压境',
+  },
+]
+
+export const demoReferences = [
+  { label: '@image1', thumbnail: 'thumb-cloud' },
+  { label: '@image2', thumbnail: 'thumb-hero' },
+  { label: '@image3', thumbnail: 'thumb-temple' },
+  { label: '@image4', thumbnail: 'thumb-muse' },
+]

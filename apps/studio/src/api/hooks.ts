@@ -1,46 +1,85 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  createEpisode,
-  createProject,
-  createStorySource,
+  getCurrentSession,
+  login,
+	createEpisode,
+	createProject,
+	createStorySource,
+  register,
   approveApprovalGate,
   generateShotPromptPack,
-  getExport,
+ getExport,
   getEpisodeTimeline,
   getShotPromptPack,
   getStoryAnalysis,
   getStoryMap,
+  getWorkflowRun,
+  getStoryboardWorkspace,
   listEpisodeAssets,
   listEpisodes,
   listApprovalGates,
   listGenerationJobs,
   listProjects,
+  listProviderConfigs,
   listStorySources,
   listStoryAnalyses,
   listStoryboardShots,
   lockAsset,
+  saveCharacterBible,
   saveEpisodeTimeline,
+  saveProviderConfig,
   saveShotPromptPack,
   seedApprovalGates,
-  seedEpisodeAssets,
-  seedEpisodeProduction,
-  seedStoryboardShots,
-  seedStoryMap,
-  requestApprovalChanges,
-  startShotVideoGeneration,
-  startEpisodeExport,
-  startStoryAnalysis,
-  updateStoryboardShot,
+	seedEpisodeAssets,
+	seedEpisodeProduction,
+	seedStoryboardShots,
+	seedStoryMap,
+	requestApprovalChanges,
+	resubmitApprovalGate,
+	startShotVideoGeneration,
+	startEpisodeExport,
+	startStoryAnalysis,
+	testProviderConfig,
+	updateStoryboardShot,
 } from './client'
 import type {
+  LoginRequest,
+  RegisterRequest,
   CreateEpisodeRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
   Export,
+  SaveProviderConfigRequest,
+  SaveCharacterBibleRequest,
   SaveShotPromptPackRequest,
   SaveTimelineRequest,
   UpdateStoryboardShotRequest,
 } from './types'
+
+export function useCurrentSession(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: getCurrentSession,
+    queryKey: ['auth-session'],
+    retry: false,
+  })
+}
+
+export function useRegister() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: RegisterRequest) => register(request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-session'] }),
+  })
+}
+
+export function useLogin() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: LoginRequest) => login(request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-session'] }),
+  })
+}
 
 export function useProjects() {
   return useQuery({
@@ -86,6 +125,15 @@ export function useGenerationJobs() {
   })
 }
 
+export function useWorkflowRun(workflowRunId?: string) {
+  return useQuery({
+    enabled: Boolean(workflowRunId),
+    queryFn: () => getWorkflowRun(workflowRunId ?? ''),
+    queryKey: ['workflow-run', workflowRunId],
+    refetchInterval: 10_000,
+  })
+}
+
 export function useStartStoryAnalysis() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -93,6 +141,7 @@ export function useStartStoryAnalysis() {
     onSuccess: (_result, episodeId) => {
       queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['story-analyses', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
     },
   })
 }
@@ -142,7 +191,10 @@ export function useSeedApprovalGates() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (episodeId: string) => seedApprovalGates(episodeId),
-    onSuccess: (_gates, episodeId) => queryClient.invalidateQueries({ queryKey: ['approval-gates', episodeId] }),
+    onSuccess: (_gates, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['approval-gates', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
+    },
   })
 }
 
@@ -150,7 +202,10 @@ export function useApproveApprovalGate() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ gateId }: { episodeId: string; gateId: string }) => approveApprovalGate(gateId, {}),
-    onSuccess: (gate) => queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] }),
+    onSuccess: (gate) => {
+      queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', gate.episode_id] })
+    },
   })
 }
 
@@ -159,7 +214,22 @@ export function useRequestApprovalChanges() {
   return useMutation({
     mutationFn: ({ gateId }: { episodeId: string; gateId: string }) =>
       requestApprovalChanges(gateId, { review_note: 'Changes requested from Studio approval board.' }),
-    onSuccess: (gate) => queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] }),
+    onSuccess: (gate) => {
+      queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', gate.episode_id] })
+    },
+  })
+}
+
+export function useResubmitApprovalGate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ gateId }: { episodeId: string; gateId: string }) =>
+      resubmitApprovalGate(gateId, { review_note: 'Resubmitted from Studio approval board.' }),
+    onSuccess: (gate) => {
+      queryClient.invalidateQueries({ queryKey: ['approval-gates', gate.episode_id] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', gate.episode_id] })
+    },
   })
 }
 
@@ -175,7 +245,28 @@ export function useSeedStoryMap() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (episodeId: string) => seedStoryMap(episodeId),
-    onSuccess: (_storyMap, episodeId) => queryClient.invalidateQueries({ queryKey: ['story-map', episodeId] }),
+    onSuccess: (_storyMap, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['story-map', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
+    },
+  })
+}
+
+export function useSaveCharacterBible() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      characterId,
+      request,
+    }: {
+      characterId: string
+      episodeId: string
+      request: SaveCharacterBibleRequest
+    }) => saveCharacterBible(characterId, request),
+    onSuccess: (_storyMapItem, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['story-map', variables.episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', variables.episodeId] })
+    },
   })
 }
 
@@ -187,11 +278,23 @@ export function useStoryboardShots(episodeId?: string) {
   })
 }
 
+export function useStoryboardWorkspace(episodeId?: string) {
+  return useQuery({
+    enabled: Boolean(episodeId),
+    queryFn: () => getStoryboardWorkspace(episodeId ?? ''),
+    queryKey: ['storyboard-workspace', episodeId],
+    refetchInterval: 10_000,
+  })
+}
+
 export function useSeedStoryboardShots() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (episodeId: string) => seedStoryboardShots(episodeId),
-    onSuccess: (_shots, episodeId) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] }),
+    onSuccess: (_shots, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
+    },
   })
 }
 
@@ -200,7 +303,10 @@ export function useUpdateStoryboardShot() {
   return useMutation({
     mutationFn: ({ request, shotId }: { request: UpdateStoryboardShotRequest; shotId: string }) =>
       updateStoryboardShot(shotId, request),
-    onSuccess: (shot) => queryClient.invalidateQueries({ queryKey: ['storyboard-shots', shot.episode_id] }),
+    onSuccess: (shot) => {
+      queryClient.invalidateQueries({ queryKey: ['storyboard-shots', shot.episode_id] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', shot.episode_id] })
+    },
   })
 }
 
@@ -217,7 +323,10 @@ export function useGenerateShotPromptPack() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (shotId: string) => generateShotPromptPack(shotId),
-    onSuccess: (pack) => queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] }),
+    onSuccess: (pack) => {
+      queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', pack.episode_id] })
+    },
   })
 }
 
@@ -229,6 +338,7 @@ export function useSaveShotPromptPack() {
     onSuccess: (pack) => {
       queryClient.invalidateQueries({ queryKey: ['shot-prompt-pack', pack.shot_id] })
       queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', pack.episode_id] })
     },
   })
 }
@@ -237,7 +347,10 @@ export function useStartShotVideoGeneration() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (shotId: string) => startShotVideoGeneration(shotId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['generation-jobs'] }),
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', job.episode_id] })
+    },
   })
 }
 
@@ -253,7 +366,10 @@ export function useSeedEpisodeAssets() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (episodeId: string) => seedEpisodeAssets(episodeId),
-    onSuccess: (_assets, episodeId) => queryClient.invalidateQueries({ queryKey: ['assets', episodeId] }),
+    onSuccess: (_assets, episodeId) => {
+      queryClient.invalidateQueries({ queryKey: ['assets', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
+    },
   })
 }
 
@@ -266,6 +382,7 @@ export function useSeedEpisodeProduction() {
       queryClient.invalidateQueries({ queryKey: ['assets', episodeId] })
       queryClient.invalidateQueries({ queryKey: ['story-map', episodeId] })
       queryClient.invalidateQueries({ queryKey: ['storyboard-shots', episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', episodeId] })
     },
   })
 }
@@ -274,7 +391,10 @@ export function useLockAsset() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: ({ assetId }: { assetId: string; episodeId: string }) => lockAsset(assetId),
-    onSuccess: (_asset, variables) => queryClient.invalidateQueries({ queryKey: ['assets', variables.episodeId] }),
+    onSuccess: (_asset, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['assets', variables.episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', variables.episodeId] })
+    },
   })
 }
 
@@ -314,4 +434,27 @@ export function useExport(exportId?: string) {
 
 function isExportInProgress(status?: Export['status']) {
   return status === 'queued' || status === 'rendering'
+}
+
+// admin: provider configs
+
+export function useProviderConfigs() {
+  return useQuery({
+    queryFn: listProviderConfigs,
+    queryKey: ['provider-configs'],
+  })
+}
+
+export function useSaveProviderConfig() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: SaveProviderConfigRequest) => saveProviderConfig(request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['provider-configs'] }),
+  })
+}
+
+export function useTestProviderConfig() {
+  return useMutation({
+    mutationFn: (capability: string) => testProviderConfig(capability),
+  })
 }

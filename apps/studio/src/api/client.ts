@@ -1,14 +1,20 @@
 import type {
+  AuthSession,
   CreateEpisodeRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
   Episode,
   ApprovalGate,
   ApprovalGateReviewRequest,
+  SaveCharacterBibleRequest,
   Asset,
   Export,
   GenerationJob,
   Project,
+  ProviderConfig,
+  LoginRequest,
+  RegisterRequest,
+  SaveProviderConfigRequest,
   SeedEpisodeProductionResponse,
   SaveTimelineRequest,
   SaveShotPromptPackRequest,
@@ -17,12 +23,17 @@ import type {
   StoryAnalysis,
   StorySource,
   StoryMap,
+  StoryMapItem,
+  StoryboardWorkspace,
   StoryboardShot,
+  TestProviderResult,
+  WorkflowRun,
   UpdateStoryboardShotRequest,
   Timeline,
 } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_MANMU_API_BASE_URL ?? ''
+const AUTH_STORAGE_KEY = 'dramora-auth-session'
 
 type ErrorEnvelope = {
   error?: {
@@ -32,9 +43,11 @@ type ErrorEnvelope = {
 }
 
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const authHeader = readStoredAuthHeader()
   const response = await fetch(`${API_BASE_URL}${path}`, {
     headers: {
       'content-type': 'application/json',
+      ...(authHeader ? { authorization: authHeader } : {}),
       ...init?.headers,
     },
     ...init,
@@ -46,6 +59,43 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   return (await response.json()) as T
+}
+
+function readStoredAuthHeader(): string | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
+  try {
+    const session = JSON.parse(raw) as AuthSession
+    return session.token ? `Bearer ${session.token}` : null
+  } catch {
+    return null
+  }
+}
+
+export async function register(request: RegisterRequest): Promise<AuthSession> {
+  const payload = await fetchJSON<{ session: AuthSession }>('/api/v1/auth/register', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.session
+}
+
+export async function login(request: LoginRequest): Promise<AuthSession> {
+  const payload = await fetchJSON<{ session: AuthSession }>('/api/v1/auth/login', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.session
+}
+
+export async function getCurrentSession(): Promise<AuthSession> {
+  const payload = await fetchJSON<{ session: AuthSession }>('/api/v1/auth/me')
+  return payload.session
 }
 
 export async function listProjects(): Promise<Project[]> {
@@ -77,6 +127,11 @@ export async function createEpisode(projectId: string, request: CreateEpisodeReq
 export async function listGenerationJobs(): Promise<GenerationJob[]> {
   const payload = await fetchJSON<{ generation_jobs: GenerationJob[] }>('/api/v1/generation-jobs')
   return payload.generation_jobs
+}
+
+export async function getWorkflowRun(workflowRunId: string): Promise<WorkflowRun> {
+  const payload = await fetchJSON<{ workflow_run: WorkflowRun }>(`/api/v1/workflow-runs/${workflowRunId}`)
+  return payload.workflow_run
 }
 
 export async function startStoryAnalysis(episodeId: string): Promise<StartStoryAnalysisResponse> {
@@ -135,6 +190,17 @@ export async function requestApprovalChanges(gateId: string, request: ApprovalGa
   return payload.approval_gate
 }
 
+export async function resubmitApprovalGate(gateId: string, request: ApprovalGateReviewRequest): Promise<ApprovalGate> {
+  const payload = await fetchJSON<{ approval_gate: ApprovalGate }>(
+    `/api/v1/approval-gates/${gateId}:resubmit`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.approval_gate
+}
+
 export async function getStoryAnalysis(analysisId: string): Promise<StoryAnalysis> {
   const payload = await fetchJSON<{ story_analysis: StoryAnalysis }>(`/api/v1/story-analyses/${analysisId}`)
   return payload.story_analysis
@@ -152,11 +218,29 @@ export async function seedStoryMap(episodeId: string): Promise<StoryMap> {
   return payload.story_map
 }
 
+export async function saveCharacterBible(characterId: string, request: SaveCharacterBibleRequest): Promise<StoryMapItem> {
+  const payload = await fetchJSON<{ story_map_item: StoryMapItem }>(
+    `/api/v1/story-map-characters/${characterId}/character-bible:save`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.story_map_item
+}
+
 export async function listStoryboardShots(episodeId: string): Promise<StoryboardShot[]> {
   const payload = await fetchJSON<{ storyboard_shots: StoryboardShot[] }>(
     `/api/v1/episodes/${episodeId}/storyboard-shots`,
   )
   return payload.storyboard_shots
+}
+
+export async function getStoryboardWorkspace(episodeId: string): Promise<StoryboardWorkspace> {
+  const payload = await fetchJSON<{ storyboard_workspace: StoryboardWorkspace }>(
+    `/api/v1/episodes/${episodeId}/storyboard-workspace`,
+  )
+  return payload.storyboard_workspace
 }
 
 export async function seedStoryboardShots(episodeId: string): Promise<StoryboardShot[]> {
@@ -254,4 +338,26 @@ export async function startEpisodeExport(episodeId: string): Promise<Export> {
 export async function getExport(exportId: string): Promise<Export> {
   const payload = await fetchJSON<{ export: Export }>(`/api/v1/exports/${exportId}`)
   return payload.export
+}
+
+// admin: provider configs
+
+export async function listProviderConfigs(): Promise<ProviderConfig[]> {
+  const payload = await fetchJSON<{ providers: ProviderConfig[] }>('/api/v1/admin/providers')
+  return payload.providers
+}
+
+export async function saveProviderConfig(request: SaveProviderConfigRequest): Promise<ProviderConfig> {
+  const payload = await fetchJSON<{ provider: ProviderConfig }>('/api/v1/admin/providers:save', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.provider
+}
+
+export async function testProviderConfig(capability: string): Promise<TestProviderResult> {
+  const payload = await fetchJSON<{ test_result: TestProviderResult }>(`/api/v1/admin/providers/${capability}:test`, {
+    method: 'POST',
+  })
+  return payload.test_result
 }
