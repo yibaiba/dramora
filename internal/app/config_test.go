@@ -54,7 +54,6 @@ func isolateConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
 		"MANMU_DATABASE_URL",
-		"MANMU_DEFAULT_ORGANIZATION_ID",
 		"MANMU_ENV",
 		"MANMU_HTTP_ADDR",
 		"MANMU_INLINE_WORKER",
