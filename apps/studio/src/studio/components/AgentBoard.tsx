@@ -1,4 +1,5 @@
 import { Activity } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import type { StoryAgentOutput, WorkflowRun } from '../../api/types'
 import { agentRoleLabel, agentStatusLabel, formatCheckpointSavedAt, workflowRunStatusLabel } from '../utils'
 
@@ -37,11 +38,53 @@ type AgentBoardProps = {
 export function AgentBoard({ agents, onSelectAgent, expandedRole, workflowRun }: AgentBoardProps) {
   const succeeded = agents.filter((a) => a.status === 'succeeded').length
   const checkpointSummary = workflowRun?.checkpoint_summary
+  const gridRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (agents.length === 0) return
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (
+          tag === 'INPUT' ||
+          tag === 'TEXTAREA' ||
+          tag === 'SELECT' ||
+          target.isContentEditable
+        ) {
+          return
+        }
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const key = event.key
+      if (key !== 'j' && key !== 'k' && key !== 'Enter') return
+      const currentIndex = expandedRole
+        ? agents.findIndex((a) => a.role === expandedRole)
+        : -1
+      let nextIndex = currentIndex
+      if (key === 'j') nextIndex = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, agents.length - 1)
+      else if (key === 'k') nextIndex = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0)
+      else if (key === 'Enter' && currentIndex < 0) nextIndex = 0
+      const next = agents[nextIndex]
+      if (!next) return
+      event.preventDefault()
+      onSelectAgent(next)
+      const node = gridRef.current?.querySelector<HTMLElement>(
+        `[data-agent-role="${next.role}"]`,
+      )
+      node?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [agents, expandedRole, onSelectAgent])
+
   return (
     <section className="agent-board" aria-label="Agent 执行看板">
       <div className="panel-title-row">
         <div>
-          <span className="section-kicker">Agent 执行看板</span>
+          <span className="section-kicker">
+            Agent 执行看板 <small style={{ marginLeft: '0.5rem', color: 'var(--subtle)' }}>j/k 选择 · Enter 展开</small>
+          </span>
           <strong>
             {succeeded}/{agents.length} 完成
           </strong>
@@ -57,7 +100,7 @@ export function AgentBoard({ agents, onSelectAgent, expandedRole, workflowRun }:
           <span className="agent-board-meta-pill">失败 {checkpointSummary.failed_nodes}</span>
         </div>
       ) : null}
-      <div className="agent-card-grid">
+      <div className="agent-card-grid" ref={gridRef}>
         {agents.map((agent) => (
           <AgentCard
             key={agent.role}
@@ -84,6 +127,7 @@ function AgentCard({
     <button
       type="button"
       className={`agent-card ${agent.status} ${expanded ? 'expanded' : ''}`}
+      data-agent-role={agent.role}
       onClick={onSelect}
       aria-expanded={expanded}
     >
