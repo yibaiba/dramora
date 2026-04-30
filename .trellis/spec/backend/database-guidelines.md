@@ -101,7 +101,8 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 | Worker downloads a Seedance result | require a provider result URI, create a ready `video` asset, and persist `generation_jobs.result_asset_id` before advancing from `downloading` to `postprocessing`. |
 | Worker advances queued export | move `exports.status` from `queued` to `rendering` to `succeeded` through `ProductionService.ProcessQueuedExports`; do not mark exports succeeded in the HTTP handler. |
 | Worker finds a rendering export | resume it and advance to `succeeded` so a previous partial worker failure does not leave exports permanently stuck. |
-| Story analysis job succeeds in no-op worker | update the job to `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
+| Story analysis job resumes from checkpoint | load/save the serialized checkpoint through `workflow_runs.output`; the worker must treat `postprocessing` story-analysis jobs as resumable rather than terminal. |
+| Story analysis job succeeds in no-op worker | update the job to `succeeded`, mark the linked `workflow_runs.status` as `succeeded`, insert the event, and create one linked `story_analyses` artifact in one repository transaction. |
 | Story analysis job has a saved story source | use the latest episode story source when generating summary, C/S/P seeds, outline, and agent outputs. |
 | Story analysis job has no story source | use the local default source only as a development fallback; do not pretend user-provided source exists. |
 | Story maps are seeded | create or update episode-scoped C/S/P rows from latest story analysis seeds. |
@@ -436,3 +437,18 @@ Prompt pack generation is a fast source-of-truth write; video generation routes 
 - Do not enqueue jobs outside the transaction that creates the source-of-truth row once River is introduced.
 - Do not leave `.gitkeep` files in `db/migrations` or `db/queries` once real migration/query files exist; migration and sqlc tooling should only see relevant files.
 - Do not create generation job rows without a stable `request_key`; it is the idempotency handle.
+
+---
+
+## SQLite Dual-Engine Notes
+
+The project supports both PostgreSQL and SQLite. When adding new tables or queries:
+
+- PostgreSQL queries go in `project_queries.go` / `production_queries.go` with `$N::uuid` and `::jsonb` casts.
+- SQLite queries go in `sqlite_queries.go` with `?` placeholders, `TEXT` columns for UUIDs/JSON, and `strftime(...)` for timestamps.
+- SQLite has no `RETURNING` clause — use INSERT then SELECT for read-back.
+- SQLite FK errors are detected via string match (`"FOREIGN KEY constraint failed"`), not error codes.
+- SQLite `ON CONFLICT` works but uses `excluded.` (lowercase) instead of `EXCLUDED.` — both are valid.
+- Nullable timestamp columns should use `COALESCE(col, '0001-01-01T00:00:00Z')` in SELECT to avoid `time.Time` scan failures on NULL.
+- SQLite migration order must respect FK references — if table A references table B, create B first in `sqlite_migrations.go`.
+- Add new tables to both `db/migrations/*.up.sql` (PostgreSQL) and `sqlite_migrations.go` (SQLite) in the same change.

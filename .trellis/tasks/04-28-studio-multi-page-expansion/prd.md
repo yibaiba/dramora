@@ -314,11 +314,70 @@
 * [x] 已补充未播种 episode 的 workspace 空态回归测试，明确该接口返回 `200 + empty workspace`
 * [x] `StoryboardPage` 已补充审批状态看板、逐条 approval gate 操作、送入 Timeline handoff 与提示词快捷插入
 * [x] 预留的 `Assets / Graph` 页面已启用，并实现了故事图谱总览、候选资产池与锁定参考资产动作
+* [x] `Assets / Graph` 已补图谱联动筛选、状态筛选、多选与批量锁定
+* [x] `Timeline / Export` 已优先消费已保存 timeline 数据，并显式展示 saved timeline / storyboard draft 来源
+* [x] 已补审批闭环：`changes_requested -> pending` 通过 `POST /api/v1/approval-gates/{gateId}:resubmit` 打通 OpenAPI、HTTP 路由/测试、Studio client/hooks 与 Storyboard UI 重新送审动作
+* [x] `StoryAnalysisPage` 已进入 PR9 前端 Agent extension 第一刀：补模板选择栏、模板提示写入故事源输入，以及 BlackboardView 项目状态快照
+* [x] `StoryAnalysisPage` 已补自动化生产入口：模板选择下方新增 Agent orchestration 面板，直接展示下游 production flow、当前 workspace readiness，并提供“启动故事解析 / 一键自动生产 / 跳转 AssetsGraph 与 Storyboard”动作
+* [x] `StoryAnalysisPage` 已深化 DAG 交互：`AgentPipeline` 现在支持点击节点查看输出、同步高亮上下游依赖，并在图上显示状态 legend，DAG 不再只是只读示意图
+* [x] `StoryAnalysisPage` 已补模板持久化：当前选中的故事解析模板会记住到浏览器本地，下次打开页面会继续沿用，并在模板栏显式提示“已自动记住”
+* [x] `StoryAnalysisPage` 已补 Agent 输出面板打磨：`AgentOutputPanel` 现在支持重点摘要卡、结构化分段、原始输出双视图，以及“一键复制摘要 / 复制全部”动作；同时把 agent status 标签收口到共享 helper，避免多处文案漂移
+* [x] `StoryAnalysisPage` 已补 Agent 输出后续动作闭环：输出面板可直接标记“已采纳 / 待跟进”、把摘要回填到故事源补充区，并按 Agent 类型跳转到 `Storyboard` 或 `Assets / Graph`；目标页会显示来自 Agent 输出的 handoff notice，`StoryAnalysisPanel` 也改为消费 page-local 受控 draft
+* [x] `StoryAnalysisPage` 已补 Agent 反馈工作台：新增独立的 `AgentFeedbackWorkspace`，支持 `全部 / 已采纳 / 待跟进 / 未标记` 四种筛选、反馈计数与空态提示，并把同一筛选结果直接驱动下方 `AgentBoard / AgentPipeline`
+* [x] `StoryAnalysisPage` 已补 Agent 反馈持久化：follow-up 标记按 `episode_id + analysis.id` 维度记入浏览器 `localStorage`，刷新后可恢复当前分析的反馈状态，并支持一键清空本轮反馈
+* [x] `StoryAnalysisPage` 已补 Agent 反馈批量动作：可基于当前筛选结果一键批量标记 `已采纳 / 待跟进`，并按筛选范围批量清空反馈，减少逐个 Agent 打标签的摩擦
+* [x] `StoryAnalysisPage` 已把 Agent feedback 投射到现有导演台面板：`BlackboardView` 会展示 agent 级 follow-up 标签，`ProductionFlowPanel` 会展示整体“反馈回路”计数与待跟进压力，不必切回输出面板才知道当前收口情况
+* [x] `StoryAnalysisPage` 已补反馈工作台交互细节：当前卡片会显示选中态，可直接执行“处理下一条待跟进”，并在卡片底部显式提示“查看输出 / 当前打开 + 重点数量”，让工作台更像连续处理的 review queue
+* [x] `StoryAnalysisPage` 已把高频 follow-up 动作下沉到反馈工作台卡片：可直接“回填摘要”或按 Agent 角色继续跳转到 `Storyboard / AssetsGraph`，不必先打开 `AgentOutputPanel`
+* [x] `StoryAnalysisPage` 已进一步打磨 review queue：卡片按 `待跟进 -> 未标记 -> 已采纳` 排序展示，顶部显式展示处理进度条，空态下可一键“返回全部”，让 follow-up 处理顺序更稳定
+* [x] `StoryboardPage` 与 `AssetsGraphPage` 已补 follow-up 跨页闭环提示：从 Agent 输出跳转过来时，notice 会带出当前 `已采纳 / 待跟进` 标记，并提供“回到解析”入口，方便处理完下游页后回到 `StoryAnalysisPage` 收口
+* [x] `StoryAnalysisPage` 已强化与下游页的协同提示：follow-up 会按 `Storyboard / AssetsGraph` 两条下游面拆开展示，自动化入口与底部页面跳转卡都会显式提示各自的待跟进压力
+* [x] `StoryAnalysisPage` 已补 review queue 收口动作：当本轮 Agent 已全部完成标记且无 `待跟进` 时，工作台会出现“收口本轮反馈”入口；执行后会清空本轮标记、重置筛选，并提示可以开始下一轮 review
+* [x] `StoryboardPage` 与 `AssetsGraphPage` 的“回到解析”已升级为带上下文的 handoff：返回 `StoryAnalysisPage` 时会带回 Agent / follow-up 状态，并在需要时默认切到 `待跟进` 筛选，同时支持一键打开对应 Agent 继续收口
+* [x] 下游页现在支持“处理完成并回到解析”：`StoryboardPage` / `AssetsGraphPage` 可带着 `已采纳` 建议返回 `StoryAnalysisPage`，后者会显式展示回传结果并支持一键应用，形成更完整的 follow-up 结果回传闭环
+* [x] `StoryAnalysisPage` 导演台已补 follow-up 快捷动作：当 `Storyboard / AssetsGraph` 任一侧仍有待跟进项时，`AutomationEntryPanel` 会直接给出“继续处理”入口，不用再手动从多页面工作流里找对应页面
+* [x] `StoryAnalysisPage` 已补跨页 auto-close 捷径：如果下游页回传的结果足以完成整轮 review，hand-off notice 会直接出现“应用并收口本轮反馈”，减少最后一步手动清理与重置筛选
+* [x] `StoryAnalysisPage` 导演台已补 review orchestration 建议器：会根据当前 review queue 自动提示“打开下一条待跟进 / 查看未标记队列 / 收口本轮反馈”，让导演台不只是展示状态，也直接给出推荐动作
+* [x] 最近一次来自 `Storyboard / AssetsGraph` 的 follow-up 回传结果，已同步投射到导演台摘要与 Blackboard 快照；从下游页回来后，不再只能依赖临时 handoff notice 记住刚刚处理了什么
+* [x] 跳转到 `StoryboardPage` / `AssetsGraphPage` 的 follow-up handoff 现在会额外带上下游 review context，下游 notice 能直接显示“本页侧还剩多少待跟进”，让目标页不再像脱离队列上下文的孤立工作台
+* [x] 最近一次下游回传结果也已接入 review queue 自身的收口摘要：当这条回传足以推动整轮队列达到“可收口”条件时，工作台会直接说明“这条回传已让本轮队列满足收口条件”，把结果回传与最终收口更紧密地连在一起
+* [x] `StoryboardPage` / `AssetsGraphPage` 的 follow-up notice 已补多页面接力入口：不仅显示另一侧仍有多少待跟进，还能直接跳到另一侧继续处理，减少在多个生产页之间手动往返查找
+* [x] 已应用到 `StoryAnalysisPage` 的下游回传结果，现在会形成按 analysis 维度持久化的连续 return history；review queue 可直接查看最近几条收口轨迹，而不是只看最后一条回传
+* [x] 导演台与下游页的 review 协同摘要已升级为“双信号”模式：同时展示“剩余待跟进数量”和“已回传数量”，让多页面 review 的推进速度与收口进度都能被直接看见
+* [x] return history 已进一步参与收口推荐：导演台建议器与 review queue 收口摘要会参考“本轮累计回传数量”来判断是否应优先收口，不再只依据当前待跟进数做判断
+* [x] `StoryboardPage` / `AssetsGraphPage` 已补统一的 review 协同摘要 chips：除 notice 文案外，还会显式展示“本页待跟进 / 另一侧待跟进 / 累计回传”，让多页面协同信息以一致的结构持续可见
+* [x] return history 已升级为可操作历史面板：review queue 不只展示最近几条回传，还允许直接从历史记录重新打开对应 Agent，或回到来源页继续复查，减少“只看得到但点不回去”的断层
+* [x] 导演台顶部的 `Next handoff` 卡已从静态文案升级为动态摘要：会根据当前 `待跟进 / 未标记 / 已回传` 的组合关系，直接提示本轮下一步应该优先收口什么，而不是只泛泛地提示“可继续生成分镜”
+* [x] return history 面板已支持按 `Storyboard / Assets / Graph` 来源筛选：多页面回传轨迹开始具备明确的来源维度，便于按生产面回看收口路径与复查记录
+* [x] `AssetsGraphPage` 已完成 PR9 第二刀：补节点预览 Inspector，并将角色节点 Character Bible 通过 `POST /api/v1/story-map-characters/{characterId}/character-bible:save` 持久化到后端，且可从 `story-map` / `storyboard-workspace` 回读
+* [x] `AssetsGraphPage` 已补 Character Bible UX 打磨：显式展示未保存/已同步状态、字段覆盖度、锚点校验提示，并允许直接编辑标准角度参考
+* [x] `AssetsGraphPage` 已补 Character Bible 引用图工作流：可把已锁定参考资产挂到具体角度槽位，并通过 `character_bible.reference_assets` 随 Character Bible 一起持久化到后端
+* [x] `StoryboardPage` 已开始消费 `character_bible.reference_assets`：Prompt 面板会优先匹配当前镜头相关角色，并提供跨页角色引用图预览与“插入角度描述”快捷操作
+* [x] `StoryboardPage` 的 Shot 卡片已补角色引用图摘要：直接提示当前镜头是否命中角色参考、可复用角色数量，以及右侧 Prompt 面板的消费状态
+* [x] `StoryboardPage` 保存 Prompt 时会自动带入已命中角色的 Character Bible 一致性描述，并在 Prompt 面板显式预览自动注入内容；仅在命中明确角色（或唯一角色）时自动增强，避免把全剧集角色误写入提示词
+* [x] `StoryboardPage` 的 Prompt 保存增强已支持一键预览 / 折叠角色一致性块，默认保持摘要态，不长期挤占编辑器空间
+* [x] `StoryboardPage` 已补 Shot 卡片引用图覆盖率筛选：支持 `全部 / 已覆盖 / 待补覆盖`，其中“已覆盖”只统计明确命中角色参考（或唯一角色自动增强）的镜头
+* [x] `AssetsGraphPage` 已补引用图自动分配 / 批处理：支持“自动补齐空槽”与“按顺序重排”，前者保留人工挂载结果，后者按当前锁定参考资产顺序快速重建角度映射
+* [x] `AssetsGraphPage` 已补节点级预览与跨页联动：节点预览会列出命中的 Storyboard 镜头，并可一键跳转到 `StoryboardPage` 自动聚焦对应镜头；角色节点还会提示 Prompt 引用图覆盖情况
 * [x] 前后端当前验证已通过：Go test/build + Studio lint/build
+* [x] PR6 / DAG checkpoint-recovery MVP 已完成第一刀：`internal/workflow` 已补 `checkpoint.go`、Blackboard snapshot/restore、Engine checkpoint save + resume 语义，以及恢复/幂等相关单测
+* [x] PR6 / DAG checkpoint-recovery 已完成第二刀：checkpoint store 已接到真实 `workflow_runs` 持久化，`story_analysis` worker 会从 `postprocessing` 继续恢复，`workflow_run` 在分析完成后同步收口为 `succeeded`
+* [x] PR6 / API 读模型已补 checkpoint 可观测性：`GET /api/v1/workflow-runs/{workflowRunId}` 现在会返回 `checkpoint_summary`，Studio 类型/Hook 也已同步
+* [x] PR6 / Studio 导演台已接入 checkpoint summary：`StoryAnalysisPage` 的自动化生产入口与 `AgentBoard` 现在会显示 workflow checkpoint 的 sequence、保存时间与节点计数，恢复进度开始对用户可见
+* [x] **Phase 1 LLM 基础设施已完成**：
+  * SQLite 零配置持久化（WAL + FK + 自动建表），PostgreSQL 无缝切换
+  * Provider Config 管理后台（4 能力端点 CRUD + 测试连接 + AdminSettingsPage）
+  * DAG 引擎（拓扑排序 + 并行执行 + 故障跳过 + 5 测试）
+  * Blackboard 共享状态协议（按 role 读写 + Subscribe 变更通知）
+  * OpenAI 兼容 Chat 客户端（/chat/completions）
+  * AgentService（5 Agent Prompt 模板 + LLM 调用 + JSON 解析）
+  * 故事解析双路径：chat 端点已配置 → LLM DAG，未配置 → 确定性 fallback
+  * 前端 AgentBoard（看板/DAG 视图切换 + AgentCard 4 态 + AgentOutputPanel + GlobalAgentIndicator）
 
 ## Recommended Next Step
 
-* 下一轮更适合补审批闭环（`changes_requested -> pending`）、深化 `Assets / Graph` 的联动筛选/批量操作，或让 `Timeline / Export` 更直接消费已保存的 timeline 数据。
+* Phase 2 方向：新增 Screenwriter/Director/Cinematographer/Voice Agent、把 checkpoint/recovery 扩到更多 workflow run/worker 路径、用户认证
+* 短期可选：继续打磨 Character Bible UX（自动分配/批量清理/引用图预览）、前端 Agent extension 深化（模板持久化或 DAG 交互）、把 checkpoint summary 继续扩到更多页面或更细粒度 node timeline、JWT auth
 
 ---
 

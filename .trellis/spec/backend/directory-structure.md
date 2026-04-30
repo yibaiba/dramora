@@ -167,6 +167,7 @@ Current command-style examples:
 ```text
 POST /api/v1/episodes/{episodeId}/story-analysis/start
 POST /api/v1/episodes/{episodeId}/timeline
+POST /api/v1/story-map-characters/{characterId}/character-bible:save
 POST /api/v1/timeline-clips/{clipId}:remove
 ```
 
@@ -214,6 +215,156 @@ r.Post("/episodes/{episodeId}/timeline", api.saveEpisodeTimeline)
 ```
 
 The correct form preserves the project convention while still expressing a state-changing save command.
+
+---
+
+## Scenario: Storyboard workspace aggregate read contract
+
+### 1. Scope / Trigger
+
+- Trigger: Storyboard 成为独立页面后，需要一个 episode-scoped 聚合读模型来承接页面主数据，而不是把主读状态拆散到多个资源查询。
+- Applies when changing storyboard workspace routes, OpenAPI schemas, HTTP handlers, service read models, or Studio hooks consuming the aggregate route.
+
+### 2. Signatures
+
+Frontend-facing API:
+
+```text
+GET /api/v1/episodes/{episodeId}/storyboard-workspace
+```
+
+Service signature:
+
+```go
+ProductionService.GetStoryboardWorkspace(ctx context.Context, episodeID string) (service.StoryboardWorkspace, error)
+```
+
+Handler/DTO boundary:
+
+```go
+Envelope{"storyboard_workspace": storyboardWorkspaceDTO(workspace)}
+```
+
+### 3. Contracts
+
+- The route is episode-scoped and read-only; keep all storyboard writes on the existing resource/action POST routes.
+- `GET /storyboard-workspace` returns `200` with a full aggregate envelope even when story map arrays, shots, assets, approval gates, or generation jobs are empty.
+- The aggregate response should include:
+  - `episode_id`
+  - `summary`
+  - `story_map`
+  - `storyboard_shots`
+  - `assets`
+  - `approval_gates`
+  - `generation_jobs`
+- `storyboard_shots[]` may enrich each shot with `scene`, `prompt_pack`, and `latest_generation_job`.
+- `prompt_pack` inside the aggregate payload is a summary/readiness projection, not a replacement for the full prompt-pack detail route.
+- Do not overload `GET /episodes/{episodeId}/storyboard-shots` with aggregate workspace concerns; keep that route a pure shot list.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Blank `episodeId` | Return invalid input from service and JSON error from handler. |
+| Episode has no seeded storyboard production data yet | Return `200` with empty aggregate collections instead of failing the whole route. |
+| Story map not seeded yet | Return `200` with empty `story_map` arrays and `summary.story_map_ready = false`. |
+| Shot has no generated prompt pack | Return `prompt_pack = null` for that shot; do not fail the whole workspace read. |
+| Episode has no generation jobs | Return `generation_jobs: []`. |
+| Existing resource routes still needed | Keep `GET /storyboard-shots`, `POST :update`, prompt-pack routes, and approval routes (`:approve`, `:request-changes`, `:resubmit`) unchanged. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `GET /api/v1/episodes/{episodeId}/storyboard-workspace` returns the page's main read model while writes stay resource-oriented.
+- Base: workspace shot includes `scene` and prompt-pack summary when those artifacts exist, and `null` when they do not.
+- Bad: adding a POST aggregate workspace endpoint for reads, or stuffing workspace summary fields into `GET /storyboard-shots`.
+
+### 6. Tests Required
+
+- HTTP route test must cover a seeded episode and assert workspace response includes summary, shot scene metadata, prompt-pack summary, and latest generation job projection.
+- HTTP route test should cover the empty/not-yet-seeded episode case and assert `200` with empty aggregates instead of `404`.
+- OpenAPI, handler DTOs, frontend DTOs/client/hooks, and README examples must change in the same slice as the route.
+- Route convention scan must confirm no frontend-facing `PUT`, `PATCH`, or `DELETE`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+r.Get("/episodes/{episodeId}/storyboard-shots", api.getStoryboardWorkspace)
+```
+
+by repurposing the shot-list route for the workspace aggregate.
+
+#### Correct
+
+```go
+r.Get("/episodes/{episodeId}/storyboard-workspace", api.getStoryboardWorkspace)
+r.Get("/episodes/{episodeId}/storyboard-shots", api.listStoryboardShots)
+```
+
+The correct form keeps resource reads and workspace aggregate reads as separate contracts.
+
+---
+
+## Scenario: Character Bible save contract
+
+### 1. Scope / Trigger
+
+- Trigger: Studio needs to persist character-specific bible metadata from `AssetsGraphPage`.
+- Applies when changing story-map character routes, OpenAPI schemas, handler DTOs, service validation, or repo persistence for `character_bible`.
+
+### 2. Signatures
+
+Frontend-facing API:
+
+```text
+POST /api/v1/story-map-characters/{characterId}/character-bible:save
+```
+
+Service signature:
+
+```go
+ProductionService.SaveCharacterBible(ctx context.Context, characterID string, input SaveCharacterBibleInput) (domain.Character, error)
+```
+
+Handler/DTO boundary:
+
+```go
+Envelope{"story_map_item": characterDTO(character)}
+```
+
+### 3. Contracts
+
+- The route is character-scoped and mutation-only; do not overload `story-map:seed` for bible edits.
+- Persist Character Bible only for story-map characters unless a new explicit contract is added for scenes/props.
+- `anchor` is required and must be validated in the service layer.
+- `character_bible.reference_assets[]` stores angle-to-asset bindings as `{ angle, asset_id }` inside the existing JSON payload.
+- Successful saves must round-trip through existing story-map projections, so `GET /episodes/{episodeId}/story-map` and `GET /episodes/{episodeId}/storyboard-workspace` both expose `character_bible`.
+- Store normalized/trimmed bible fields; do not preserve empty-string noise or duplicate list entries.
+- Reference assets must belong to the same episode, be `assets.kind = "character"`, match the character node code via `assets.purpose`, and already be in `ready` status before they can be persisted.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Blank `characterId` | Return invalid input via existing JSON error helpers. |
+| Blank bible anchor | Return invalid input; do not accept an empty persisted bible. |
+| Reference asset angle not enabled in `reference_angles` | Return invalid input instead of saving a dangling binding. |
+| Reference asset is not `ready` or does not belong to the character node | Return invalid input; do not persist the mapping. |
+| Unknown character id | Return the repo/service not-found error through the handler. |
+| Save succeeds | Return the updated `story_map_item` envelope and keep read projections consistent. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `POST /api/v1/story-map-characters/{characterId}/character-bible:save` updates one character bible, including `reference_assets`, and subsequent `GET /story-map` shows the saved payload.
+- Base: optional palette/expressions/reference angles may be omitted while the anchor remains required.
+- Bad: adding a `PATCH /story-map-characters/{characterId}` route or hiding persistence only inside the frontend.
+
+### 6. Tests Required
+
+- HTTP route test must reject unlocked/mismatched reference assets, then save Character Bible and read back the character from both `story-map` and `storyboard-workspace`.
+- Repo coverage must ensure sqlite/postgres/in-memory implementations all preserve `character_bible`.
+- OpenAPI and frontend client/type updates must land in the same slice as the handler route.
 
 ---
 
@@ -433,3 +584,196 @@ task, err := adapter.SubmitGeneration(ctx, input)
 ```
 
 Provider integration stays behind `internal/provider`; handlers and domain code only see project-owned service/domain contracts.
+
+---
+
+## Scenario: SQLite default persistence with PostgreSQL fallback
+
+### 1. Scope / Trigger
+
+- Trigger: the project needs zero-config local persistence without requiring a PostgreSQL instance.
+- Applies when changing database initialization, repository wiring, or container startup.
+
+### 2. Signatures
+
+SQLite open:
+
+```go
+func OpenSQLite(ctx context.Context, dbPath string) (*SQLiteDB, error)
+```
+
+Container fallback:
+
+```go
+if cfg.DatabaseURL != "" {
+    // PostgreSQL path
+} else {
+    // SQLite path: .data/data.db
+}
+```
+
+### 3. Contracts
+
+- `MANMU_DATABASE_URL` set: API uses PostgreSQL repositories (unchanged).
+- `MANMU_DATABASE_URL` empty: API uses SQLite repositories with auto-migration at `.data/data.db`.
+- `MANMU_DATA_DIR` overrides the SQLite data directory (default: `.data`).
+- SQLite opens with WAL mode, foreign keys enabled, busy timeout 5s.
+- SQLite migrations run on every startup via `CREATE TABLE IF NOT EXISTS`.
+- `.data/` is in `.gitignore`.
+- SQLite queries use `?` placeholders, `TEXT` for UUIDs, `TEXT` for JSON columns, `strftime(...)` for timestamps.
+- PostgreSQL queries remain unchanged with `$N::uuid`, `::jsonb`, `now()`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| `MANMU_DATA_DIR` parent missing | `OpenSQLite` creates the directory via `os.MkdirAll`. |
+| SQLite migration DDL fails | Container creation fails and API exits non-zero. |
+| Foreign key violation in SQLite | Detected via string match `"FOREIGN KEY constraint failed"`, mapped to `domain.ErrNotFound`. |
+| Unique violation in SQLite | Detected via string match `"UNIQUE constraint failed"`, mapped to `domain.ErrInvalidInput`. |
+| SQLite `INSERT` without `RETURNING` | Do `INSERT` then `SELECT` by ID for read-back. |
+| SQLite `UPDATE` without `RETURNING` | Do `UPDATE`, check `RowsAffected`, then `SELECT` by ID. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `DATABASE_URL` empty, API starts with SQLite, all routes work identically to PostgreSQL.
+- Base: developer explicitly sets `MANMU_DATA_DIR=./test-data` for a test environment.
+- Bad: importing `modernc.org/sqlite` from `internal/domain` or handlers.
+
+### 6. Tests Required
+
+- Existing handler tests pass without modification (they use memory repos).
+- `go build ./...` and `go test ./...` pass with `GOTOOLCHAIN=local`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+// Handler directly opens SQLite
+db, _ := sql.Open("sqlite", "./data.db")
+```
+
+#### Correct
+
+```go
+// Container opens SQLite; handlers use repo interfaces
+sqliteDB, err := repo.OpenSQLite(ctx, dbPath)
+projectRepo = repo.NewSQLiteProjectRepository(sqliteDB.DB)
+```
+
+---
+
+## Scenario: Admin provider config management
+
+### 1. Scope / Trigger
+
+- Trigger: administrators configure AI capability endpoints (chat/image/video/audio) via Studio management UI.
+- Applies when changing provider config routes, DTOs, repository, or Studio admin pages.
+
+### 2. Signatures
+
+Frontend-facing API:
+
+```text
+GET  /api/v1/admin/providers
+POST /api/v1/admin/providers:save
+POST /api/v1/admin/providers/{capability}:test
+```
+
+Service signatures:
+
+```go
+ProviderService.ListProviderConfigs(ctx) ([]domain.ProviderConfig, error)
+ProviderService.SaveProviderConfig(ctx, SaveProviderConfigInput) (domain.ProviderConfig, error)
+ProviderService.TestProviderConfig(ctx, capability) TestProviderResult
+```
+
+### 3. Contracts
+
+- `GET /admin/providers` returns `{ "providers": [...] }` with `api_key` masked (first 4 + last 4 chars).
+- `POST /admin/providers:save` requires `capability` (chat|image|video|audio), `base_url`, `api_key`, `model`.
+- `POST /admin/providers/{capability}:test` returns `200` with `{ "test_result": { ok, model, latency_ms, error } }` always — test failure is not an HTTP error.
+- Provider configs are stored in `provider_configs` table (SQLite/PostgreSQL), upserted by `capability` unique key.
+- `ProviderService` is `nil` when using memory repos (no SQLite); admin routes return 500 gracefully.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Missing capability/base_url/api_key/model | Return `domain.ErrInvalidInput`; HTTP maps to 400. |
+| Invalid capability (not chat/image/video/audio) | Return `domain.ErrInvalidInput`; HTTP maps to 400. |
+| Test endpoint unreachable | Return `{ ok: false, error: "连接失败: ..." }` with HTTP 200. |
+| Test endpoint returns 401 | Return `{ ok: false, error: "API Key 无效 (401)" }` with HTTP 200. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: admin saves chat endpoint, tests connection, sees green "连接成功" with latency.
+- Base: no endpoints configured; agents fall back to deterministic analysis.
+- Bad: returning raw provider errors to frontend; storing API keys in plaintext logs.
+
+---
+
+## Scenario: DAG workflow engine and agent execution
+
+### 1. Scope / Trigger
+
+- Trigger: story analysis transitions from deterministic to LLM-driven multi-agent execution.
+- Applies when changing workflow engine, agent service, or story analysis completion logic.
+
+### 2. Signatures
+
+Engine:
+
+```go
+workflow.NewEngine(graph *Graph, bb *Blackboard, executor NodeExecutor) *Engine
+engine.EnableCheckpointing(workflowID string, store CheckpointStore)
+engine.Resume(checkpoint *Checkpoint) error
+engine.Execute(ctx context.Context) error
+engine.Runs() map[string]*NodeRun
+```
+
+Agent service:
+
+```go
+AgentService.MakeNodeExecutor(sourceText string) workflow.NodeExecutor
+AgentService.IsAvailable(ctx context.Context) bool
+ProductionService.GetWorkflowRunDetail(ctx context.Context, id string) (WorkflowRunDetail, error)
+ProductionRepository.SaveWorkflowCheckpoint(ctx, workflowRunID, payload) error
+ProductionRepository.LoadWorkflowCheckpoint(ctx, workflowRunID) ([]byte, error)
+```
+
+### 3. Contracts
+
+- Phase 1 graph: `story_analyst → outline_planner → character_analyst | scene_analyst | prop_analyst` (last 3 parallel).
+- Engine executes nodes in topological order; sibling nodes with all dependencies satisfied run concurrently.
+- Failed node causes dependent downstream nodes to be `skipped`, not `failed`.
+- Blackboard is the inter-agent communication channel; agents write by role, downstream agents read upstream output.
+- Checkpoint snapshots capture both node-run state and Blackboard state; resume restores Blackboard first, then restores node runs.
+- Resume re-queues interrupted `running` nodes as `waiting`; `succeeded`, `failed`, and `skipped` remain terminal.
+- Enabled checkpointing must emit monotonic sequence snapshots so concurrent saves do not regress to older progress.
+- Story-analysis checkpoint persistence is stored against the existing `workflow_runs` row and reloaded by `workflow_run_id`; do not create a second ad-hoc checkpoint table for this path.
+- Worker recovery must continue `story_analysis` jobs from `postprocessing`, because that is the status where `completeGeneratedStoryAnalysis` executes the DAG and can now resume from a saved checkpoint.
+- `GET /api/v1/workflow-runs/{workflowRunId}` should expose checkpoint observability as a read-model summary (sequence, saved time, node counts, blackboard roles) instead of dumping raw checkpoint payloads.
+- `AgentService.IsAvailable` checks whether `chat` provider config exists; if not, `completeGeneratedStoryAnalysis` falls back to deterministic `analyzeStorySource`.
+- LLM agents use OpenAI-compatible `/chat/completions` endpoint configured via admin provider management.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| Chat endpoint not configured | `IsAvailable` returns false; deterministic fallback runs. |
+| LLM returns non-JSON | Agent highlights fall back to truncated raw output. |
+| DAG has cycle | `Engine.Execute` returns error before running any node. |
+| Resume checkpoint contains `running` nodes | Treat them as interrupted work, reset to `waiting`, and continue from restored Blackboard state. |
+| Checkpoint store receives out-of-order saves | Keep the newest sequence; do not overwrite newer progress with stale snapshots. |
+| Story-analysis job is already in `postprocessing` | Worker resumes `completeGeneratedStoryAnalysis` instead of ignoring the job as already processed. |
+| Node executor panics | Recovered by `middleware.Recoverer`; node marked `failed`. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: admin configures chat endpoint → story analysis runs 5 LLM agents via DAG → agent outputs with highlights displayed in AgentBoard.
+- Good: workflow resumes from a saved checkpoint and only reruns unfinished nodes.
+- Good: a restarted worker picks up a `postprocessing` story-analysis job, reloads the saved checkpoint from `workflow_runs`, and completes the remaining nodes.
+- Base: no chat endpoint → deterministic fallback, zero behavior change for existing users.
+- Bad: calling LLM synchronously in HTTP handler; storing LLM raw responses in domain entities.

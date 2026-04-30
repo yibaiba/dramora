@@ -4,25 +4,99 @@ info:
   version: 0.1.0
 servers:
   - url: http://localhost:8080
+security:
+  - bearerAuth: []
 paths:
   /healthz:
     get:
       summary: Health check
+      security: []
       responses:
         "200":
           description: API process is alive
   /readyz:
     get:
       summary: Readiness check
+      security: []
       responses:
         "200":
           description: API dependencies are ready
   /api/v1/meta/capabilities:
     get:
       summary: List enabled API capabilities
+      security: []
       responses:
         "200":
           description: Capability list
+  /api/v1/auth/register:
+    post:
+      summary: Register a Studio user and start a JWT session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Auth session created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  /api/v1/auth/login:
+    post:
+      summary: Login with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Auth session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/AuthSession"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
+  /api/v1/auth/me:
+    get:
+      summary: Resolve the current JWT session
+      responses:
+        "200":
+          description: Current auth session
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session:
+                    $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
   /api/v1/projects:
     get:
       summary: List projects
@@ -348,6 +422,31 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/approval-gates/{gateId}:resubmit:
+    post:
+      summary: Resubmit a changes-requested human gate back to pending
+      parameters:
+        - $ref: "#/components/parameters/GateID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApprovalGateReviewRequest"
+      responses:
+        "200":
+          description: Approval gate moved back to pending
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  approval_gate:
+                    $ref: "#/components/schemas/ApprovalGate"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/story-map:
     get:
       summary: Get character, scene, and prop maps for an episode
@@ -380,6 +479,52 @@ paths:
                 properties:
                   story_map:
                     $ref: "#/components/schemas/StoryMap"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/story-map-characters/{characterId}/character-bible:save:
+    post:
+      summary: Save persisted Character Bible fields for a story-map character
+      parameters:
+        - name: characterId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveCharacterBibleRequest"
+      responses:
+        "200":
+          description: Updated story-map character
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  story_map_item:
+                    $ref: "#/components/schemas/StoryMapItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/storyboard-workspace:
+    get:
+      summary: Get the aggregated storyboard workspace read model for an episode
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      responses:
+        "200":
+          description: Storyboard workspace detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  storyboard_workspace:
+                    $ref: "#/components/schemas/StoryboardWorkspace"
         "404":
           $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/storyboard-shots:
@@ -706,7 +851,70 @@ paths:
       responses:
         "200":
           description: SSE stream
+  /api/v1/admin/providers:
+    get:
+      summary: List configured provider endpoints
+      responses:
+        "200":
+          description: Provider config list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  providers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderConfig"
+  "/api/v1/admin/providers:save":
+    post:
+      summary: Save a provider endpoint configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SaveProviderConfigRequest"
+      responses:
+        "200":
+          description: Saved provider config
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  provider:
+                    $ref: "#/components/schemas/ProviderConfig"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/api/v1/admin/providers/{capability}:test":
+    post:
+      summary: Test connectivity to a configured provider endpoint
+      parameters:
+        - name: capability
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [chat, image, video, audio]
+      responses:
+        "200":
+          description: Test result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  test_result:
+                    $ref: "#/components/schemas/TestProviderResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
   responses:
     BadRequest:
       description: Invalid request
@@ -801,6 +1009,28 @@ components:
           minLength: 1
         description:
           type: string
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+    RegisterRequest:
+      allOf:
+        - $ref: "#/components/schemas/LoginRequest"
+        - type: object
+          required:
+            - display_name
+          properties:
+            display_name:
+              type: string
+              minLength: 1
     CreateEpisodeRequest:
       type: object
       required:
@@ -840,6 +1070,40 @@ components:
         language:
           type: string
           default: zh-CN
+    AuthUser:
+      type: object
+      required:
+        - id
+        - email
+        - display_name
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        display_name:
+          type: string
+    AuthSession:
+      type: object
+      required:
+        - token
+        - user
+        - organization_id
+        - role
+        - expires_at
+      properties:
+        token:
+          type: string
+        user:
+          $ref: "#/components/schemas/AuthUser"
+        organization_id:
+          type: string
+        role:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
     Project:
       type: object
       required:
@@ -915,12 +1179,80 @@ components:
         status:
           type: string
           enum: [draft, running, waiting_approval, succeeded, failed, canceled]
+        checkpoint_summary:
+          $ref: "#/components/schemas/WorkflowCheckpointSummary"
+        node_runs:
+          type: array
+          items:
+            $ref: "#/components/schemas/WorkflowNodeRun"
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    WorkflowCheckpointSummary:
+      type: object
+      required:
+        - sequence
+        - saved_at
+        - completed_nodes
+        - waiting_nodes
+        - running_nodes
+        - failed_nodes
+        - skipped_nodes
+        - blackboard_roles
+      properties:
+        sequence:
+          type: integer
+          format: int64
+        saved_at:
+          type: string
+          format: date-time
+        completed_nodes:
+          type: integer
+        waiting_nodes:
+          type: integer
+        running_nodes:
+          type: integer
+        failed_nodes:
+          type: integer
+        skipped_nodes:
+          type: integer
+        blackboard_roles:
+          type: array
+          items:
+            type: string
+    WorkflowNodeRun:
+      type: object
+      required:
+        - node_id
+        - kind
+        - status
+        - summary
+        - highlights
+        - error_message
+        - upstream_node_ids
+      properties:
+        node_id:
+          type: string
+        kind:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, waiting_approval, succeeded, failed, skipped, canceled]
+        summary:
+          type: string
+        highlights:
+          type: array
+          items:
+            type: string
+        error_message:
+          type: string
+        upstream_node_ids:
+          type: array
+          items:
+            type: string
     GenerationJob:
       type: object
       required:
@@ -1187,14 +1519,81 @@ components:
           type: string
         description:
           type: string
+        character_bible:
+          $ref: "#/components/schemas/CharacterBible"
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+    CharacterBible:
+      type: object
+      required: [anchor, palette, expressions, reference_angles, reference_assets, wardrobe, notes]
+      properties:
+        anchor:
+          type: string
+        palette:
+          $ref: "#/components/schemas/CharacterBiblePalette"
+        expressions:
+          type: array
+          items:
+            type: string
+        reference_angles:
+          type: array
+          items:
+            type: string
+        reference_assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/CharacterBibleReferenceAsset"
+        wardrobe:
+          type: string
+        notes:
+          type: string
+    CharacterBibleReferenceAsset:
+      type: object
+      required: [angle, asset_id]
+      properties:
+        angle:
+          type: string
+        asset_id:
+          type: string
+    CharacterBiblePalette:
+      type: object
+      required: [skin, hair, accent, eyes, costume]
+      properties:
+        skin:
+          type: string
+        hair:
+          type: string
+        accent:
+          type: string
+        eyes:
+          type: string
+        costume:
+          type: string
+    SaveCharacterBibleRequest:
+      type: object
+      required: [character_bible]
+      properties:
+        character_bible:
+          $ref: "#/components/schemas/CharacterBible"
     StoryboardShot:
       type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - scene_id
+        - code
+        - title
+        - description
+        - prompt
+        - position
+        - duration_ms
+        - created_at
+        - updated_at
       properties:
         id:
           type: string
@@ -1222,6 +1621,125 @@ components:
         updated_at:
           type: string
           format: date-time
+    StoryboardShotPromptPackSummary:
+      type: object
+      required: [id, shot_id, provider, model, preset, task_type, updated_at]
+      properties:
+        id:
+          type: string
+        shot_id:
+          type: string
+        provider:
+          type: string
+        model:
+          type: string
+        preset:
+          type: string
+        task_type:
+          type: string
+          enum: [text_to_video, image_to_video, first_last_frame_to_video]
+        updated_at:
+          type: string
+          format: date-time
+    StoryboardWorkspaceShot:
+      type: object
+      required:
+        - id
+        - project_id
+        - episode_id
+        - scene_id
+        - code
+        - title
+        - description
+        - prompt
+        - position
+        - duration_ms
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        episode_id:
+          type: string
+        scene_id:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        prompt:
+          type: string
+        position:
+          type: integer
+        duration_ms:
+          type: integer
+        scene:
+          allOf:
+            - $ref: "#/components/schemas/StoryMapItem"
+          nullable: true
+        prompt_pack:
+          allOf:
+            - $ref: "#/components/schemas/StoryboardShotPromptPackSummary"
+          nullable: true
+        latest_generation_job:
+          allOf:
+            - $ref: "#/components/schemas/GenerationJob"
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    StoryboardWorkspaceSummary:
+      type: object
+      required: [analysis_count, story_map_ready, ready_assets_count, pending_approval_gates_count]
+      properties:
+        analysis_count:
+          type: integer
+        story_map_ready:
+          type: boolean
+        ready_assets_count:
+          type: integer
+        pending_approval_gates_count:
+          type: integer
+    StoryboardWorkspace:
+      type: object
+      required:
+        - episode_id
+        - summary
+        - story_map
+        - storyboard_shots
+        - assets
+        - approval_gates
+        - generation_jobs
+      properties:
+        episode_id:
+          type: string
+        summary:
+          $ref: "#/components/schemas/StoryboardWorkspaceSummary"
+        story_map:
+          $ref: "#/components/schemas/StoryMap"
+        storyboard_shots:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoryboardWorkspaceShot"
+        assets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Asset"
+        approval_gates:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApprovalGate"
+        generation_jobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/GenerationJob"
     UpdateStoryboardShotRequest:
       type: object
       required: [title, prompt, duration_ms]
@@ -1493,3 +2011,71 @@ components:
         updated_at:
           type: string
           format: date-time
+    ProviderConfig:
+      type: object
+      properties:
+        id:
+          type: string
+        capability:
+          type: string
+          enum: [chat, image, video, audio]
+        base_url:
+          type: string
+        api_key:
+          type: string
+          description: Masked API key for display
+        model:
+          type: string
+        credits_per_unit:
+          type: integer
+        credit_unit:
+          type: string
+        timeout_ms:
+          type: integer
+        max_retries:
+          type: integer
+        is_enabled:
+          type: boolean
+        updated_at:
+          type: string
+          format: date-time
+        updated_by:
+          type: string
+    SaveProviderConfigRequest:
+      type: object
+      required: [capability, base_url, api_key, model]
+      properties:
+        capability:
+          type: string
+          enum: [chat, image, video, audio]
+        base_url:
+          type: string
+          minLength: 1
+        api_key:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
+        credits_per_unit:
+          type: integer
+          minimum: 0
+        credit_unit:
+          type: string
+        timeout_ms:
+          type: integer
+          minimum: 0
+        max_retries:
+          type: integer
+          minimum: 0
+    TestProviderResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        model:
+          type: string
+        latency_ms:
+          type: integer
+        error:
+          type: string
