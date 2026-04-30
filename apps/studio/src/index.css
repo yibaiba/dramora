@@ -3441,6 +3441,25 @@ p {
   align-items: center;
 }
 
+.agent-feedback-history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-block: 0.5rem;
+}
+
+.agent-feedback-history-search {
+  flex: 1 1 14rem;
+  min-width: 10rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  background: var(--surface-soft, rgba(255, 255, 255, 0.04));
+  color: inherit;
+  font: inherit;
+}
+
 .agent-feedback-summary {
   display: flex;
   align-items: center;

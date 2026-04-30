@@ -413,6 +413,29 @@ export function StoryAnalysisPage() {
     })
     setReviewClosureNotice(`已移除来自 ${entry.sourcePage} · ${entry.agentLabel} 的回传记录。`)
   }
+  const handleRemoveHistoryEntries = (entries: ReturnedFollowUpHistoryEntry[]) => {
+    if (!feedbackStorageEntryKey || entries.length === 0) return
+
+    const removeIds = new Set(entries.map((entry) => entry.id))
+    setPersistedReturnHistory((current) => {
+      const existing = current[feedbackStorageEntryKey]
+      if (!existing) {
+        return current
+      }
+
+      const next = existing.filter((candidate) => !removeIds.has(candidate.id))
+      if (next.length === existing.length) {
+        return current
+      }
+      if (next.length === 0) {
+        const cleared = { ...current }
+        delete cleared[feedbackStorageEntryKey]
+        return cleared
+      }
+      return { ...current, [feedbackStorageEntryKey]: next }
+    })
+    setReviewClosureNotice(`已批量移除 ${entries.length} 条回传记录。`)
+  }
   const handleCloseReviewCycle = () => {
     if (!feedbackStorageEntryKey) return
 
@@ -605,6 +628,7 @@ export function StoryAnalysisPage() {
             onOpenFollowUpTarget={handleOpenFollowUpTarget}
             onOpenHistorySource={handleOpenHistorySource}
             onRemoveHistoryEntry={handleRemoveHistoryEntry}
+            onRemoveHistoryEntries={handleRemoveHistoryEntries}
             onSelectAgent={setSelectedAgent}
             onSelectHistoryEntry={handleSelectHistoryEntry}
             returnedFollowUpHistory={returnedFollowUpHistory}

@@ -31,6 +31,7 @@ type AgentFeedbackWorkspaceProps = {
   onOpenFollowUpTarget: (agent: StoryAgentOutput) => void
   onOpenHistorySource: (entry: ReturnedFollowUpHistoryEntry) => void
   onRemoveHistoryEntry?: (entry: ReturnedFollowUpHistoryEntry) => void
+  onRemoveHistoryEntries?: (entries: ReturnedFollowUpHistoryEntry[]) => void
   onSelectAgent: (agent: StoryAgentOutput) => void
   onSelectHistoryEntry: (entry: ReturnedFollowUpHistoryEntry) => void
   returnedFollowUpHistory?: ReturnedFollowUpHistoryEntry[]
@@ -63,6 +64,7 @@ export function AgentFeedbackWorkspace({
   onOpenFollowUpTarget,
   onOpenHistorySource,
   onRemoveHistoryEntry,
+  onRemoveHistoryEntries,
   onSelectAgent,
   onSelectHistoryEntry,
   returnedFollowUpHistory = [],
@@ -73,6 +75,8 @@ export function AgentFeedbackWorkspace({
   const [historyFilter, setHistoryFilter] = useState<ReturnHistoryFilter>('all')
   const [historyFeedbackFilter, setHistoryFeedbackFilter] = useState<ReturnHistoryFeedbackFilter>('all')
   const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [historySearch, setHistorySearch] = useState('')
+  const [historyCopyState, setHistoryCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const filteredAgents = agents
     .filter((agent) => matchesAgentFeedbackFilter(agent.role, feedbackByRole, filter))
     .sort((left, right) => {
@@ -95,7 +99,13 @@ export function AgentFeedbackWorkspace({
     const matchesSource = historyFilter === 'all' || entry.sourcePage === historyFilter
     const matchesFeedback =
       historyFeedbackFilter === 'all' || entry.feedback === historyFeedbackFilter
-    return matchesSource && matchesFeedback
+    const trimmedSearch = historySearch.trim().toLowerCase()
+    const matchesSearch =
+      trimmedSearch.length === 0 ||
+      entry.agentLabel.toLowerCase().includes(trimmedSearch) ||
+      entry.sourcePage.toLowerCase().includes(trimmedSearch) ||
+      (entry.resultNote ?? '').toLowerCase().includes(trimmedSearch)
+    return matchesSource && matchesFeedback && matchesSearch
   })
   const visibleReturnHistory = historyExpanded
     ? filteredReturnHistory
@@ -152,6 +162,54 @@ export function AgentFeedbackWorkspace({
               <strong>最近回传记录</strong>
             </div>
             <small>最近 {returnedFollowUpHistory.length} 条</small>
+          </div>
+          <div className="agent-feedback-history-toolbar">
+            <input
+              type="search"
+              className="agent-feedback-history-search"
+              value={historySearch}
+              onChange={(event) => setHistorySearch(event.target.value)}
+              placeholder="搜索 agent / 来源 / 备注"
+              aria-label="搜索回传历史"
+            />
+            {filteredReturnHistory.length > 0 && onRemoveHistoryEntries ? (
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={() => {
+                  onRemoveHistoryEntries(filteredReturnHistory)
+                  setHistoryCopyState('idle')
+                }}
+              >
+                批量移除（{filteredReturnHistory.length}）
+              </button>
+            ) : null}
+            {filteredReturnHistory.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={async () => {
+                  try {
+                    const payload = JSON.stringify(filteredReturnHistory, null, 2)
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      await navigator.clipboard.writeText(payload)
+                      setHistoryCopyState('copied')
+                    } else {
+                      setHistoryCopyState('error')
+                    }
+                  } catch {
+                    setHistoryCopyState('error')
+                  }
+                  window.setTimeout(() => setHistoryCopyState('idle'), 1500)
+                }}
+              >
+                {historyCopyState === 'copied'
+                  ? '已复制 JSON'
+                  : historyCopyState === 'error'
+                    ? '复制失败'
+                    : `复制为 JSON（${filteredReturnHistory.length}）`}
+              </button>
+            ) : null}
           </div>
           <div className="asset-filter-row" role="toolbar" aria-label="回传历史筛选">
             {(['all', 'Storyboard', 'Assets / Graph'] as ReturnHistoryFilter[]).map((entry) => {
