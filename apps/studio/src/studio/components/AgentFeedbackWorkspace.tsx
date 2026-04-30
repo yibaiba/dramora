@@ -14,6 +14,10 @@ import {
   agentFollowUpFeedbackLabel,
   matchesAgentFeedbackFilter,
 } from '../agentOutput'
+import {
+  RETURN_HISTORY_INITIAL_PAGE_SIZE,
+  RETURN_HISTORY_PAGE_INCREMENT,
+} from '../reviewPersistence'
 import { agentRoleLabel, agentStatusLabel } from '../utils'
 
 type AgentFeedbackWorkspaceProps = {
@@ -74,7 +78,7 @@ export function AgentFeedbackWorkspace({
   const counts = buildAgentFeedbackSummary(agents, feedbackByRole)
   const [historyFilter, setHistoryFilter] = useState<ReturnHistoryFilter>('all')
   const [historyFeedbackFilter, setHistoryFeedbackFilter] = useState<ReturnHistoryFeedbackFilter>('all')
-  const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [historyPageSize, setHistoryPageSize] = useState(RETURN_HISTORY_INITIAL_PAGE_SIZE)
   const [historySearch, setHistorySearch] = useState('')
   const [historyCopyState, setHistoryCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const filteredAgents = agents
@@ -107,10 +111,15 @@ export function AgentFeedbackWorkspace({
       (entry.resultNote ?? '').toLowerCase().includes(trimmedSearch)
     return matchesSource && matchesFeedback && matchesSearch
   })
-  const visibleReturnHistory = historyExpanded
-    ? filteredReturnHistory
-    : filteredReturnHistory.slice(0, 3)
+  const visibleReturnHistory = filteredReturnHistory.slice(0, historyPageSize)
   const hiddenReturnHistoryCount = filteredReturnHistory.length - visibleReturnHistory.length
+
+  const historyFilterSignature = `${historyFilter}|${historyFeedbackFilter}|${historySearch}`
+  const [previousFilterSignature, setPreviousFilterSignature] = useState(historyFilterSignature)
+  if (previousFilterSignature !== historyFilterSignature) {
+    setPreviousFilterSignature(historyFilterSignature)
+    setHistoryPageSize(RETURN_HISTORY_INITIAL_PAGE_SIZE)
+  }
 
   return (
     <section className="surface-card agent-feedback-workspace" aria-labelledby="agent-feedback-workspace-title">
@@ -293,16 +302,40 @@ export function AgentFeedbackWorkspace({
               <small>当前筛选下暂无回传记录。</small>
             ) : null}
           </div>
-          {filteredReturnHistory.length > 3 ? (
-            <button
-              type="button"
-              className="ghost-action"
-              onClick={() => setHistoryExpanded((current) => !current)}
-            >
-              {historyExpanded
-                ? '收起回传记录'
-                : `展开全部回传记录（还有 ${hiddenReturnHistoryCount} 条）`}
-            </button>
+          {filteredReturnHistory.length > RETURN_HISTORY_INITIAL_PAGE_SIZE ? (
+            <div className="agent-feedback-history-pagination">
+              {hiddenReturnHistoryCount > 0 ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() =>
+                    setHistoryPageSize((current) =>
+                      Math.min(current + RETURN_HISTORY_PAGE_INCREMENT, filteredReturnHistory.length),
+                    )
+                  }
+                >
+                  加载更多（剩余 {hiddenReturnHistoryCount}，每次 +{RETURN_HISTORY_PAGE_INCREMENT}）
+                </button>
+              ) : null}
+              {hiddenReturnHistoryCount > 0 && filteredReturnHistory.length > historyPageSize ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => setHistoryPageSize(filteredReturnHistory.length)}
+                >
+                  展开全部（{filteredReturnHistory.length}）
+                </button>
+              ) : null}
+              {historyPageSize > RETURN_HISTORY_INITIAL_PAGE_SIZE ? (
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => setHistoryPageSize(RETURN_HISTORY_INITIAL_PAGE_SIZE)}
+                >
+                  收起回传记录
+                </button>
+              ) : null}
+            </div>
           ) : null}
         </div>
       ) : null}

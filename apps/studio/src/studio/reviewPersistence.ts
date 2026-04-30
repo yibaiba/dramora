@@ -10,6 +10,10 @@ import {
 const storyAnalysisFeedbackStorageKey = 'dramora.story-analysis.feedback-by-analysis'
 const storyAnalysisReturnHistoryStorageKey = 'dramora.story-analysis.return-history-by-analysis'
 
+export const RETURN_HISTORY_CAPACITY = 24
+export const RETURN_HISTORY_INITIAL_PAGE_SIZE = 3
+export const RETURN_HISTORY_PAGE_INCREMENT = 5
+
 export type PersistedStoryAnalysisFeedback = Record<
   string,
   Partial<Record<string, AgentFollowUpFeedback>>
@@ -113,7 +117,7 @@ export function appendReturnedFollowUpHistoryEntry(
 ): PersistedStoryAnalysisReturnHistory {
   return {
     ...history,
-    [key]: [entry, ...(history[key] ?? [])].slice(0, 6),
+    [key]: [entry, ...(history[key] ?? [])].slice(0, RETURN_HISTORY_CAPACITY),
   }
 }
 
@@ -187,5 +191,5 @@ function sanitizeReturnedFollowUpHistory(value: unknown): ReturnedFollowUpHistor
         (candidate.sourcePage === 'Storyboard' || candidate.sourcePage === 'Assets / Graph')
       )
     })
-    .slice(0, 6)
+    .slice(0, RETURN_HISTORY_CAPACITY)
 }

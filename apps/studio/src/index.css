@@ -3460,6 +3460,14 @@ p {
   font: inherit;
 }
 
+.agent-feedback-history-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
 .agent-feedback-summary {
   display: flex;
   align-items: center;
