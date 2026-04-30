@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { studioRoutePaths } from '../routes'
 
-type ChipSide = 'storyboard' | 'assetsGraph'
+type ChipSide = 'storyboard' | 'assetsGraph' | 'storyAnalysis'
 
 type ReviewSummaryChipsProps = {
   currentSide: ChipSide
@@ -58,7 +58,7 @@ export function ReviewSummaryChips({
       ) : (
         <span className={chipClass(assetsGraphPendingCount, assetsGraphCurrent)}>{assetsGraphLabel}</span>
       )}
-      {totalReturnedCount > 0 ? (
+      {totalReturnedCount > 0 && currentSide !== 'storyAnalysis' ? (
         <Link
           className="blackboard-chip blackboard-chip-link"
           to={studioRoutePaths.storyAnalysis}

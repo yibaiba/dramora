@@ -26,6 +26,7 @@ import type { Episode, GenerationJob, Project } from '../../api/types'
 import { agentFollowUpFeedbackLabel } from '../agentOutput'
 import { AnalysisResultCard } from '../components/StoryAnalysisPanel'
 import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
+import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { buildStoryAnalysisReviewSnapshot } from '../reviewPersistence'
 import { studioNavItems, studioRoutePaths } from '../routes'
@@ -188,17 +189,12 @@ export function HomePage() {
           </div>
           <p>{reviewRelayDescription}</p>
           {reviewSnapshot ? (
-            <div className="blackboard-chip-row">
-              <span className="blackboard-chip">
-                Storyboard 待跟进 {reviewSnapshot.surfaceSummary.storyboard.needs_follow_up}
-              </span>
-              <span className="blackboard-chip">
-                Assets / Graph 待跟进 {reviewSnapshot.surfaceSummary.assetsGraph.needs_follow_up}
-              </span>
-              <span className="blackboard-chip">
-                累计回传 {reviewSnapshot.returnedHistorySummary.total}
-              </span>
-            </div>
+            <ReviewSummaryChips
+              currentSide="storyAnalysis"
+              storyboardPendingCount={reviewSnapshot.surfaceSummary.storyboard.needs_follow_up}
+              assetsGraphPendingCount={reviewSnapshot.surfaceSummary.assetsGraph.needs_follow_up}
+              totalReturnedCount={reviewSnapshot.returnedHistorySummary.total}
+            />
           ) : null}
           <div className="review-relay-actions">
             <Link className="hero-secondary-action" to={studioRoutePaths.storyAnalysis}>
