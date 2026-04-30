@@ -30,12 +30,15 @@ type AgentFeedbackWorkspaceProps = {
   onOpenNextFollowUp: () => void
   onOpenFollowUpTarget: (agent: StoryAgentOutput) => void
   onOpenHistorySource: (entry: ReturnedFollowUpHistoryEntry) => void
+  onRemoveHistoryEntry?: (entry: ReturnedFollowUpHistoryEntry) => void
   onSelectAgent: (agent: StoryAgentOutput) => void
   onSelectHistoryEntry: (entry: ReturnedFollowUpHistoryEntry) => void
   returnedFollowUpHistory?: ReturnedFollowUpHistoryEntry[]
   returnedFollowUpSummary?: ReturnedFollowUpSummary | null
   selectedRole?: string
 }
+
+type ReturnHistoryFeedbackFilter = 'all' | AgentFollowUpFeedback
 
 const feedbackFilters: AgentFeedbackFilter[] = [
   'all',
@@ -59,6 +62,7 @@ export function AgentFeedbackWorkspace({
   onOpenNextFollowUp,
   onOpenFollowUpTarget,
   onOpenHistorySource,
+  onRemoveHistoryEntry,
   onSelectAgent,
   onSelectHistoryEntry,
   returnedFollowUpHistory = [],
@@ -67,6 +71,8 @@ export function AgentFeedbackWorkspace({
 }: AgentFeedbackWorkspaceProps) {
   const counts = buildAgentFeedbackSummary(agents, feedbackByRole)
   const [historyFilter, setHistoryFilter] = useState<ReturnHistoryFilter>('all')
+  const [historyFeedbackFilter, setHistoryFeedbackFilter] = useState<ReturnHistoryFeedbackFilter>('all')
+  const [historyExpanded, setHistoryExpanded] = useState(false)
   const filteredAgents = agents
     .filter((agent) => matchesAgentFeedbackFilter(agent.role, feedbackByRole, filter))
     .sort((left, right) => {
@@ -85,9 +91,16 @@ export function AgentFeedbackWorkspace({
   const reviewProgress = counts.total === 0 ? 0 : Math.round((reviewedCount / counts.total) * 100)
   const canCloseReviewCycle =
     counts.total > 0 && counts.needs_follow_up === 0 && counts.unmarked === 0
-  const filteredReturnHistory = returnedFollowUpHistory.filter((entry) =>
-    historyFilter === 'all' ? true : entry.sourcePage === historyFilter,
-  )
+  const filteredReturnHistory = returnedFollowUpHistory.filter((entry) => {
+    const matchesSource = historyFilter === 'all' || entry.sourcePage === historyFilter
+    const matchesFeedback =
+      historyFeedbackFilter === 'all' || entry.feedback === historyFeedbackFilter
+    return matchesSource && matchesFeedback
+  })
+  const visibleReturnHistory = historyExpanded
+    ? filteredReturnHistory
+    : filteredReturnHistory.slice(0, 3)
+  const hiddenReturnHistoryCount = filteredReturnHistory.length - visibleReturnHistory.length
 
   return (
     <section className="surface-card agent-feedback-workspace" aria-labelledby="agent-feedback-workspace-title">
@@ -159,8 +172,31 @@ export function AgentFeedbackWorkspace({
               )
             })}
           </div>
+          <div className="asset-filter-row" role="toolbar" aria-label="回传反馈类型筛选">
+            {(['all', 'adopted', 'needs_follow_up'] as ReturnHistoryFeedbackFilter[]).map((entry) => {
+              const count =
+                entry === 'all'
+                  ? returnedFollowUpHistory.length
+                  : returnedFollowUpHistory.filter((item) => item.feedback === entry).length
+              const label =
+                entry === 'all' ? '全部反馈' : agentFollowUpFeedbackLabel(entry)
+              return (
+                <button
+                  key={entry}
+                  type="button"
+                  aria-pressed={historyFeedbackFilter === entry}
+                  className={
+                    historyFeedbackFilter === entry ? 'asset-filter-chip active' : 'asset-filter-chip'
+                  }
+                  onClick={() => setHistoryFeedbackFilter(entry)}
+                >
+                  {label} {count}
+                </button>
+              )
+            })}
+          </div>
           <div className="agent-feedback-history-list">
-            {filteredReturnHistory.slice(0, 3).map((entry) => (
+            {visibleReturnHistory.map((entry) => (
               <div className="agent-feedback-history-item" key={entry.id}>
                 <strong>
                   {entry.sourcePage} · {entry.agentLabel}
@@ -182,11 +218,34 @@ export function AgentFeedbackWorkspace({
                   >
                     回到来源页
                   </button>
+                  {onRemoveHistoryEntry ? (
+                    <button
+                      type="button"
+                      className="ghost-action"
+                      onClick={() => onRemoveHistoryEntry(entry)}
+                    >
+                      移除此条
+                    </button>
+                  ) : null}
                   <small>{new Date(entry.createdAt).toLocaleString()}</small>
                 </div>
               </div>
             ))}
+            {visibleReturnHistory.length === 0 ? (
+              <small>当前筛选下暂无回传记录。</small>
+            ) : null}
           </div>
+          {filteredReturnHistory.length > 3 ? (
+            <button
+              type="button"
+              className="ghost-action"
+              onClick={() => setHistoryExpanded((current) => !current)}
+            >
+              {historyExpanded
+                ? '收起回传记录'
+                : `展开全部回传记录（还有 ${hiddenReturnHistoryCount} 条）`}
+            </button>
+          ) : null}
         </div>
       ) : null}
 

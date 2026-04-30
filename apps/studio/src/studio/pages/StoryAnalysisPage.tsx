@@ -391,6 +391,28 @@ export function StoryAnalysisPage() {
       handleOpenFollowUpTarget(agent)
     }
   }
+  const handleRemoveHistoryEntry = (entry: ReturnedFollowUpHistoryEntry) => {
+    if (!feedbackStorageEntryKey) return
+
+    setPersistedReturnHistory((current) => {
+      const existing = current[feedbackStorageEntryKey]
+      if (!existing) {
+        return current
+      }
+
+      const next = existing.filter((candidate) => candidate.id !== entry.id)
+      if (next.length === existing.length) {
+        return current
+      }
+      if (next.length === 0) {
+        const cleared = { ...current }
+        delete cleared[feedbackStorageEntryKey]
+        return cleared
+      }
+      return { ...current, [feedbackStorageEntryKey]: next }
+    })
+    setReviewClosureNotice(`已移除来自 ${entry.sourcePage} · ${entry.agentLabel} 的回传记录。`)
+  }
   const handleCloseReviewCycle = () => {
     if (!feedbackStorageEntryKey) return
 
@@ -582,6 +604,7 @@ export function StoryAnalysisPage() {
             onOpenNextFollowUp={handleOpenNextFollowUp}
             onOpenFollowUpTarget={handleOpenFollowUpTarget}
             onOpenHistorySource={handleOpenHistorySource}
+            onRemoveHistoryEntry={handleRemoveHistoryEntry}
             onSelectAgent={setSelectedAgent}
             onSelectHistoryEntry={handleSelectHistoryEntry}
             returnedFollowUpHistory={returnedFollowUpHistory}
