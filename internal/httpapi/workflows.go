@@ -20,7 +20,7 @@ func (api *api) startStoryAnalysis(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, Envelope{
-		"workflow_run":   workflowRunDTO(result.WorkflowRun),
+		"workflow_run":   workflowRunDTO(result.WorkflowRun, nil, nil),
 		"generation_job": generationJobDTO(result.GenerationJob),
 	})
 }
@@ -55,12 +55,12 @@ func (api *api) getStoryAnalysis(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *api) getWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	run, err := api.productionService.GetWorkflowRun(r.Context(), chi.URLParam(r, "workflowRunId"))
+	detail, err := api.productionService.GetWorkflowRunDetail(r.Context(), chi.URLParam(r, "workflowRunId"))
 	if err != nil {
 		writeServiceError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, Envelope{"workflow_run": workflowRunDTO(run)})
+	writeJSON(w, http.StatusOK, Envelope{"workflow_run": workflowRunDTO(detail.Run, detail.Checkpoint, detail.NodeRuns)})
 }
 
 func (api *api) listGenerationJobs(w http.ResponseWriter, r *http.Request) {

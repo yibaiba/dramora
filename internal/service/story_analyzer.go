@@ -1,11 +1,14 @@
 package service
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/workflow"
 )
 
 var storySourceSplitter = regexp.MustCompile(`[。！？!?；;\n]+`)
@@ -35,6 +38,47 @@ func analyzeStorySource(source domain.StorySource) deterministicStoryAnalysis {
 		outline:        outline,
 		agentOutputs:   storyAgentOutputs(characters, scenes, props, outline),
 	}
+}
+
+func makeDeterministicStoryAnalysisExecutor(analysis deterministicStoryAnalysis) workflow.NodeExecutor {
+	return func(_ context.Context, nodeID string, _ workflow.NodeKind, bb *workflow.Blackboard) (any, error) {
+		result, err := deterministicAgentResult(nodeID, analysis)
+		if err != nil {
+			return nil, err
+		}
+		bb.Write(nodeID, result)
+		return result, nil
+	}
+}
+
+func deterministicAgentResult(nodeID string, analysis deterministicStoryAnalysis) (*AgentResult, error) {
+	result := &AgentResult{Role: nodeID}
+	switch nodeID {
+	case "story_analyst":
+		result.Output = analysis.summary
+		result.Highlights = append([]string(nil), analysis.themes...)
+	case "outline_planner":
+		payload, err := json.Marshal(struct {
+			Beats []domain.StoryBeat `json:"beats"`
+		}{Beats: analysis.outline})
+		if err != nil {
+			return nil, err
+		}
+		result.Output = string(payload)
+		result.Highlights = beatTitles(analysis.outline)
+	case "character_analyst":
+		result.Output = "抽取主要人物与关系线索。"
+		result.Highlights = append([]string(nil), analysis.characterSeeds...)
+	case "scene_analyst":
+		result.Output = "抽取可视化场景候选。"
+		result.Highlights = append([]string(nil), analysis.sceneSeeds...)
+	case "prop_analyst":
+		result.Output = "抽取关键道具和线索物。"
+		result.Highlights = append([]string(nil), analysis.propSeeds...)
+	default:
+		result.Output = "本地 deterministic workflow 节点已完成。"
+	}
+	return result, nil
 }
 
 func storySentences(content string) []string {
