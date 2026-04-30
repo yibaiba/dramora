@@ -23,6 +23,20 @@ func (r *PostgresProductionRepository) GetEpisodeTimeline(
 	return r.hydrateTimeline(ctx, timeline)
 }
 
+func (r *PostgresProductionRepository) GetTimelineByID(
+	ctx context.Context,
+	timelineID string,
+) (domain.Timeline, error) {
+	timeline, err := scanTimeline(r.pool.QueryRow(ctx, getTimelineByIDSQL, timelineID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Timeline{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return timeline, err
+	}
+	return r.hydrateTimeline(ctx, timeline)
+}
+
 func (r *PostgresProductionRepository) SaveEpisodeTimeline(
 	ctx context.Context,
 	params SaveEpisodeTimelineParams,

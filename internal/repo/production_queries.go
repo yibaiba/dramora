@@ -6,10 +6,28 @@ FROM workflow_runs
 WHERE id = $1::uuid
 `
 
+const loadWorkflowCheckpointSQL = `
+SELECT output::text
+FROM workflow_runs
+WHERE id = $1::uuid
+`
+
 const createWorkflowRunSQL = `
 INSERT INTO workflow_runs (id, project_id, episode_id, status, input)
 VALUES ($1::uuid, $2::uuid, $3::uuid, $4, '{"kind":"story_analysis"}'::jsonb)
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), status, created_at, updated_at
+`
+
+const saveWorkflowCheckpointSQL = `
+UPDATE workflow_runs
+SET output = $2::jsonb, updated_at = now()
+WHERE id = $1::uuid
+`
+
+const completeWorkflowRunSQL = `
+UPDATE workflow_runs
+SET status = $2, finished_at = now(), updated_at = now()
+WHERE id = $1::uuid
 `
 
 const createStorySourceSQL = `
@@ -192,6 +210,12 @@ FROM timelines
 WHERE episode_id = $1::uuid
 `
 
+const getTimelineByIDSQL = `
+SELECT id::text, episode_id::text, status, version, duration_ms, created_at, updated_at
+FROM timelines
+WHERE id = $1::uuid
+`
+
 const listTimelineTracksSQL = `
 SELECT id::text, timeline_id::text, kind, name, position, created_at, updated_at
 FROM timeline_tracks
@@ -245,7 +269,7 @@ SET story_analysis_id = EXCLUDED.story_analysis_id,
     description = EXCLUDED.description,
     updated_at = now()
 RETURNING id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
-       code, name, description, created_at, updated_at
+       code, name, description, COALESCE(character_bible, '{}'::jsonb), created_at, updated_at
 `
 
 const upsertSceneSQL = `
@@ -274,10 +298,26 @@ RETURNING id::text, project_id::text, episode_id::text, COALESCE(story_analysis_
 
 const listCharactersSQL = `
 SELECT id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
-       code, name, description, created_at, updated_at
+       code, name, description, COALESCE(character_bible, '{}'::jsonb), created_at, updated_at
 FROM characters
 WHERE episode_id = $1::uuid
 ORDER BY code
+`
+
+const getCharacterSQL = `
+SELECT id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
+       code, name, description, COALESCE(character_bible, '{}'::jsonb), created_at, updated_at
+FROM characters
+WHERE id = $1::uuid
+`
+
+const saveCharacterBibleSQL = `
+UPDATE characters
+SET character_bible = $2::jsonb,
+    updated_at = now()
+WHERE id = $1::uuid
+RETURNING id::text, project_id::text, episode_id::text, COALESCE(story_analysis_id::text, ''),
+       code, name, description, COALESCE(character_bible, '{}'::jsonb), created_at, updated_at
 `
 
 const listScenesSQL = `
@@ -322,6 +362,12 @@ SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose
 FROM assets
 WHERE episode_id = $1::uuid
 ORDER BY kind, purpose, created_at
+`
+
+const getAssetSQL = `
+SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), kind, purpose, uri, status, created_at, updated_at
+FROM assets
+WHERE id = $1::uuid
 `
 
 const lockAssetSQL = `

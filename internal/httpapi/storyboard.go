@@ -9,6 +9,21 @@ import (
 	"github.com/yibaiba/dramora/internal/service"
 )
 
+func (api *api) getStoryboardWorkspace(w http.ResponseWriter, r *http.Request) {
+	episodeID := chi.URLParam(r, "episodeId")
+	if _, err := api.projectService.GetEpisode(r.Context(), episodeID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	workspace, err := api.productionService.GetStoryboardWorkspace(r.Context(), episodeID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"storyboard_workspace": storyboardWorkspaceDTO(workspace)})
+}
+
 func (api *api) listStoryboardShots(w http.ResponseWriter, r *http.Request) {
 	episodeID := chi.URLParam(r, "episodeId")
 	if _, err := api.projectService.GetEpisode(r.Context(), episodeID); err != nil {

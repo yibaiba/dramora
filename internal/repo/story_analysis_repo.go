@@ -38,6 +38,11 @@ func (r *PostgresProductionRepository) CompleteStoryAnalysisJob(
 	if err != nil {
 		return StoryAnalysisCompletion{}, err
 	}
+	if params.Analysis.WorkflowRunID != "" {
+		if _, err := tx.Exec(ctx, completeWorkflowRunSQL, params.Analysis.WorkflowRunID, domain.WorkflowRunStatusSucceeded); err != nil {
+			return StoryAnalysisCompletion{}, err
+		}
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return StoryAnalysisCompletion{}, err
 	}

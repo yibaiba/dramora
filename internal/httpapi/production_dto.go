@@ -5,15 +5,39 @@ import (
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/repo"
+	"github.com/yibaiba/dramora/internal/service"
 )
 
 type workflowRunResponse struct {
-	ID        string                   `json:"id"`
-	ProjectID string                   `json:"project_id"`
-	EpisodeID string                   `json:"episode_id"`
-	Status    domain.WorkflowRunStatus `json:"status"`
-	CreatedAt time.Time                `json:"created_at"`
-	UpdatedAt time.Time                `json:"updated_at"`
+	ID                string                             `json:"id"`
+	ProjectID         string                             `json:"project_id"`
+	EpisodeID         string                             `json:"episode_id"`
+	Status            domain.WorkflowRunStatus           `json:"status"`
+	CheckpointSummary *workflowCheckpointSummaryResponse `json:"checkpoint_summary,omitempty"`
+	NodeRuns          []workflowNodeRunResponse          `json:"node_runs,omitempty"`
+	CreatedAt         time.Time                          `json:"created_at"`
+	UpdatedAt         time.Time                          `json:"updated_at"`
+}
+
+type workflowCheckpointSummaryResponse struct {
+	Sequence        uint64    `json:"sequence"`
+	SavedAt         time.Time `json:"saved_at"`
+	CompletedNodes  int       `json:"completed_nodes"`
+	WaitingNodes    int       `json:"waiting_nodes"`
+	RunningNodes    int       `json:"running_nodes"`
+	FailedNodes     int       `json:"failed_nodes"`
+	SkippedNodes    int       `json:"skipped_nodes"`
+	BlackboardRoles []string  `json:"blackboard_roles"`
+}
+
+type workflowNodeRunResponse struct {
+	NodeID          string                       `json:"node_id"`
+	Kind            string                       `json:"kind"`
+	Status          domain.WorkflowNodeRunStatus `json:"status"`
+	Summary         string                       `json:"summary"`
+	Highlights      []string                     `json:"highlights"`
+	ErrorMessage    string                       `json:"error_message"`
+	UpstreamNodeIDs []string                     `json:"upstream_node_ids"`
 }
 
 type generationJobResponse struct {
@@ -95,15 +119,39 @@ type storyMapResponse struct {
 	Props      []propResponse      `json:"props"`
 }
 
+type characterBiblePaletteResponse struct {
+	Skin    string `json:"skin"`
+	Hair    string `json:"hair"`
+	Accent  string `json:"accent"`
+	Eyes    string `json:"eyes"`
+	Costume string `json:"costume"`
+}
+
+type characterBibleResponse struct {
+	Anchor          string                                 `json:"anchor"`
+	Palette         characterBiblePaletteResponse          `json:"palette"`
+	Expressions     []string                               `json:"expressions"`
+	ReferenceAngles []string                               `json:"reference_angles"`
+	ReferenceAssets []characterBibleReferenceAssetResponse `json:"reference_assets"`
+	Wardrobe        string                                 `json:"wardrobe"`
+	Notes           string                                 `json:"notes"`
+}
+
+type characterBibleReferenceAssetResponse struct {
+	Angle   string `json:"angle"`
+	AssetID string `json:"asset_id"`
+}
+
 type characterResponse struct {
-	ID          string    `json:"id"`
-	ProjectID   string    `json:"project_id"`
-	EpisodeID   string    `json:"episode_id"`
-	Code        string    `json:"code"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID             string                  `json:"id"`
+	ProjectID      string                  `json:"project_id"`
+	EpisodeID      string                  `json:"episode_id"`
+	Code           string                  `json:"code"`
+	Name           string                  `json:"name"`
+	Description    string                  `json:"description"`
+	CharacterBible *characterBibleResponse `json:"character_bible,omitempty"`
+	CreatedAt      time.Time               `json:"created_at"`
+	UpdatedAt      time.Time               `json:"updated_at"`
 }
 
 type sceneResponse characterResponse
@@ -122,6 +170,51 @@ type storyboardShotResponse struct {
 	DurationMS  int       `json:"duration_ms"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type storyboardShotPromptPackSummaryResponse struct {
+	ID        string    `json:"id"`
+	ShotID    string    `json:"shot_id"`
+	Provider  string    `json:"provider"`
+	Model     string    `json:"model"`
+	Preset    string    `json:"preset"`
+	TaskType  string    `json:"task_type"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type storyboardWorkspaceShotResponse struct {
+	ID                  string                                   `json:"id"`
+	ProjectID           string                                   `json:"project_id"`
+	EpisodeID           string                                   `json:"episode_id"`
+	SceneID             string                                   `json:"scene_id"`
+	Code                string                                   `json:"code"`
+	Title               string                                   `json:"title"`
+	Description         string                                   `json:"description"`
+	Prompt              string                                   `json:"prompt"`
+	Position            int                                      `json:"position"`
+	DurationMS          int                                      `json:"duration_ms"`
+	Scene               *sceneResponse                           `json:"scene"`
+	PromptPack          *storyboardShotPromptPackSummaryResponse `json:"prompt_pack"`
+	LatestGenerationJob *generationJobResponse                   `json:"latest_generation_job"`
+	CreatedAt           time.Time                                `json:"created_at"`
+	UpdatedAt           time.Time                                `json:"updated_at"`
+}
+
+type storyboardWorkspaceSummaryResponse struct {
+	AnalysisCount             int  `json:"analysis_count"`
+	StoryMapReady             bool `json:"story_map_ready"`
+	ReadyAssetsCount          int  `json:"ready_assets_count"`
+	PendingApprovalGatesCount int  `json:"pending_approval_gates_count"`
+}
+
+type storyboardWorkspaceResponse struct {
+	EpisodeID       string                             `json:"episode_id"`
+	Summary         storyboardWorkspaceSummaryResponse `json:"summary"`
+	StoryMap        storyMapResponse                   `json:"story_map"`
+	StoryboardShots []storyboardWorkspaceShotResponse  `json:"storyboard_shots"`
+	Assets          []assetResponse                    `json:"assets"`
+	ApprovalGates   []approvalGateResponse             `json:"approval_gates"`
+	GenerationJobs  []generationJobResponse            `json:"generation_jobs"`
 }
 
 type promptTimeSliceResponse struct {
@@ -201,14 +294,45 @@ type exportResponse struct {
 	UpdatedAt  time.Time           `json:"updated_at"`
 }
 
-func workflowRunDTO(run domain.WorkflowRun) workflowRunResponse {
+func workflowRunDTO(
+	run domain.WorkflowRun,
+	checkpoint *service.WorkflowCheckpointSummary,
+	nodeRuns []service.WorkflowNodeDetail,
+) workflowRunResponse {
+	var checkpointResponse *workflowCheckpointSummaryResponse
+	if checkpoint != nil {
+		checkpointResponse = &workflowCheckpointSummaryResponse{
+			Sequence:        checkpoint.Sequence,
+			SavedAt:         checkpoint.SavedAt,
+			CompletedNodes:  checkpoint.CompletedNodes,
+			WaitingNodes:    checkpoint.WaitingNodes,
+			RunningNodes:    checkpoint.RunningNodes,
+			FailedNodes:     checkpoint.FailedNodes,
+			SkippedNodes:    checkpoint.SkippedNodes,
+			BlackboardRoles: append([]string(nil), checkpoint.BlackboardRoles...),
+		}
+	}
+	nodeRunResponses := make([]workflowNodeRunResponse, 0, len(nodeRuns))
+	for _, nodeRun := range nodeRuns {
+		nodeRunResponses = append(nodeRunResponses, workflowNodeRunResponse{
+			NodeID:          nodeRun.NodeID,
+			Kind:            string(nodeRun.Kind),
+			Status:          nodeRun.Status,
+			Summary:         nodeRun.Summary,
+			Highlights:      append([]string(nil), nodeRun.Highlights...),
+			ErrorMessage:    nodeRun.ErrorMessage,
+			UpstreamNodeIDs: append([]string(nil), nodeRun.UpstreamNodeIDs...),
+		})
+	}
 	return workflowRunResponse{
-		ID:        run.ID,
-		ProjectID: run.ProjectID,
-		EpisodeID: run.EpisodeID,
-		Status:    run.Status,
-		CreatedAt: run.CreatedAt,
-		UpdatedAt: run.UpdatedAt,
+		ID:                run.ID,
+		ProjectID:         run.ProjectID,
+		EpisodeID:         run.EpisodeID,
+		Status:            run.Status,
+		CheckpointSummary: checkpointResponse,
+		NodeRuns:          nodeRunResponses,
+		CreatedAt:         run.CreatedAt,
+		UpdatedAt:         run.UpdatedAt,
 	}
 }
 
@@ -226,6 +350,14 @@ func generationJobDTO(job domain.GenerationJob) generationJobResponse {
 		CreatedAt:     job.CreatedAt,
 		UpdatedAt:     job.UpdatedAt,
 	}
+}
+
+func generationJobDTOs(jobs []domain.GenerationJob) []generationJobResponse {
+	responses := make([]generationJobResponse, 0, len(jobs))
+	for _, job := range jobs {
+		responses = append(responses, generationJobDTO(job))
+	}
+	return responses
 }
 
 func approvalGateDTO(gate domain.ApprovalGate) approvalGateResponse {
@@ -300,13 +432,18 @@ func storyMapDTO(storyMap repo.StoryMap) storyMapResponse {
 func characterDTOs(items []domain.Character) []characterResponse {
 	responses := make([]characterResponse, 0, len(items))
 	for _, item := range items {
-		responses = append(responses, characterResponse{
-			ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
-			Code: item.Code, Name: item.Name, Description: item.Description,
-			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
-		})
+		responses = append(responses, characterDTO(item))
 	}
 	return responses
+}
+
+func characterDTO(item domain.Character) characterResponse {
+	return characterResponse{
+		ID: item.ID, ProjectID: item.ProjectID, EpisodeID: item.EpisodeID,
+		Code: item.Code, Name: item.Name, Description: item.Description,
+		CharacterBible: characterBibleDTO(item.CharacterBible),
+		CreatedAt:      item.CreatedAt, UpdatedAt: item.UpdatedAt,
+	}
 }
 
 func sceneDTOs(items []domain.Scene) []sceneResponse {
@@ -333,6 +470,38 @@ func propDTOs(items []domain.Prop) []propResponse {
 	return responses
 }
 
+func characterBibleDTO(bible *domain.CharacterBible) *characterBibleResponse {
+	if bible == nil {
+		return nil
+	}
+	return &characterBibleResponse{
+		Anchor: bible.Anchor,
+		Palette: characterBiblePaletteResponse{
+			Skin:    bible.Palette.Skin,
+			Hair:    bible.Palette.Hair,
+			Accent:  bible.Palette.Accent,
+			Eyes:    bible.Palette.Eyes,
+			Costume: bible.Palette.Costume,
+		},
+		Expressions:     bible.Expressions,
+		ReferenceAngles: bible.ReferenceAngles,
+		ReferenceAssets: characterBibleReferenceAssetDTOs(bible.ReferenceAssets),
+		Wardrobe:        bible.Wardrobe,
+		Notes:           bible.Notes,
+	}
+}
+
+func characterBibleReferenceAssetDTOs(items []domain.CharacterBibleReferenceAsset) []characterBibleReferenceAssetResponse {
+	responses := make([]characterBibleReferenceAssetResponse, 0, len(items))
+	for _, item := range items {
+		responses = append(responses, characterBibleReferenceAssetResponse{
+			Angle:   item.Angle,
+			AssetID: item.AssetID,
+		})
+	}
+	return responses
+}
+
 func storyboardShotDTOs(items []domain.StoryboardShot) []storyboardShotResponse {
 	responses := make([]storyboardShotResponse, 0, len(items))
 	for _, item := range items {
@@ -343,6 +512,69 @@ func storyboardShotDTOs(items []domain.StoryboardShot) []storyboardShotResponse 
 			Position: item.Position, DurationMS: item.DurationMS,
 			CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 		})
+	}
+	return responses
+}
+
+func storyboardWorkspaceDTO(item service.StoryboardWorkspace) storyboardWorkspaceResponse {
+	return storyboardWorkspaceResponse{
+		EpisodeID:       item.EpisodeID,
+		Summary:         storyboardWorkspaceSummaryDTO(item.Summary),
+		StoryMap:        storyMapDTO(item.StoryMap),
+		StoryboardShots: storyboardWorkspaceShotDTOs(item.StoryboardShots),
+		Assets:          assetDTOs(item.Assets),
+		ApprovalGates:   approvalGateDTOs(item.ApprovalGates),
+		GenerationJobs:  generationJobDTOs(item.GenerationJobs),
+	}
+}
+
+func storyboardWorkspaceSummaryDTO(item service.StoryboardWorkspaceSummary) storyboardWorkspaceSummaryResponse {
+	return storyboardWorkspaceSummaryResponse{
+		AnalysisCount:             item.AnalysisCount,
+		StoryMapReady:             item.StoryMapReady,
+		ReadyAssetsCount:          item.ReadyAssetsCount,
+		PendingApprovalGatesCount: item.PendingApprovalGatesCount,
+	}
+}
+
+func storyboardWorkspaceShotDTOs(items []service.StoryboardWorkspaceShot) []storyboardWorkspaceShotResponse {
+	responses := make([]storyboardWorkspaceShotResponse, 0, len(items))
+	for _, item := range items {
+		response := storyboardWorkspaceShotResponse{
+			ID:          item.Shot.ID,
+			ProjectID:   item.Shot.ProjectID,
+			EpisodeID:   item.Shot.EpisodeID,
+			SceneID:     item.Shot.SceneID,
+			Code:        item.Shot.Code,
+			Title:       item.Shot.Title,
+			Description: item.Shot.Description,
+			Prompt:      item.Shot.Prompt,
+			Position:    item.Shot.Position,
+			DurationMS:  item.Shot.DurationMS,
+			CreatedAt:   item.Shot.CreatedAt,
+			UpdatedAt:   item.Shot.UpdatedAt,
+		}
+		if item.Scene != nil {
+			scene := sceneResponse(characterResponse{
+				ID: item.Scene.ID, ProjectID: item.Scene.ProjectID, EpisodeID: item.Scene.EpisodeID,
+				Code: item.Scene.Code, Name: item.Scene.Name, Description: item.Scene.Description,
+				CreatedAt: item.Scene.CreatedAt, UpdatedAt: item.Scene.UpdatedAt,
+			})
+			response.Scene = &scene
+		}
+		if item.PromptPack != nil {
+			pack := storyboardShotPromptPackSummaryResponse{
+				ID: item.PromptPack.ID, ShotID: item.PromptPack.ShotID, Provider: item.PromptPack.Provider,
+				Model: item.PromptPack.Model, Preset: item.PromptPack.Preset, TaskType: item.PromptPack.TaskType,
+				UpdatedAt: item.PromptPack.UpdatedAt,
+			}
+			response.PromptPack = &pack
+		}
+		if item.LatestGenerationJob != nil {
+			job := generationJobDTO(*item.LatestGenerationJob)
+			response.LatestGenerationJob = &job
+		}
+		responses = append(responses, response)
 	}
 	return responses
 }

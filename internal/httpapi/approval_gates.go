@@ -75,6 +75,24 @@ func (api *api) requestApprovalChanges(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, Envelope{"approval_gate": approvalGateDTO(gate)})
 }
 
+func (api *api) resubmitApprovalGate(w http.ResponseWriter, r *http.Request) {
+	request, ok := readApprovalGateReviewRequest(w, r)
+	if !ok {
+		return
+	}
+	gate, err := api.productionService.ResubmitApprovalGate(
+		r.Context(),
+		chi.URLParam(r, "gateId"),
+		request.ReviewedBy,
+		request.ReviewNote,
+	)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"approval_gate": approvalGateDTO(gate)})
+}
+
 func readApprovalGateReviewRequest(w http.ResponseWriter, r *http.Request) (approvalGateReviewRequest, bool) {
 	var request approvalGateReviewRequest
 	if err := readJSON(r, &request); err != nil {

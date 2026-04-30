@@ -226,9 +226,17 @@ func scanCharacters(rows rowsScanner) ([]domain.Character, error) {
 
 func scanCharacter(row rowScanner) (domain.Character, error) {
 	var item domain.Character
-	err := row.Scan(&item.ID, &item.ProjectID, &item.EpisodeID, &item.StoryAnalysisID,
-		&item.Code, &item.Name, &item.Description, &item.CreatedAt, &item.UpdatedAt)
-	return item, err
+	var characterBible []byte
+	if err := row.Scan(&item.ID, &item.ProjectID, &item.EpisodeID, &item.StoryAnalysisID,
+		&item.Code, &item.Name, &item.Description, &characterBible, &item.CreatedAt, &item.UpdatedAt); err != nil {
+		return domain.Character{}, err
+	}
+	bible, err := decodeCharacterBible(characterBible)
+	if err != nil {
+		return domain.Character{}, err
+	}
+	item.CharacterBible = bible
+	return item, nil
 }
 
 func scanScenes(rows rowsScanner) ([]domain.Scene, error) {

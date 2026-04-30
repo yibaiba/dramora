@@ -16,6 +16,8 @@ type ProductionRepository interface {
 	LatestStorySource(ctx context.Context, episodeID string) (domain.StorySource, error)
 	CreateStoryAnalysisRun(ctx context.Context, params CreateStoryAnalysisRunParams) (StoryAnalysisRun, error)
 	GetWorkflowRun(ctx context.Context, workflowRunID string) (domain.WorkflowRun, error)
+	SaveWorkflowCheckpoint(ctx context.Context, workflowRunID string, payload []byte) error
+	LoadWorkflowCheckpoint(ctx context.Context, workflowRunID string) ([]byte, error)
 	ListGenerationJobs(ctx context.Context) ([]domain.GenerationJob, error)
 	ListGenerationJobsByStatus(ctx context.Context, status domain.GenerationJobStatus, limit int) ([]domain.GenerationJob, error)
 	GetGenerationJob(ctx context.Context, generationJobID string) (domain.GenerationJob, error)
@@ -32,15 +34,19 @@ type ProductionRepository interface {
 	GetStoryAnalysis(ctx context.Context, analysisID string) (domain.StoryAnalysis, error)
 	SaveStoryMap(ctx context.Context, params SaveStoryMapParams) (StoryMap, error)
 	GetStoryMap(ctx context.Context, episodeID string) (StoryMap, error)
+	GetCharacter(ctx context.Context, characterID string) (domain.Character, error)
+	SaveCharacterBible(ctx context.Context, params SaveCharacterBibleParams) (domain.Character, error)
 	SaveStoryboardShots(ctx context.Context, params SaveStoryboardShotsParams) ([]domain.StoryboardShot, error)
 	ListStoryboardShots(ctx context.Context, episodeID string) ([]domain.StoryboardShot, error)
 	GetStoryboardShot(ctx context.Context, shotID string) (domain.StoryboardShot, error)
 	SaveShotPromptPack(ctx context.Context, params SaveShotPromptPackParams) (domain.ShotPromptPack, error)
 	GetShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error)
 	CreateAsset(ctx context.Context, params CreateAssetParams) (domain.Asset, error)
+	GetAsset(ctx context.Context, assetID string) (domain.Asset, error)
 	ListAssetsByEpisode(ctx context.Context, episodeID string) ([]domain.Asset, error)
 	LockAsset(ctx context.Context, assetID string) (domain.Asset, error)
 	GetEpisodeTimeline(ctx context.Context, episodeID string) (domain.Timeline, error)
+	GetTimelineByID(ctx context.Context, timelineID string) (domain.Timeline, error)
 	SaveEpisodeTimeline(ctx context.Context, params SaveEpisodeTimelineParams) (domain.Timeline, error)
 	SaveEpisodeTimelineGraph(ctx context.Context, params SaveEpisodeTimelineGraphParams) (domain.Timeline, error)
 	CreateExport(ctx context.Context, params CreateExportParams) (domain.Export, error)
@@ -169,6 +175,11 @@ type SaveStoryMapItemParams struct {
 	Code            string
 	Name            string
 	Description     string
+}
+
+type SaveCharacterBibleParams struct {
+	CharacterID    string
+	CharacterBible domain.CharacterBible
 }
 
 type SaveStoryboardShotsParams struct {
@@ -323,6 +334,31 @@ func (r *PostgresProductionRepository) GetWorkflowRun(
 		return domain.WorkflowRun{}, domain.ErrNotFound
 	}
 	return run, err
+}
+
+func (r *PostgresProductionRepository) SaveWorkflowCheckpoint(ctx context.Context, workflowRunID string, payload []byte) error {
+	if len(payload) == 0 {
+		payload = []byte("{}")
+	}
+	res, err := r.pool.Exec(ctx, saveWorkflowCheckpointSQL, workflowRunID, string(payload))
+	if err != nil {
+		return err
+	}
+	if res.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresProductionRepository) LoadWorkflowCheckpoint(ctx context.Context, workflowRunID string) ([]byte, error) {
+	var payload string
+	if err := r.pool.QueryRow(ctx, loadWorkflowCheckpointSQL, workflowRunID).Scan(&payload); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return []byte(payload), nil
 }
 
 func (r *PostgresProductionRepository) ListGenerationJobs(ctx context.Context) ([]domain.GenerationJob, error) {

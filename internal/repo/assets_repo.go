@@ -71,6 +71,14 @@ func (r *PostgresProductionRepository) ListAssetsByEpisode(
 	return scanAssets(rows)
 }
 
+func (r *PostgresProductionRepository) GetAsset(ctx context.Context, assetID string) (domain.Asset, error) {
+	asset, err := scanAsset(r.pool.QueryRow(ctx, getAssetSQL, assetID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Asset{}, domain.ErrNotFound
+	}
+	return asset, err
+}
+
 func (r *PostgresProductionRepository) LockAsset(ctx context.Context, assetID string) (domain.Asset, error) {
 	asset, err := scanAsset(r.pool.QueryRow(ctx, lockAssetSQL, assetID, domain.AssetStatusReady))
 	if errors.Is(err, pgx.ErrNoRows) {

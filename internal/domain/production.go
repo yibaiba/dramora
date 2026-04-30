@@ -97,6 +97,29 @@ type StoryAgentOutput struct {
 	Highlights []string `json:"highlights"`
 }
 
+type CharacterBiblePalette struct {
+	Skin    string `json:"skin"`
+	Hair    string `json:"hair"`
+	Accent  string `json:"accent"`
+	Eyes    string `json:"eyes"`
+	Costume string `json:"costume"`
+}
+
+type CharacterBibleReferenceAsset struct {
+	Angle   string `json:"angle"`
+	AssetID string `json:"asset_id"`
+}
+
+type CharacterBible struct {
+	Anchor          string                         `json:"anchor"`
+	Palette         CharacterBiblePalette          `json:"palette"`
+	Expressions     []string                       `json:"expressions"`
+	ReferenceAngles []string                       `json:"reference_angles"`
+	ReferenceAssets []CharacterBibleReferenceAsset `json:"reference_assets"`
+	Wardrobe        string                         `json:"wardrobe"`
+	Notes           string                         `json:"notes"`
+}
+
 type Asset struct {
 	ID        string
 	ProjectID string
@@ -128,6 +151,7 @@ type Character struct {
 	Code            string
 	Name            string
 	Description     string
+	CharacterBible  *CharacterBible
 	CreatedAt       time.Time
 	UpdatedAt       time.Time
 }

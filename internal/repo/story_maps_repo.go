@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -40,6 +41,29 @@ func (r *PostgresProductionRepository) GetStoryMap(ctx context.Context, episodeI
 	}
 	props, err := r.listProps(ctx, episodeID)
 	return StoryMap{Characters: characters, Scenes: scenes, Props: props}, err
+}
+
+func (r *PostgresProductionRepository) GetCharacter(ctx context.Context, characterID string) (domain.Character, error) {
+	character, err := scanCharacter(r.pool.QueryRow(ctx, getCharacterSQL, characterID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Character{}, domain.ErrNotFound
+	}
+	return character, err
+}
+
+func (r *PostgresProductionRepository) SaveCharacterBible(
+	ctx context.Context,
+	params SaveCharacterBibleParams,
+) (domain.Character, error) {
+	payload, err := json.Marshal(params.CharacterBible)
+	if err != nil {
+		return domain.Character{}, err
+	}
+	character, err := scanCharacter(r.pool.QueryRow(ctx, saveCharacterBibleSQL, params.CharacterID, string(payload)))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Character{}, domain.ErrNotFound
+	}
+	return character, err
 }
 
 func (r *PostgresProductionRepository) SaveStoryboardShots(
