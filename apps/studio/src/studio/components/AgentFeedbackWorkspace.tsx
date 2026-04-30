@@ -256,6 +256,31 @@ export function AgentFeedbackWorkspace({
               <button
                 type="button"
                 className="ghost-action"
+                onClick={() => {
+                  try {
+                    const payload = JSON.stringify(filteredReturnHistory, null, 2)
+                    const blob = new Blob([payload], { type: 'application/json' })
+                    const url = URL.createObjectURL(blob)
+                    const anchor = document.createElement('a')
+                    anchor.href = url
+                    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+                    anchor.download = `return-history-${stamp}.json`
+                    document.body.appendChild(anchor)
+                    anchor.click()
+                    document.body.removeChild(anchor)
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                  } catch {
+                    /* swallow: download failure is non-fatal */
+                  }
+                }}
+              >
+                下载 JSON（{filteredReturnHistory.length}）
+              </button>
+            ) : null}
+            {filteredReturnHistory.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-action"
                 onClick={async () => {
                   try {
                     const payload = JSON.stringify(filteredReturnHistory, null, 2)
