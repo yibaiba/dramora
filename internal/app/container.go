@@ -71,7 +71,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		db:                db,
 		sqliteDB:          sqliteDB,
 		Logger:            logger.With("env", cfg.Env),
-		AuthService:       service.NewAuthService(identityRepo, cfg.DefaultOrganizationID, cfg.JWTSecret),
+		AuthService:       service.NewAuthService(identityRepo, cfg.JWTSecret),
 		ProjectService:    projectSvc,
 		ProductionService: productionSvc,
 		ProviderService:   providerService,

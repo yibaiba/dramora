@@ -16,11 +16,7 @@ func TestAdminRoutesRequireOwnerRole(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authService := service.NewAuthService(
-		repo.NewMemoryIdentityRepository(),
-		"00000000-0000-0000-0000-000000000001",
-		"test-secret",
-	)
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:      logger,
 		Version:     "test",
@@ -54,7 +50,7 @@ func TestAdminRoutesRejectNonAdminRole(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
 	const orgID = "00000000-0000-0000-0000-000000000001"
-	authService := service.NewAuthService(identityRepo, orgID, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:      logger,
 		Version:     "test",

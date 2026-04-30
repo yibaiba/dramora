@@ -22,7 +22,7 @@ func TestProjectRoutesUseOrganizationFromJWTContext(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectRepo := repo.NewMemoryProjectRepository()
 	projectService := service.NewProjectService(projectRepo, defaultOrgID)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), authOrgID, "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:         logger,
 		Version:        "test",
@@ -101,7 +101,7 @@ func TestProjectRoutesRequireAuthentication(t *testing.T) {
 	router := NewRouter(RouterConfig{
 		Logger:         logger,
 		Version:        "test",
-		AuthService:    service.NewAuthService(repo.NewMemoryIdentityRepository(), "00000000-0000-0000-0000-000000000001", "test-secret"),
+		AuthService:    service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret"),
 		ProjectService: service.NewProjectService(repo.NewMemoryProjectRepository(), "00000000-0000-0000-0000-000000000001"),
 	})
 
@@ -124,7 +124,7 @@ func TestProductionRoutesRespectOrganizationContext(t *testing.T) {
 	projectService := service.NewProjectService(projectRepo, defaultOrgID)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), authOrgID, "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",
@@ -220,7 +220,7 @@ func TestGlobalResourceWriteRoutesRespectOrganizationContext(t *testing.T) {
 	projectService := service.NewProjectService(projectRepo, defaultOrgID)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), authOrgID, "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",

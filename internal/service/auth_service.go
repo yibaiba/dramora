@@ -44,18 +44,19 @@ type LoginInput struct {
 }
 
 type AuthService struct {
-	identityRepo          repo.IdentityRepository
-	defaultOrganizationID string
-	jwtSecret             []byte
-	tokenTTL              time.Duration
+	identityRepo repo.IdentityRepository
+	jwtSecret    []byte
+	tokenTTL     time.Duration
 }
 
-func NewAuthService(identityRepo repo.IdentityRepository, defaultOrganizationID string, jwtSecret string) *AuthService {
+// NewAuthService 构建认证服务。
+// 不再依赖 defaultOrganizationID：注册时若无邀请令牌，AuthService 会为新
+// 用户自动建立一个 owned workspace；带邀请令牌时按邀请的 org/role 加入。
+func NewAuthService(identityRepo repo.IdentityRepository, jwtSecret string) *AuthService {
 	return &AuthService{
-		identityRepo:          identityRepo,
-		defaultOrganizationID: defaultOrganizationID,
-		jwtSecret:             []byte(jwtSecret),
-		tokenTTL:              defaultAuthTokenTTL,
+		identityRepo: identityRepo,
+		jwtSecret:    []byte(jwtSecret),
+		tokenTTL:     defaultAuthTokenTTL,
 	}
 }
 
