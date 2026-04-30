@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
 )
@@ -69,4 +70,38 @@ func (s *ProductionService) filterGenerationJobsForContext(
 		}
 	}
 	return filtered, nil
+}
+
+// workerJobAuthContextForProject 根据 project id 解析所属组织，并把当前 ctx
+// 派生为带该组织上下文的 worker 身份。解析失败时返回原 ctx，让上层维持
+// 既有 system 兜底语义。
+func (s *ProductionService) workerJobAuthContextForProject(ctx context.Context, projectID string) context.Context {
+	if s.projectSvc == nil || strings.TrimSpace(projectID) == "" {
+		return ctx
+	}
+	project, err := s.projectSvc.LookupProjectByID(ctx, projectID)
+	if err != nil || strings.TrimSpace(project.OrganizationID) == "" {
+		return ctx
+	}
+	return WithRequestAuthContext(ctx, RequestAuthContext{
+		OrganizationID: project.OrganizationID,
+		Role:           RoleWorker,
+	})
+}
+
+// workerJobAuthContextForTimeline 通过 timeline -> episode -> project 链路
+// 解析 export 所属组织，并派生 worker auth context。
+func (s *ProductionService) workerJobAuthContextForTimeline(ctx context.Context, timelineID string) context.Context {
+	if s.projectSvc == nil || strings.TrimSpace(timelineID) == "" {
+		return ctx
+	}
+	timeline, err := s.production.GetTimelineByID(ctx, timelineID)
+	if err != nil || strings.TrimSpace(timeline.EpisodeID) == "" {
+		return ctx
+	}
+	episode, err := s.projectSvc.LookupEpisodeByID(ctx, timeline.EpisodeID)
+	if err != nil {
+		return ctx
+	}
+	return s.workerJobAuthContextForProject(ctx, episode.ProjectID)
 }

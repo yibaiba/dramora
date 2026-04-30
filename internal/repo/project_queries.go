@@ -19,6 +19,12 @@ FROM projects
 WHERE id = $1::uuid AND organization_id = $2::uuid
 `
 
+const lookupProjectByIDSQL = `
+SELECT id::text, organization_id::text, name, description, status, created_at, updated_at
+FROM projects
+WHERE id = $1::uuid
+`
+
 const listEpisodesSQL = `
 SELECT id::text, project_id::text, number, title, status, created_at, updated_at
 FROM episodes

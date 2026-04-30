@@ -175,7 +175,8 @@ func (s *ProductionService) processExportsByStatus(
 	summary := jobs.ExecutionSummary{}
 	for _, export := range exports {
 		summary.Processed++
-		if err := s.processExportNoop(ctx, export); err != nil {
+		jobCtx := s.workerJobAuthContextForTimeline(ctx, export.TimelineID)
+		if err := s.processExportNoop(jobCtx, export); err != nil {
 			summary.Failed++
 			return summary, fmt.Errorf("process export %s: %w", export.ID, err)
 		}

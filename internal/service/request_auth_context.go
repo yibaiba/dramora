@@ -10,6 +10,10 @@ const (
 	// 该上下文绕过组织归属过滤，仅供 inline worker / job runner 等
 	// 没有真实用户会话但可信的执行环境注入。
 	RoleSystem = "system"
+
+	// RoleWorker 标识 worker 处理具体 job 时按 job 所属组织注入的上下文，
+	// 不绕过 authorize 检查；与 RoleSystem 的区别是要求显式 OrganizationID。
+	RoleWorker = "worker"
 )
 
 type requestAuthContextKey struct{}

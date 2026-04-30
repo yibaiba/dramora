@@ -22,6 +22,12 @@ FROM projects
 WHERE id = ? AND organization_id = ?
 `
 
+const sqliteLookupProjectByIDSQL = `
+SELECT id, organization_id, name, description, status, created_at, updated_at
+FROM projects
+WHERE id = ?
+`
+
 const sqliteListEpisodesSQL = `
 SELECT id, project_id, number, title, status, created_at, updated_at
 FROM episodes

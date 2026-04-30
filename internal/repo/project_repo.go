@@ -32,6 +32,7 @@ type ProjectRepository interface {
 	ListProjects(ctx context.Context, organizationID string) ([]domain.Project, error)
 	CreateProject(ctx context.Context, params CreateProjectParams) (domain.Project, error)
 	GetProject(ctx context.Context, organizationID string, projectID string) (domain.Project, error)
+	LookupProjectByID(ctx context.Context, projectID string) (domain.Project, error)
 	ListEpisodes(ctx context.Context, projectID string) ([]domain.Episode, error)
 	CreateEpisode(ctx context.Context, params CreateEpisodeParams) (domain.Episode, error)
 	GetEpisode(ctx context.Context, episodeID string) (domain.Episode, error)
@@ -79,6 +80,17 @@ func (r *PostgresProjectRepository) GetProject(
 	projectID string,
 ) (domain.Project, error) {
 	project, err := scanProject(r.pool.QueryRow(ctx, getProjectSQL, projectID, organizationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Project{}, domain.ErrNotFound
+	}
+	return project, err
+}
+
+func (r *PostgresProjectRepository) LookupProjectByID(
+	ctx context.Context,
+	projectID string,
+) (domain.Project, error) {
+	project, err := scanProject(r.pool.QueryRow(ctx, lookupProjectByIDSQL, projectID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Project{}, domain.ErrNotFound
 	}

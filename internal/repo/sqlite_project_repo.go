@@ -48,6 +48,15 @@ func (r *SQLiteProjectRepository) GetProject(ctx context.Context, organizationID
 	return project, err
 }
 
+func (r *SQLiteProjectRepository) LookupProjectByID(ctx context.Context, projectID string) (domain.Project, error) {
+	row := r.db.QueryRowContext(ctx, sqliteLookupProjectByIDSQL, projectID)
+	project, err := scanProject(row)
+	if err == sql.ErrNoRows {
+		return domain.Project{}, domain.ErrNotFound
+	}
+	return project, err
+}
+
 func (r *SQLiteProjectRepository) ListEpisodes(ctx context.Context, projectID string) ([]domain.Episode, error) {
 	rows, err := r.db.QueryContext(ctx, sqliteListEpisodesSQL, projectID)
 	if err != nil {

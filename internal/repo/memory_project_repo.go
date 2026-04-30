@@ -77,6 +77,20 @@ func (r *MemoryProjectRepository) GetProject(
 	return project, nil
 }
 
+func (r *MemoryProjectRepository) LookupProjectByID(
+	_ context.Context,
+	projectID string,
+) (domain.Project, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	project, ok := r.projects[projectID]
+	if !ok {
+		return domain.Project{}, domain.ErrNotFound
+	}
+	return project, nil
+}
+
 func (r *MemoryProjectRepository) ListEpisodes(_ context.Context, projectID string) ([]domain.Episode, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

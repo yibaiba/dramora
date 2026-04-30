@@ -113,6 +113,24 @@ func (s *ProjectService) GetEpisode(ctx context.Context, episodeID string) (doma
 	return episode, nil
 }
 
+// LookupProjectByID 跳过组织过滤直接通过项目 ID 取项目，仅供 worker / 内部任务
+// 解析项目所属组织时使用，业务调用请走 GetProject 以保留组织鉴权。
+func (s *ProjectService) LookupProjectByID(ctx context.Context, projectID string) (domain.Project, error) {
+	if strings.TrimSpace(projectID) == "" {
+		return domain.Project{}, fmt.Errorf("%w: project id is required", domain.ErrInvalidInput)
+	}
+	return s.projects.LookupProjectByID(ctx, projectID)
+}
+
+// LookupEpisodeByID 跳过组织过滤直接通过 episode ID 取剧集，仅供 worker /
+// 内部任务用于解析剧集所属项目；业务调用请走 GetEpisode。
+func (s *ProjectService) LookupEpisodeByID(ctx context.Context, episodeID string) (domain.Episode, error) {
+	if strings.TrimSpace(episodeID) == "" {
+		return domain.Episode{}, fmt.Errorf("%w: episode id is required", domain.ErrInvalidInput)
+	}
+	return s.projects.GetEpisode(ctx, episodeID)
+}
+
 func (s *ProjectService) nextEpisodeNumber(ctx context.Context, projectID string, requested int) (int, error) {
 	if requested > 0 {
 		return requested, nil

@@ -41,7 +41,8 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 			continue
 		}
 		summary.Processed++
-		if err := s.processGenerationJob(ctx, generationJob); err != nil {
+		jobCtx := s.workerJobAuthContextForProject(ctx, generationJob.ProjectID)
+		if err := s.processGenerationJob(jobCtx, generationJob); err != nil {
 			summary.Failed++
 			return summary, fmt.Errorf("process generation job %s: %w", generationJob.ID, err)
 		}
