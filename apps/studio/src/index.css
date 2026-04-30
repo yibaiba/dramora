@@ -4904,3 +4904,67 @@ p {
   font-size: 0.78rem;
   color: rgb(252, 165, 165);
 }
+
+.worker-metrics-prom {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.worker-metrics-prom-desc {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: rgba(226, 232, 240, 0.85);
+}
+
+.worker-metrics-prom-desc code {
+  padding: 0.05rem 0.35rem;
+  margin: 0 0.15rem;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.worker-metrics-prom-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.worker-metrics-prom-url {
+  flex: 1 1 18rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  color: rgba(226, 232, 240, 0.95);
+  word-break: break-all;
+}
+
+.worker-metrics-prom-snippet {
+  border-top: 1px dashed rgba(148, 163, 184, 0.25);
+  padding-top: 0.6rem;
+}
+
+.worker-metrics-prom-snippet summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: rgba(226, 232, 240, 0.85);
+  margin-bottom: 0.5rem;
+}
+
+.worker-metrics-prom-snippet pre {
+  padding: 0.65rem 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: rgba(226, 232, 240, 0.92);
+  overflow-x: auto;
+  margin: 0 0 0.5rem;
+}
