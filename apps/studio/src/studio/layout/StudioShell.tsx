@@ -1,8 +1,10 @@
 import {
   ChevronDown,
   Home,
+  Moon,
   Plus,
   Settings,
+  Sun,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
@@ -11,6 +13,7 @@ import { useCreateEpisode, useCreateProject } from '../../api/hooks'
 import type { Project } from '../../api/types'
 import { useAuthStore } from '../../state/authStore'
 import { useStudioSelection } from '../hooks/useStudioSelection'
+import { useThemeMode } from '../hooks/useThemeMode'
 import { studioNavItems, studioRoutePaths } from '../routes'
 
 export function StudioShell() {
@@ -28,6 +31,7 @@ export function StudioShell() {
   const createEpisode = useCreateEpisode(selectedProject?.id)
   const authSession = useAuthStore((state) => state.session)
   const clearSession = useAuthStore((state) => state.clearSession)
+  const { mode: themeMode, toggle: toggleTheme } = useThemeMode()
   const [projectName, setProjectName] = useState('')
   const [episodeTitle, setEpisodeTitle] = useState('')
   const activeRoute =
@@ -139,7 +143,26 @@ export function StudioShell() {
             <strong>{authSession?.user.display_name ?? 'Director'}</strong>
             <small>{authSession?.user.email ?? 'director@dramora.ai'}</small>
           </div>
-          <button className="owner-logout" onClick={clearSession} type="button">
+          <button
+            aria-label={themeMode === 'dark' ? '切换为亮色主题' : '切换为暗色主题'}
+            className="owner-logout"
+            onClick={toggleTheme}
+            title={themeMode === 'dark' ? '切换为亮色主题' : '切换为暗色主题'}
+            type="button"
+          >
+            {themeMode === 'dark' ? (
+              <Sun aria-hidden="true" />
+            ) : (
+              <Moon aria-hidden="true" />
+            )}
+          </button>
+          <button
+            aria-label="退出登录"
+            className="owner-logout"
+            onClick={clearSession}
+            title="退出登录"
+            type="button"
+          >
             <Settings aria-hidden="true" />
           </button>
         </div>
