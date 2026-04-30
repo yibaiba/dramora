@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"sync/atomic"
@@ -10,16 +11,23 @@ import (
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
+var errWorkerMetricsRepoUnavailable = errors.New("worker metrics repository not configured")
+
 // WorkerMetricsSnapshot 描述 worker 在单 process 维度的运行可观测指标。
 // 当前覆盖 worker 派生组织上下文失败而被跳过的 job：
 //   - Generation job：projectID -> organization 解析失败
 //   - Export job：timeline -> episode -> project 解析失败
+//
+// 多进程部署下，可通过 ProductionService.WorkerMetricsAggregated 直接读 DB
+// 拿到跨进程聚合视图；该函数在无 repo 时回退到本地 atomic 快照。
 type WorkerMetricsSnapshot struct {
 	GenerationOrgUnresolvedSkips uint64    `json:"generation_org_unresolved_skips"`
 	ExportOrgUnresolvedSkips     uint64    `json:"export_org_unresolved_skips"`
 	LastSkipKind                 string    `json:"last_skip_kind,omitempty"`
 	LastSkipReason               string    `json:"last_skip_reason,omitempty"`
 	LastSkipAt                   time.Time `json:"last_skip_at,omitempty"`
+	// Source 描述快照来源："local" 表示当前进程内 atomic；"aggregated" 表示从持久层聚合而来。
+	Source string `json:"source,omitempty"`
 }
 
 type workerMetrics struct {
@@ -73,6 +81,7 @@ func (m *workerMetrics) snapshot() WorkerMetricsSnapshot {
 	snap := WorkerMetricsSnapshot{
 		GenerationOrgUnresolvedSkips: atomic.LoadUint64(&m.generationSkips),
 		ExportOrgUnresolvedSkips:     atomic.LoadUint64(&m.exportSkips),
+		Source:                       "local",
 	}
 	m.mu.Lock()
 	snap.LastSkipKind = m.lastSkipKind
@@ -80,6 +89,48 @@ func (m *workerMetrics) snapshot() WorkerMetricsSnapshot {
 	snap.LastSkipAt = m.lastSkipAt
 	m.mu.Unlock()
 	return snap
+}
+
+// aggregatedSnapshot 直接从持久层读取所有 metric_kind 行，得到跨进程聚合视图。
+// 持久层缺失或读取失败时返回 (zero, error)，调用方应回退到内存 snapshot。
+func (m *workerMetrics) aggregatedSnapshot(ctx context.Context) (WorkerMetricsSnapshot, error) {
+	if m.repo == nil {
+		return WorkerMetricsSnapshot{}, errWorkerMetricsRepoUnavailable
+	}
+	rows, err := m.repo.LoadAll(ctx)
+	if err != nil {
+		return WorkerMetricsSnapshot{}, err
+	}
+	snap := WorkerMetricsSnapshot{Source: "aggregated"}
+	var (
+		latestKind   string
+		latestReason string
+		latestAt     time.Time
+	)
+	for _, row := range rows {
+		switch row.Kind {
+		case repo.WorkerMetricKindGenerationSkip:
+			snap.GenerationOrgUnresolvedSkips = row.Counter
+		case repo.WorkerMetricKindExportSkip:
+			snap.ExportOrgUnresolvedSkips = row.Counter
+		}
+		if row.LastAt.After(latestAt) {
+			latestAt = row.LastAt
+			latestReason = row.LastReason
+			switch row.Kind {
+			case repo.WorkerMetricKindGenerationSkip:
+				latestKind = "generation"
+			case repo.WorkerMetricKindExportSkip:
+				latestKind = "export"
+			default:
+				latestKind = string(row.Kind)
+			}
+		}
+	}
+	snap.LastSkipKind = latestKind
+	snap.LastSkipReason = latestReason
+	snap.LastSkipAt = latestAt
+	return snap, nil
 }
 
 // loadFromRepo 从持久层加载已有的 metrics 状态到内存 atomic。
@@ -143,4 +194,14 @@ func (s *ProductionService) LoadWorkerMetrics(ctx context.Context) error {
 // WorkerMetrics 返回当前 process 累计的 worker 可观测指标快照。
 func (s *ProductionService) WorkerMetrics() WorkerMetricsSnapshot {
 	return s.metrics.snapshot()
+}
+
+// WorkerMetricsAggregated 在持久层可用时返回跨进程聚合的 worker 指标快照；
+// 否则回退到当前 process 的本地 atomic 快照，并把 Source 标记为 "local"。
+func (s *ProductionService) WorkerMetricsAggregated(ctx context.Context) WorkerMetricsSnapshot {
+	snap, err := s.metrics.aggregatedSnapshot(ctx)
+	if err != nil {
+		return s.metrics.snapshot()
+	}
+	return snap
 }

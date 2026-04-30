@@ -102,3 +102,62 @@ func TestProductionServicePersistsAndReloadsWorkerMetrics(t *testing.T) {
 		t.Fatalf("expected last skip metadata to be restored, got %+v", snap)
 	}
 }
+
+func TestProductionServiceWorkerMetricsAggregatedAcrossProcesses(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	shared := repo.NewMemoryWorkerMetricsRepository()
+
+	// Two independent ProductionService instances share one persistent
+	// metrics store, simulating two worker processes writing through to the
+	// same backing table.
+	procA := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	procA.SetWorkerMetricsRepository(shared, nil)
+	procB := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	procB.SetWorkerMetricsRepository(shared, nil)
+
+	procA.metrics.recordGenerationSkip("project lookup failed")
+	procB.metrics.recordGenerationSkip("project lookup failed")
+	procB.metrics.recordExportSkip("timeline lookup failed")
+
+	// Local snapshots only know what each process counted.
+	if local := procA.WorkerMetrics(); local.GenerationOrgUnresolvedSkips != 1 || local.Source != "local" {
+		t.Fatalf("procA local snapshot mismatch: %+v", local)
+	}
+	if local := procB.WorkerMetrics(); local.GenerationOrgUnresolvedSkips != 1 || local.ExportOrgUnresolvedSkips != 1 {
+		t.Fatalf("procB local snapshot mismatch: %+v", local)
+	}
+
+	// Aggregated snapshot reads the shared store, so both processes see the
+	// cross-process totals (2 generation skips, 1 export skip).
+	agg := procA.WorkerMetricsAggregated(ctx)
+	if agg.Source != "aggregated" {
+		t.Fatalf("expected Source=aggregated, got %q", agg.Source)
+	}
+	if agg.GenerationOrgUnresolvedSkips != 2 {
+		t.Fatalf("expected aggregated GenerationOrgUnresolvedSkips=2, got %d", agg.GenerationOrgUnresolvedSkips)
+	}
+	if agg.ExportOrgUnresolvedSkips != 1 {
+		t.Fatalf("expected aggregated ExportOrgUnresolvedSkips=1, got %d", agg.ExportOrgUnresolvedSkips)
+	}
+	if agg.LastSkipKind == "" || agg.LastSkipAt.IsZero() {
+		t.Fatalf("expected aggregated last skip metadata, got %+v", agg)
+	}
+}
+
+func TestProductionServiceWorkerMetricsAggregatedFallsBackWithoutRepo(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	svc := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	svc.metrics.recordGenerationSkip("local-only")
+
+	snap := svc.WorkerMetricsAggregated(ctx)
+	if snap.Source != "local" {
+		t.Fatalf("expected fallback Source=local, got %q", snap.Source)
+	}
+	if snap.GenerationOrgUnresolvedSkips != 1 {
+		t.Fatalf("expected local fallback counter=1, got %d", snap.GenerationOrgUnresolvedSkips)
+	}
+}

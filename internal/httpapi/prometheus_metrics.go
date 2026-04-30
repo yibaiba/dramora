@@ -11,12 +11,12 @@ import (
 // prometheusMetrics 以 Prometheus text exposition 0.0.4 格式暴露 worker 指标。
 // 该端点供 Prometheus / Alertmanager / Grafana Agent 等抓取，路径固定为 /metrics
 // 且不要求鉴权（与社区惯例一致）；实际部署可在反向代理或网络层做访问控制。
-func (a *api) prometheusMetrics(w http.ResponseWriter, _ *http.Request) {
+func (a *api) prometheusMetrics(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 
 	var snap service.WorkerMetricsSnapshot
 	if a.productionService != nil {
-		snap = a.productionService.WorkerMetrics()
+		snap = a.productionService.WorkerMetricsAggregated(r.Context())
 	}
 
 	var b strings.Builder

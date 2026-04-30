@@ -64,14 +64,14 @@ export function WorkerMetricsPage() {
         <Activity size={20} aria-hidden="true" />
         <h1>Worker Metrics</h1>
         <p className="page-subtitle">
-          展示 worker 在解析 job 组织上下文时被跳过的次数。计数为进程内 atomic 累计，进程重启后归零。
+          展示 worker 在解析 job 组织上下文时被跳过的次数。计数已持久化，进程重启后可恢复；多进程部署时优先返回跨进程聚合视图。
         </p>
       </header>
 
       <section className="provider-card" aria-label="刷新">
         <div className="provider-card-header">
           <RefreshCcw size={18} aria-hidden="true" />
-          <h2>当前进程快照</h2>
+          <h2>当前快照{data?.source ? `（${data.source === 'aggregated' ? '跨进程聚合' : '本地进程'}）` : ''}</h2>
           <button
             className="action-btn secondary"
             onClick={() => metricsQuery.refetch()}

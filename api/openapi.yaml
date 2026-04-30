@@ -1080,7 +1080,13 @@ paths:
           $ref: "#/components/responses/BadRequest"
   /api/v1/admin/worker-metrics:
     get:
-      summary: Snapshot of in-process worker observability counters (owner/admin)
+      summary: Snapshot of cross-process worker observability counters (owner/admin)
+      description: |
+        Returns worker observability counters. When the persistence layer is
+        configured, the snapshot is aggregated from the shared store across
+        all worker processes (`source: "aggregated"`); otherwise the response
+        falls back to the local in-memory snapshot of the API process
+        (`source: "local"`).
       responses:
         "200":
           description: Worker metrics snapshot
@@ -1105,6 +1111,9 @@ paths:
                       last_skip_at:
                         type: string
                         format: date-time
+                      source:
+                        type: string
+                        enum: [local, aggregated]
         "403":
           description: Forbidden — owner/admin role required
 components:

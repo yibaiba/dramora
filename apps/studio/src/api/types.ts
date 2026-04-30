@@ -524,4 +524,5 @@ export type WorkerMetricsSnapshot = {
   last_skip_kind?: string
   last_skip_reason?: string
   last_skip_at?: string
+  source?: 'local' | 'aggregated'
 }
