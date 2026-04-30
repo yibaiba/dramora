@@ -35,6 +35,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	router.Get("/healthz", api.health)
 	router.Get("/readyz", api.readiness)
+	router.Get("/metrics", api.prometheusMetrics)
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Use(authContextMiddleware(cfg.AuthService))

@@ -21,6 +21,22 @@ paths:
       responses:
         "200":
           description: API dependencies are ready
+  /metrics:
+    get:
+      summary: Prometheus text exposition for worker metrics
+      security: []
+      responses:
+        "200":
+          description: |
+            Prometheus 0.0.4 text exposition. Exposes counters
+            `dramora_worker_org_unresolved_skips_total{kind=...}` and a
+            `dramora_worker_last_skip_*` gauge family describing the latest
+            worker org-context resolution failure. Endpoint is intentionally
+            unauthenticated; restrict access at the network / proxy layer.
+          content:
+            text/plain:
+              schema:
+                type: string
   /api/v1/meta/capabilities:
     get:
       summary: List enabled API capabilities
