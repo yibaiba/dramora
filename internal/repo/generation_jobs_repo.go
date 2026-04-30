@@ -43,3 +43,35 @@ func (r *PostgresProductionRepository) CreateGenerationJob(
 	}
 	return job, nil
 }
+
+func (r *PostgresProductionRepository) ListGenerationJobEvents(
+	ctx context.Context,
+	generationJobID string,
+	limit int,
+) ([]domain.GenerationJobEvent, error) {
+	rows, err := r.pool.Query(ctx, listGenerationJobEventsSQL, generationJobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := make([]domain.GenerationJobEvent, 0)
+	for rows.Next() {
+		var (
+			ev     domain.GenerationJobEvent
+			status string
+		)
+		if err := rows.Scan(&ev.ID, &ev.GenerationJobID, &status, &ev.Message, &ev.CreatedAt); err != nil {
+			return nil, err
+		}
+		ev.Status = domain.GenerationJobStatus(status)
+		events = append(events, ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		events = events[len(events)-limit:]
+	}
+	return events, nil
+}

@@ -815,6 +815,63 @@ paths:
                     $ref: "#/components/schemas/GenerationJob"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/generation-jobs/{jobId}/recovery:
+    get:
+      summary: Get generation job recovery snapshot
+      parameters:
+        - $ref: "#/components/parameters/JobID"
+      responses:
+        "200":
+          description: Generation job recovery detail (events + summary)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  generation_job_recovery:
+                    type: object
+                    properties:
+                      generation_job:
+                        $ref: "#/components/schemas/GenerationJob"
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                            generation_job_id:
+                              type: string
+                            status:
+                              type: string
+                            message:
+                              type: string
+                            created_at:
+                              type: string
+                              format: date-time
+                      summary:
+                        type: object
+                        properties:
+                          is_terminal:
+                            type: boolean
+                          is_recoverable:
+                            type: boolean
+                          current_status:
+                            type: string
+                          status_entered_at:
+                            type: string
+                            format: date-time
+                          last_event_at:
+                            type: string
+                            format: date-time
+                          status_event_count:
+                            type: integer
+                          total_event_count:
+                            type: integer
+                          next_hint:
+                            type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/episodes/{episodeId}/timeline:
     get:
       summary: Get episode timeline

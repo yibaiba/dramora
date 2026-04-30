@@ -28,6 +28,14 @@ type GenerationJob struct {
 	UpdatedAt      time.Time
 }
 
+type GenerationJobEvent struct {
+	ID              string
+	GenerationJobID string
+	Status          GenerationJobStatus
+	Message         string
+	CreatedAt       time.Time
+}
+
 type ApprovalGate struct {
 	ID            string
 	ProjectID     string

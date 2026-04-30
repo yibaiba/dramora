@@ -79,6 +79,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/workflow-runs/{workflowRunId}", api.getWorkflowRun)
 		r.Get("/generation-jobs", api.listGenerationJobs)
 		r.Get("/generation-jobs/{jobId}", api.getGenerationJob)
+		r.Get("/generation-jobs/{jobId}/recovery", api.getGenerationJobRecovery)
 		r.Get("/episodes/{episodeId}/timeline", api.getEpisodeTimeline)
 		r.Get("/events/stream", streamEventsHandler)
 

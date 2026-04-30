@@ -11,6 +11,7 @@ import type {
   Asset,
   Export,
   GenerationJob,
+  GenerationJobRecovery,
   Project,
   ProviderConfig,
   LoginRequest,
@@ -129,6 +130,13 @@ export async function createEpisode(projectId: string, request: CreateEpisodeReq
 export async function listGenerationJobs(): Promise<GenerationJob[]> {
   const payload = await fetchJSON<{ generation_jobs: GenerationJob[] }>('/api/v1/generation-jobs')
   return payload.generation_jobs
+}
+
+export async function getGenerationJobRecovery(jobId: string): Promise<GenerationJobRecovery> {
+  const payload = await fetchJSON<{ generation_job_recovery: GenerationJobRecovery }>(
+    `/api/v1/generation-jobs/${jobId}/recovery`,
+  )
+  return payload.generation_job_recovery
 }
 
 export async function getWorkflowRun(workflowRunId: string): Promise<WorkflowRun> {

@@ -67,6 +67,13 @@ INSERT INTO generation_job_events (generation_job_id, status, message)
 VALUES ($1::uuid, $2, $3)
 `
 
+const listGenerationJobEventsSQL = `
+SELECT id::text, generation_job_id::text, status, message, created_at
+FROM generation_job_events
+WHERE generation_job_id = $1::uuid
+ORDER BY created_at, id
+`
+
 const listGenerationJobsSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),

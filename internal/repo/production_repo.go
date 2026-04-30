@@ -24,6 +24,7 @@ type ProductionRepository interface {
 	CreateGenerationJob(ctx context.Context, params CreateGenerationJobParams) (domain.GenerationJob, error)
 	AdvanceGenerationJobStatus(ctx context.Context, params AdvanceGenerationJobStatusParams) (domain.GenerationJob, error)
 	CompleteGenerationJobWithResult(ctx context.Context, params CompleteGenerationJobWithResultParams) (domain.GenerationJob, domain.Asset, error)
+	ListGenerationJobEvents(ctx context.Context, generationJobID string, limit int) ([]domain.GenerationJobEvent, error)
 	ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error)
 	GetApprovalGate(ctx context.Context, gateID string) (domain.ApprovalGate, error)
 	SaveApprovalGate(ctx context.Context, params SaveApprovalGateParams) (domain.ApprovalGate, error)

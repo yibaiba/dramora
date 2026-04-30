@@ -360,6 +360,58 @@ func generationJobDTOs(jobs []domain.GenerationJob) []generationJobResponse {
 	return responses
 }
 
+type generationJobEventResponse struct {
+	ID        string                     `json:"id"`
+	JobID     string                     `json:"generation_job_id"`
+	Status    domain.GenerationJobStatus `json:"status"`
+	Message   string                     `json:"message"`
+	CreatedAt time.Time                  `json:"created_at"`
+}
+
+type generationJobRecoverySummaryResponse struct {
+	IsTerminal       bool                       `json:"is_terminal"`
+	IsRecoverable    bool                       `json:"is_recoverable"`
+	CurrentStatus    domain.GenerationJobStatus `json:"current_status"`
+	StatusEnteredAt  time.Time                  `json:"status_entered_at"`
+	LastEventAt      time.Time                  `json:"last_event_at"`
+	StatusEventCount int                        `json:"status_event_count"`
+	TotalEventCount  int                        `json:"total_event_count"`
+	NextHint         string                     `json:"next_hint"`
+}
+
+type generationJobRecoveryResponse struct {
+	Job     generationJobResponse                `json:"generation_job"`
+	Events  []generationJobEventResponse         `json:"events"`
+	Summary generationJobRecoverySummaryResponse `json:"summary"`
+}
+
+func generationJobRecoveryDTO(recovery service.GenerationJobRecovery) generationJobRecoveryResponse {
+	events := make([]generationJobEventResponse, 0, len(recovery.Events))
+	for _, ev := range recovery.Events {
+		events = append(events, generationJobEventResponse{
+			ID:        ev.ID,
+			JobID:     ev.GenerationJobID,
+			Status:    ev.Status,
+			Message:   ev.Message,
+			CreatedAt: ev.CreatedAt,
+		})
+	}
+	return generationJobRecoveryResponse{
+		Job:    generationJobDTO(recovery.Job),
+		Events: events,
+		Summary: generationJobRecoverySummaryResponse{
+			IsTerminal:       recovery.Summary.IsTerminal,
+			IsRecoverable:    recovery.Summary.IsRecoverable,
+			CurrentStatus:    recovery.Summary.CurrentStatus,
+			StatusEnteredAt:  recovery.Summary.StatusEnteredAt,
+			LastEventAt:      recovery.Summary.LastEventAt,
+			StatusEventCount: recovery.Summary.StatusEventCount,
+			TotalEventCount:  recovery.Summary.TotalEventCount,
+			NextHint:         recovery.Summary.NextHint,
+		},
+	}
+}
+
 func approvalGateDTO(gate domain.ApprovalGate) approvalGateResponse {
 	return approvalGateResponse{
 		ID: gate.ID, ProjectID: gate.ProjectID, EpisodeID: gate.EpisodeID,

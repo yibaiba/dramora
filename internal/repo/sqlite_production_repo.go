@@ -242,6 +242,40 @@ func (r *SQLiteProductionRepository) CompleteGenerationJobWithResult(ctx context
 	return job, asset, nil
 }
 
+func (r *SQLiteProductionRepository) ListGenerationJobEvents(
+	ctx context.Context,
+	generationJobID string,
+	limit int,
+) ([]domain.GenerationJobEvent, error) {
+	rows, err := r.db.QueryContext(ctx, sqliteListGenerationJobEventsSQL, generationJobID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	events := make([]domain.GenerationJobEvent, 0)
+	for rows.Next() {
+		var (
+			ev          domain.GenerationJobEvent
+			status      string
+			messageNull sql.NullString
+		)
+		if err := rows.Scan(&ev.ID, &ev.GenerationJobID, &status, &messageNull, &ev.CreatedAt); err != nil {
+			return nil, err
+		}
+		ev.Status = domain.GenerationJobStatus(status)
+		ev.Message = messageNull.String
+		events = append(events, ev)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if limit > 0 && len(events) > limit {
+		events = events[len(events)-limit:]
+	}
+	return events, nil
+}
+
 func (r *SQLiteProductionRepository) ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error) {
 	rows, err := r.db.QueryContext(ctx, sqliteListApprovalGatesSQL, episodeID)
 	if err != nil {

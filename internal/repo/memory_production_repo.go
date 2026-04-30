@@ -15,6 +15,7 @@ type MemoryProductionRepository struct {
 	runCheckpoints map[string][]byte
 	jobs           map[string]domain.GenerationJob
 	jobKeys        map[string]string
+	jobEvents      map[string][]domain.GenerationJobEvent
 	sources        map[string]domain.StorySource
 	gates          map[string]domain.ApprovalGate
 	analyses       map[string]domain.StoryAnalysis
@@ -34,6 +35,7 @@ func NewMemoryProductionRepository() *MemoryProductionRepository {
 		runCheckpoints: make(map[string][]byte),
 		jobs:           make(map[string]domain.GenerationJob),
 		jobKeys:        make(map[string]string),
+		jobEvents:      make(map[string][]domain.GenerationJobEvent),
 		sources:        make(map[string]domain.StorySource),
 		gates:          make(map[string]domain.ApprovalGate),
 		analyses:       make(map[string]domain.StoryAnalysis),
@@ -137,6 +139,7 @@ func (r *MemoryProductionRepository) CreateStoryAnalysisRun(
 	r.runs[run.ID] = run
 	r.jobs[job.ID] = job
 	r.jobKeys[params.RequestKey] = job.ID
+	r.appendJobEventLocked(job.ID, job.Status, "story analysis queued", now)
 	return StoryAnalysisRun{WorkflowRun: run, GenerationJob: job}, nil
 }
 
@@ -261,6 +264,7 @@ func (r *MemoryProductionRepository) CreateGenerationJob(
 	}
 	r.jobs[job.ID] = job
 	r.jobKeys[params.RequestKey] = job.ID
+	r.appendJobEventLocked(job.ID, job.Status, params.EventMessage, now)
 	return job, nil
 }
 
@@ -282,8 +286,10 @@ func (r *MemoryProductionRepository) AdvanceGenerationJobStatus(
 	if params.ResultAssetID != "" {
 		job.ResultAssetID = params.ResultAssetID
 	}
-	job.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	job.UpdatedAt = now
 	r.jobs[job.ID] = job
+	r.appendJobEventLocked(job.ID, job.Status, params.EventMessage, now)
 	return job, nil
 }
 
@@ -304,9 +310,59 @@ func (r *MemoryProductionRepository) CompleteGenerationJobWithResult(
 	if params.Job.ProviderTaskID != "" {
 		job.ProviderTaskID = params.Job.ProviderTaskID
 	}
-	job.UpdatedAt = time.Now().UTC()
+	now := time.Now().UTC()
+	job.UpdatedAt = now
 	r.jobs[job.ID] = job
+	r.appendJobEventLocked(job.ID, job.Status, params.Job.EventMessage, now)
 	return job, asset, nil
+}
+
+func (r *MemoryProductionRepository) ListGenerationJobEvents(
+	_ context.Context,
+	generationJobID string,
+	limit int,
+) ([]domain.GenerationJobEvent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	events := r.jobEvents[generationJobID]
+	if len(events) == 0 {
+		return []domain.GenerationJobEvent{}, nil
+	}
+	out := make([]domain.GenerationJobEvent, len(events))
+	copy(out, events)
+	sort.Slice(out, func(i int, j int) bool {
+		if out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].ID < out[j].ID
+		}
+		return out[i].CreatedAt.Before(out[j].CreatedAt)
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[len(out)-limit:]
+	}
+	return out, nil
+}
+
+func (r *MemoryProductionRepository) appendJobEventLocked(
+	jobID string,
+	status domain.GenerationJobStatus,
+	message string,
+	createdAt time.Time,
+) {
+	if jobID == "" {
+		return
+	}
+	if r.jobEvents == nil {
+		r.jobEvents = make(map[string][]domain.GenerationJobEvent)
+	}
+	id, _ := domain.NewID()
+	r.jobEvents[jobID] = append(r.jobEvents[jobID], domain.GenerationJobEvent{
+		ID:              id,
+		GenerationJobID: jobID,
+		Status:          status,
+		Message:         message,
+		CreatedAt:       createdAt,
+	})
 }
 
 func (r *MemoryProductionRepository) ListApprovalGates(

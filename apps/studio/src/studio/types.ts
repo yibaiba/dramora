@@ -12,6 +12,7 @@ export type StudioShot = {
   tags: string[]
   thumbnail: string
   title: string
+  latestGenerationJobId?: string
 }
 
 export type InspectorTab = 'details' | 'prompt' | 'references' | 'notes'

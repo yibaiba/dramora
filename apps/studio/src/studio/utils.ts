@@ -161,6 +161,7 @@ export function mapWorkspaceDisplayShots(shots: StoryboardWorkspaceShot[]): Stud
       ].filter((value): value is string => Boolean(value)),
       thumbnail: thumbnailByIndex(index),
       title: shot.title,
+      latestGenerationJobId: latestJob?.id,
     }
   })
 }

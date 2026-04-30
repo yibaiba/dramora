@@ -84,6 +84,33 @@ func TestStartStoryAnalysisRoute(t *testing.T) {
 	if payload.GenerationJob.Status != "queued" {
 		t.Fatalf("expected queued job, got %q", payload.GenerationJob.Status)
 	}
+
+	recoveryResp := httptest.NewRecorder()
+	recoveryReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/generation-jobs/"+payload.GenerationJob.ID+"/recovery",
+		nil,
+	)
+	router.ServeHTTP(recoveryResp, recoveryReq)
+	if recoveryResp.Code != http.StatusOK {
+		t.Fatalf("expected recovery 200, got %d: %s", recoveryResp.Code, recoveryResp.Body.String())
+	}
+	var recoveryPayload struct {
+		Recovery generationJobRecoveryResponse `json:"generation_job_recovery"`
+	}
+	decodeBody(t, recoveryResp, &recoveryPayload)
+	if recoveryPayload.Recovery.Job.ID != payload.GenerationJob.ID {
+		t.Fatalf("expected recovery job id %q, got %q", payload.GenerationJob.ID, recoveryPayload.Recovery.Job.ID)
+	}
+	if recoveryPayload.Recovery.Summary.TotalEventCount == 0 {
+		t.Fatalf("expected at least one lifecycle event, got %+v", recoveryPayload.Recovery.Summary)
+	}
+	if !recoveryPayload.Recovery.Summary.IsRecoverable && !recoveryPayload.Recovery.Summary.IsTerminal {
+		t.Fatalf("expected recoverable or terminal summary, got %+v", recoveryPayload.Recovery.Summary)
+	}
+	if recoveryPayload.Recovery.Summary.NextHint == "" {
+		t.Fatalf("expected next_hint, got empty")
+	}
 }
 
 func TestSaveEpisodeTimelineRoute(t *testing.T) {

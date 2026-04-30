@@ -14,6 +14,7 @@ import {
   getStoryAnalysis,
   getStoryMap,
   getWorkflowRun,
+  getGenerationJobRecovery,
   getStoryboardWorkspace,
   listEpisodeAssets,
   listEpisodes,
@@ -125,6 +126,16 @@ export function useGenerationJobs() {
     queryFn: listGenerationJobs,
     queryKey: ['generation-jobs'],
     refetchInterval: 10_000,
+  })
+}
+
+export function useGenerationJobRecovery(jobId?: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? Boolean(jobId)
+  return useQuery({
+    enabled,
+    queryFn: () => getGenerationJobRecovery(jobId ?? ''),
+    queryKey: ['generation-job-recovery', jobId],
+    refetchInterval: 15_000,
   })
 }
 

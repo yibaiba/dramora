@@ -85,3 +85,12 @@ func (api *api) getGenerationJob(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, Envelope{"generation_job": generationJobDTO(job)})
 }
+
+func (api *api) getGenerationJobRecovery(w http.ResponseWriter, r *http.Request) {
+	recovery, err := api.productionService.GetGenerationJobRecovery(r.Context(), chi.URLParam(r, "jobId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"generation_job_recovery": generationJobRecoveryDTO(recovery)})
+}

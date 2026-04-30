@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
@@ -221,4 +222,110 @@ func (s *ProductionService) GetGenerationJob(ctx context.Context, id string) (do
 		return domain.GenerationJob{}, err
 	}
 	return job, nil
+}
+
+type GenerationJobRecovery struct {
+	Job     domain.GenerationJob
+	Events  []domain.GenerationJobEvent
+	Summary GenerationJobRecoverySummary
+}
+
+type GenerationJobRecoverySummary struct {
+	IsTerminal       bool
+	IsRecoverable    bool
+	CurrentStatus    domain.GenerationJobStatus
+	StatusEnteredAt  time.Time
+	LastEventAt      time.Time
+	StatusEventCount int
+	TotalEventCount  int
+	NextHint         string
+}
+
+func (s *ProductionService) GetGenerationJobRecovery(
+	ctx context.Context,
+	id string,
+) (GenerationJobRecovery, error) {
+	job, err := s.GetGenerationJob(ctx, id)
+	if err != nil {
+		return GenerationJobRecovery{}, err
+	}
+	events, err := s.production.ListGenerationJobEvents(ctx, job.ID, 0)
+	if err != nil {
+		return GenerationJobRecovery{}, err
+	}
+	return GenerationJobRecovery{
+		Job:     job,
+		Events:  events,
+		Summary: buildGenerationJobRecoverySummary(job, events),
+	}, nil
+}
+
+func buildGenerationJobRecoverySummary(
+	job domain.GenerationJob,
+	events []domain.GenerationJobEvent,
+) GenerationJobRecoverySummary {
+	summary := GenerationJobRecoverySummary{
+		CurrentStatus:   job.Status,
+		IsTerminal:      isTerminalGenerationStatus(job.Status),
+		IsRecoverable:   isRecoverableGenerationStatus(job.Status),
+		TotalEventCount: len(events),
+	}
+	for _, ev := range events {
+		if ev.CreatedAt.After(summary.LastEventAt) {
+			summary.LastEventAt = ev.CreatedAt
+		}
+		if ev.Status == job.Status {
+			summary.StatusEventCount++
+			if ev.CreatedAt.After(summary.StatusEnteredAt) {
+				summary.StatusEnteredAt = ev.CreatedAt
+			}
+		}
+	}
+	if summary.StatusEnteredAt.IsZero() {
+		summary.StatusEnteredAt = job.UpdatedAt
+	}
+	if summary.LastEventAt.IsZero() {
+		summary.LastEventAt = job.UpdatedAt
+	}
+	summary.NextHint = recoveryNextHint(job, summary)
+	return summary
+}
+
+func isTerminalGenerationStatus(status domain.GenerationJobStatus) bool {
+	switch status {
+	case domain.GenerationJobStatusSucceeded, domain.GenerationJobStatusFailed:
+		return true
+	}
+	return false
+}
+
+func isRecoverableGenerationStatus(status domain.GenerationJobStatus) bool {
+	switch status {
+	case domain.GenerationJobStatusQueued,
+		domain.GenerationJobStatusSubmitting,
+		domain.GenerationJobStatusSubmitted,
+		domain.GenerationJobStatusPolling,
+		domain.GenerationJobStatusDownloading,
+		domain.GenerationJobStatusPostprocessing:
+		return true
+	}
+	return false
+}
+
+func recoveryNextHint(job domain.GenerationJob, summary GenerationJobRecoverySummary) string {
+	switch job.Status {
+	case domain.GenerationJobStatusSucceeded:
+		return "job complete; result asset persisted"
+	case domain.GenerationJobStatusFailed:
+		return "job failed; create a new request to retry"
+	case domain.GenerationJobStatusQueued:
+		return "waiting for worker to pick up"
+	case domain.GenerationJobStatusSubmitting:
+		return "worker will resubmit or recover provider task on next poll"
+	case domain.GenerationJobStatusSubmitted, domain.GenerationJobStatusPolling:
+		return "worker will poll provider for completion on next tick"
+	case domain.GenerationJobStatusDownloading, domain.GenerationJobStatusPostprocessing:
+		return "worker will resume download / postprocessing on next tick"
+	}
+	return ""
 }

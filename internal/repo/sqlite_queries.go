@@ -109,6 +109,13 @@ INSERT INTO generation_job_events (generation_job_id, status, message)
 VALUES (?, ?, ?)
 `
 
+const sqliteListGenerationJobEventsSQL = `
+SELECT id, generation_job_id, status, message, created_at
+FROM generation_job_events
+WHERE generation_job_id = ?
+ORDER BY created_at, id
+`
+
 const sqliteGetGenerationJobSQL = `
 SELECT id, project_id, COALESCE(episode_id, ''), COALESCE(workflow_run_id, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),

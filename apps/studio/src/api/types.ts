@@ -96,6 +96,31 @@ export type GenerationJob = {
   updated_at: string
 }
 
+export type GenerationJobEvent = {
+  id: string
+  generation_job_id: string
+  status: GenerationJobStatus
+  message: string
+  created_at: string
+}
+
+export type GenerationJobRecoverySummary = {
+  is_terminal: boolean
+  is_recoverable: boolean
+  current_status: GenerationJobStatus
+  status_entered_at: string
+  last_event_at: string
+  status_event_count: number
+  total_event_count: number
+  next_hint: string
+}
+
+export type GenerationJobRecovery = {
+  generation_job: GenerationJob
+  events: GenerationJobEvent[]
+  summary: GenerationJobRecoverySummary
+}
+
 export type WorkflowRun = {
   id: string
   project_id: string
