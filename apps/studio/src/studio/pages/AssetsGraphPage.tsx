@@ -24,6 +24,7 @@ import {
 import { ActionButton } from '../components/ActionButton'
 import { AssetsGraphInspector } from '../components/AssetsGraphInspector'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
+import { StatePlaceholder } from '../components/StatePlaceholder'
 import {
   cloneCharacterBibleDraft,
   createCharacterBibleDraft,
@@ -726,15 +727,18 @@ export function AssetsGraphPage() {
         </div>
 
         {assets.length === 0 ? (
-          <div className="empty-board asset-empty-board">
-            <Library aria-hidden="true" />
-            <div>
-              <strong>还没有候选资产</strong>
-              <p>生成资产图谱并创建候选资产后，这里会出现可锁定的参考素材卡片。</p>
-            </div>
-          </div>
+          <StatePlaceholder
+            tone="empty"
+            icon={Library}
+            title="还没有候选资产"
+            description="生成资产图谱并创建候选资产后，这里会出现可锁定的参考素材卡片。"
+          />
         ) : filteredAssets.length === 0 ? (
-          <div className="graph-empty">当前筛选条件下没有资产，请切换节点或状态筛选。</div>
+          <StatePlaceholder
+            tone="empty"
+            title="当前筛选条件下没有资产"
+            description="请切换节点或状态筛选。"
+          />
         ) : (
           <div className="asset-candidate-grid">
             {filteredAssets.map((asset) => (

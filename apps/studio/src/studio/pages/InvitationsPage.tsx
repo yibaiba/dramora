@@ -4,6 +4,7 @@ import { Mail, Plus, ShieldCheck, Copy, Check } from 'lucide-react'
 import { useCreateInvitation, useOrganizationInvitations } from '../../api/hooks'
 import { useAuthStore } from '../../state/authStore'
 import type { OrganizationInvitation } from '../../api/types'
+import { StatePlaceholder } from '../components/StatePlaceholder'
 
 const ADMIN_ROLES = new Set(['owner', 'admin'])
 
@@ -121,9 +122,13 @@ export function InvitationsPage() {
         </div>
         <div className="provider-card-body">
           {invitationsQuery.isLoading ? (
-            <p>加载中...</p>
+            <StatePlaceholder tone="loading" title="正在加载邀请列表" />
           ) : invitations.length === 0 ? (
-            <p className="page-subtitle">暂无邀请记录。生成第一条邀请链接邀请协作者加入吧。</p>
+            <StatePlaceholder
+              tone="empty"
+              title="暂无邀请记录"
+              description="生成第一条邀请链接邀请协作者加入吧。"
+            />
           ) : (
             <ul className="invitation-list">
               {invitations.map((invitation) => (

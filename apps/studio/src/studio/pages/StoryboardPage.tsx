@@ -52,6 +52,7 @@ import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
 import { RecoveryPanel } from '../components/RecoveryPanel'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
+import { StatePlaceholder } from '../components/StatePlaceholder'
 import type { InspectorTab, ShotDraft, StudioShot, ViewMode } from '../types'
 import type {
   ApprovalGateOverview,
@@ -255,13 +256,13 @@ export function StoryboardPage() {
   if (!selectedShot) {
     return (
       <section className="studio-page" aria-labelledby="storyboard-title">
-        <div className="empty-board">
-          <Boxes aria-hidden="true" />
-          <div>
-            <strong id="storyboard-title">还没有镜头卡</strong>
-            <p>先完成故事解析，再生成故事图谱与分镜卡。</p>
-          </div>
-        </div>
+        <h1 id="storyboard-title" className="sr-only">Storyboard</h1>
+        <StatePlaceholder
+          tone="empty"
+          icon={Boxes}
+          title="还没有镜头卡"
+          description="先完成故事解析，再生成故事图谱与分镜卡。"
+        />
       </section>
     )
   }
@@ -1571,10 +1572,11 @@ function ApprovalStatusCard({
         </article>
       </div>
       {orderedGates.length === 0 ? (
-        <div className="approval-empty">
-          <strong>还没有审批点</strong>
-          <p>先生成分镜和审批点，导演确认流才会出现。</p>
-        </div>
+        <StatePlaceholder
+          tone="empty"
+          title="还没有审批点"
+          description="先生成分镜和审批点，导演确认流才会出现。"
+        />
       ) : (
         <div className="approval-gate-list">
           {orderedGates.map((gate) => {
