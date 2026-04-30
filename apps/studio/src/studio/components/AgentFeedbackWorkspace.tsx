@@ -396,41 +396,68 @@ export function AgentFeedbackWorkspace({
             })}
           </div>
           <div className="agent-feedback-history-list">
-            {visibleReturnHistory.map((entry) => (
-              <div className="agent-feedback-history-item" key={entry.id}>
-                <strong>
-                  {entry.sourcePage} · {entry.agentLabel}
-                </strong>
-                <span>{agentFollowUpFeedbackLabel(entry.feedback)}</span>
-                <small>{entry.resultNote ?? '已从下游页回传结果。'}</small>
-                <div className="agent-feedback-history-actions">
-                  <button
-                    type="button"
-                    className="ghost-action"
-                    onClick={() => onSelectHistoryEntry(entry)}
-                  >
-                    打开对应 Agent
-                  </button>
-                  <button
-                    type="button"
-                    className="ghost-action"
-                    onClick={() => onOpenHistorySource(entry)}
-                  >
-                    回到来源页
-                  </button>
-                  {onRemoveHistoryEntry ? (
-                    <button
-                      type="button"
-                      className="ghost-action"
-                      onClick={() => onRemoveHistoryEntry(entry)}
-                    >
-                      移除此条
-                    </button>
-                  ) : null}
-                  <small>{new Date(entry.createdAt).toLocaleString()}</small>
+            {(() => {
+              const groups: { key: string; label: string; items: typeof visibleReturnHistory }[] = []
+              const today = new Date()
+              const todayKey = today.toDateString()
+              const yesterdayKey = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1).toDateString()
+              for (const item of visibleReturnHistory) {
+                const created = new Date(item.createdAt)
+                const dayKey = created.toDateString()
+                let label = created.toLocaleDateString()
+                if (dayKey === todayKey) label = `今天 · ${label}`
+                else if (dayKey === yesterdayKey) label = `昨天 · ${label}`
+                const last = groups[groups.length - 1]
+                if (last && last.key === dayKey) {
+                  last.items.push(item)
+                } else {
+                  groups.push({ key: dayKey, label, items: [item] })
+                }
+              }
+              return groups.map((group) => (
+                <div className="agent-feedback-history-group" key={group.key}>
+                  <div className="agent-feedback-history-group-heading">
+                    <span>{group.label}</span>
+                    <small>{group.items.length} 条</small>
+                  </div>
+                  {group.items.map((entry) => (
+                    <div className="agent-feedback-history-item" key={entry.id}>
+                      <strong>
+                        {entry.sourcePage} · {entry.agentLabel}
+                      </strong>
+                      <span>{agentFollowUpFeedbackLabel(entry.feedback)}</span>
+                      <small>{entry.resultNote ?? '已从下游页回传结果。'}</small>
+                      <div className="agent-feedback-history-actions">
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          onClick={() => onSelectHistoryEntry(entry)}
+                        >
+                          打开对应 Agent
+                        </button>
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          onClick={() => onOpenHistorySource(entry)}
+                        >
+                          回到来源页
+                        </button>
+                        {onRemoveHistoryEntry ? (
+                          <button
+                            type="button"
+                            className="ghost-action"
+                            onClick={() => onRemoveHistoryEntry(entry)}
+                          >
+                            移除此条
+                          </button>
+                        ) : null}
+                        <small>{new Date(entry.createdAt).toLocaleTimeString()}</small>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
+              ))
+            })()}
             {visibleReturnHistory.length === 0 ? (
               <small>当前筛选下暂无回传记录。</small>
             ) : null}

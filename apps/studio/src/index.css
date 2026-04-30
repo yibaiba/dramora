@@ -3416,6 +3416,23 @@ p {
   gap: 0.55rem;
 }
 
+.agent-feedback-history-group {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.agent-feedback-history-group-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.1rem 0.2rem 0.05rem;
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px dashed rgba(148, 163, 184, 0.15);
+}
+
 .agent-feedback-history-item {
   display: grid;
   gap: 0.2rem;
