@@ -21,6 +21,8 @@ import {
   listGenerationJobs,
   listProjects,
   listProviderConfigs,
+  listOrganizationInvitations,
+  createOrganizationInvitation,
   listStorySources,
   listStoryAnalyses,
   listStoryboardShots,
@@ -46,6 +48,7 @@ import type {
   LoginRequest,
   RegisterRequest,
   CreateEpisodeRequest,
+  CreateInvitationRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
   Export,
@@ -456,5 +459,21 @@ export function useSaveProviderConfig() {
 export function useTestProviderConfig() {
   return useMutation({
     mutationFn: (capability: string) => testProviderConfig(capability),
+  })
+}
+
+export function useOrganizationInvitations(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: listOrganizationInvitations,
+    queryKey: ['organization-invitations'],
+  })
+}
+
+export function useCreateInvitation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CreateInvitationRequest) => createOrganizationInvitation(request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
   })
 }

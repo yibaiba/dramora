@@ -12,6 +12,11 @@ export function AuthPage() {
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [password, setPassword] = useState('')
+  const [invitationToken, setInvitationToken] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    const params = new URLSearchParams(window.location.search)
+    return params.get('invite') ?? ''
+  })
   const [errorMessage, setErrorMessage] = useState('')
 
   const activeMutation = mode === 'login' ? loginMutation : registerMutation
@@ -31,7 +36,12 @@ export function AuthPage() {
     }
 
     registerMutation.mutate(
-      { display_name: displayName, email, password },
+      {
+        display_name: displayName,
+        email,
+        password,
+        ...(invitationToken.trim() ? { invitation_token: invitationToken.trim() } : {}),
+      },
       {
         onError: (error) => setErrorMessage(error.message),
         onSuccess: (session) => setSession(session),
@@ -94,6 +104,17 @@ export function AuthPage() {
                 placeholder="Lin Yifei"
                 required
                 value={displayName}
+              />
+            </label>
+          ) : null}
+
+          {mode === 'register' ? (
+            <label>
+              <span>邀请码（可选）</span>
+              <input
+                onChange={(event) => setInvitationToken(event.target.value)}
+                placeholder="留空则自动创建你的工作台"
+                value={invitationToken}
               />
             </label>
           ) : null}

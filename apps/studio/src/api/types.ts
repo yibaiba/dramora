@@ -40,6 +40,26 @@ export type LoginRequest = {
 
 export type RegisterRequest = LoginRequest & {
   display_name: string
+  invitation_token?: string
+}
+
+export type OrganizationInvitation = {
+  id: string
+  organization_id: string
+  email: string
+  role: 'owner' | 'admin' | 'editor' | 'viewer'
+  token: string
+  status: 'pending' | 'accepted' | 'revoked'
+  invited_by_user_id?: string
+  expires_at: string
+  accepted_at?: string | null
+  accepted_by_user_id?: string
+  created_at: string
+}
+
+export type CreateInvitationRequest = {
+  email: string
+  role?: 'owner' | 'admin' | 'editor' | 'viewer'
 }
 
 export type Project = {

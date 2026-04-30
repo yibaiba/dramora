@@ -4,6 +4,7 @@ import {
   Download,
   Home,
   Layers3,
+  Mail,
   Settings,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -12,6 +13,7 @@ export const studioRoutePaths = {
   adminSettings: '/admin/settings',
   assetsGraph: '/assets-graph',
   home: '/',
+  organizationInvitations: '/admin/invitations',
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
@@ -68,5 +70,12 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'adminSettings',
     label: 'Settings',
     path: studioRoutePaths.adminSettings,
+  },
+  {
+    description: '为协作者签发组织邀请（owner / admin）。',
+    icon: Mail,
+    key: 'organizationInvitations',
+    label: 'Invitations',
+    path: studioRoutePaths.organizationInvitations,
   },
 ]

@@ -1,6 +1,7 @@
 import type {
   AuthSession,
   CreateEpisodeRequest,
+  CreateInvitationRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
   Episode,
@@ -13,6 +14,7 @@ import type {
   Project,
   ProviderConfig,
   LoginRequest,
+  OrganizationInvitation,
   RegisterRequest,
   SaveProviderConfigRequest,
   SeedEpisodeProductionResponse,
@@ -360,4 +362,21 @@ export async function testProviderConfig(capability: string): Promise<TestProvid
     method: 'POST',
   })
   return payload.test_result
+}
+
+// org invitations (owner/admin only)
+
+export async function listOrganizationInvitations(): Promise<OrganizationInvitation[]> {
+  const payload = await fetchJSON<{ invitations: OrganizationInvitation[] }>('/api/v1/organizations/invitations')
+  return payload.invitations ?? []
+}
+
+export async function createOrganizationInvitation(
+  request: CreateInvitationRequest,
+): Promise<OrganizationInvitation> {
+  const payload = await fetchJSON<{ invitation: OrganizationInvitation }>('/api/v1/organizations/invitations', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.invitation
 }
