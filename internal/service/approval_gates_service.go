@@ -45,6 +45,9 @@ func (s *ProductionService) ListApprovalGates(
 	if strings.TrimSpace(episodeID) == "" {
 		return nil, fmt.Errorf("%w: episode id is required", domain.ErrInvalidInput)
 	}
+	if err := s.authorizeEpisode(ctx, episodeID); err != nil {
+		return nil, err
+	}
 	return s.production.ListApprovalGates(ctx, episodeID)
 }
 
@@ -64,6 +67,15 @@ func (s *ProductionService) RequestApprovalChanges(
 	reviewNote string,
 ) (domain.ApprovalGate, error) {
 	return s.reviewApprovalGate(ctx, gateID, domain.ApprovalGateStatusChangesRequested, reviewedBy, reviewNote)
+}
+
+func (s *ProductionService) ResubmitApprovalGate(
+	ctx context.Context,
+	gateID string,
+	reviewedBy string,
+	reviewNote string,
+) (domain.ApprovalGate, error) {
+	return s.reviewApprovalGate(ctx, gateID, domain.ApprovalGateStatusPending, reviewedBy, reviewNote)
 }
 
 func (s *ProductionService) approvalGateSeeds(
@@ -177,6 +189,9 @@ func (s *ProductionService) reviewApprovalGate(
 	}
 	gate, err := s.production.GetApprovalGate(ctx, gateID)
 	if err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, gate.ProjectID, gate.EpisodeID); err != nil {
 		return domain.ApprovalGate{}, err
 	}
 	if err := gate.Status.ValidateTransition(status); err != nil {

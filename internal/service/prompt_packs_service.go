@@ -29,6 +29,9 @@ func (s *ProductionService) GenerateShotPromptPack(
 	if err != nil {
 		return domain.ShotPromptPack{}, err
 	}
+	if err := s.authorizeScopedResource(ctx, shot.ProjectID, shot.EpisodeID); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
 	assets, err := s.production.ListAssetsByEpisode(ctx, shot.EpisodeID)
 	if err != nil {
 		return domain.ShotPromptPack{}, err
@@ -47,7 +50,14 @@ func (s *ProductionService) GetShotPromptPack(
 	if strings.TrimSpace(shotID) == "" {
 		return domain.ShotPromptPack{}, fmt.Errorf("%w: shot id is required", domain.ErrInvalidInput)
 	}
-	return s.production.GetShotPromptPack(ctx, shotID)
+	pack, err := s.production.GetShotPromptPack(ctx, shotID)
+	if err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, pack.ProjectID, pack.EpisodeID); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	return pack, nil
 }
 
 type SaveShotPromptPackInput struct {
@@ -75,12 +85,18 @@ func (s *ProductionService) SaveShotPromptPack(
 		if shotErr != nil {
 			return domain.ShotPromptPack{}, shotErr
 		}
+		if err := s.authorizeScopedResource(ctx, shot.ProjectID, shot.EpisodeID); err != nil {
+			return domain.ShotPromptPack{}, err
+		}
 		packParams, buildErr := buildShotPromptPackParams(shot, nil)
 		if buildErr != nil {
 			return domain.ShotPromptPack{}, buildErr
 		}
 		packParams.DirectPrompt = directPrompt
 		return s.production.SaveShotPromptPack(ctx, packParams)
+	}
+	if err := s.authorizeScopedResource(ctx, pack.ProjectID, pack.EpisodeID); err != nil {
+		return domain.ShotPromptPack{}, err
 	}
 	return s.production.SaveShotPromptPack(ctx, repo.SaveShotPromptPackParams{
 		ID:                pack.ID,
@@ -108,6 +124,9 @@ func (s *ProductionService) StartShotVideoGeneration(
 	}
 	pack, err := s.production.GetShotPromptPack(ctx, shotID)
 	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, pack.ProjectID, pack.EpisodeID); err != nil {
 		return domain.GenerationJob{}, err
 	}
 	jobID, err := domain.NewID()

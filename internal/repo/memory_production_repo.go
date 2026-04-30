@@ -10,39 +10,41 @@ import (
 )
 
 type MemoryProductionRepository struct {
-	mu        sync.RWMutex
-	runs      map[string]domain.WorkflowRun
-	jobs      map[string]domain.GenerationJob
-	jobKeys   map[string]string
-	sources   map[string]domain.StorySource
-	gates     map[string]domain.ApprovalGate
-	analyses  map[string]domain.StoryAnalysis
-	timelines map[string]domain.Timeline
-	chars     map[string]domain.Character
-	scenes    map[string]domain.Scene
-	props     map[string]domain.Prop
-	shots     map[string]domain.StoryboardShot
-	prompts   map[string]domain.ShotPromptPack
-	assets    map[string]domain.Asset
-	exports   map[string]domain.Export
+	mu             sync.RWMutex
+	runs           map[string]domain.WorkflowRun
+	runCheckpoints map[string][]byte
+	jobs           map[string]domain.GenerationJob
+	jobKeys        map[string]string
+	sources        map[string]domain.StorySource
+	gates          map[string]domain.ApprovalGate
+	analyses       map[string]domain.StoryAnalysis
+	timelines      map[string]domain.Timeline
+	chars          map[string]domain.Character
+	scenes         map[string]domain.Scene
+	props          map[string]domain.Prop
+	shots          map[string]domain.StoryboardShot
+	prompts        map[string]domain.ShotPromptPack
+	assets         map[string]domain.Asset
+	exports        map[string]domain.Export
 }
 
 func NewMemoryProductionRepository() *MemoryProductionRepository {
 	return &MemoryProductionRepository{
-		runs:      make(map[string]domain.WorkflowRun),
-		jobs:      make(map[string]domain.GenerationJob),
-		jobKeys:   make(map[string]string),
-		sources:   make(map[string]domain.StorySource),
-		gates:     make(map[string]domain.ApprovalGate),
-		analyses:  make(map[string]domain.StoryAnalysis),
-		timelines: make(map[string]domain.Timeline),
-		chars:     make(map[string]domain.Character),
-		scenes:    make(map[string]domain.Scene),
-		props:     make(map[string]domain.Prop),
-		shots:     make(map[string]domain.StoryboardShot),
-		prompts:   make(map[string]domain.ShotPromptPack),
-		assets:    make(map[string]domain.Asset),
-		exports:   make(map[string]domain.Export),
+		runs:           make(map[string]domain.WorkflowRun),
+		runCheckpoints: make(map[string][]byte),
+		jobs:           make(map[string]domain.GenerationJob),
+		jobKeys:        make(map[string]string),
+		sources:        make(map[string]domain.StorySource),
+		gates:          make(map[string]domain.ApprovalGate),
+		analyses:       make(map[string]domain.StoryAnalysis),
+		timelines:      make(map[string]domain.Timeline),
+		chars:          make(map[string]domain.Character),
+		scenes:         make(map[string]domain.Scene),
+		props:          make(map[string]domain.Prop),
+		shots:          make(map[string]domain.StoryboardShot),
+		prompts:        make(map[string]domain.ShotPromptPack),
+		assets:         make(map[string]domain.Asset),
+		exports:        make(map[string]domain.Export),
 	}
 }
 
@@ -150,6 +152,35 @@ func (r *MemoryProductionRepository) GetWorkflowRun(
 		return domain.WorkflowRun{}, domain.ErrNotFound
 	}
 	return run, nil
+}
+
+func (r *MemoryProductionRepository) SaveWorkflowCheckpoint(
+	_ context.Context,
+	workflowRunID string,
+	payload []byte,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if _, ok := r.runs[workflowRunID]; !ok {
+		return domain.ErrNotFound
+	}
+	r.runCheckpoints[workflowRunID] = append([]byte(nil), payload...)
+	return nil
+}
+
+func (r *MemoryProductionRepository) LoadWorkflowCheckpoint(
+	_ context.Context,
+	workflowRunID string,
+) ([]byte, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	if _, ok := r.runs[workflowRunID]; !ok {
+		return nil, domain.ErrNotFound
+	}
+	payload := r.runCheckpoints[workflowRunID]
+	return append([]byte(nil), payload...), nil
 }
 
 func (r *MemoryProductionRepository) ListGenerationJobs(_ context.Context) ([]domain.GenerationJob, error) {
@@ -379,6 +410,13 @@ func (r *MemoryProductionRepository) CompleteStoryAnalysisJob(
 	job.Status = params.Job.To
 	job.UpdatedAt = time.Now().UTC()
 	r.jobs[job.ID] = job
+	if params.Analysis.WorkflowRunID != "" {
+		if run, ok := r.runs[params.Analysis.WorkflowRunID]; ok {
+			run.Status = domain.WorkflowRunStatusSucceeded
+			run.UpdatedAt = job.UpdatedAt
+			r.runs[run.ID] = run
+		}
+	}
 
 	analysis := r.buildStoryAnalysisLocked(params.Analysis)
 	r.analyses[analysis.ID] = analysis
@@ -516,6 +554,35 @@ func (r *MemoryProductionRepository) GetStoryMap(_ context.Context, episodeID st
 	}
 	sortStoryMap(storyMap)
 	return storyMap, nil
+}
+
+func (r *MemoryProductionRepository) GetCharacter(_ context.Context, characterID string) (domain.Character, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	character, ok := r.chars[characterID]
+	if !ok {
+		return domain.Character{}, domain.ErrNotFound
+	}
+	return character, nil
+}
+
+func (r *MemoryProductionRepository) SaveCharacterBible(
+	_ context.Context,
+	params SaveCharacterBibleParams,
+) (domain.Character, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	character, ok := r.chars[params.CharacterID]
+	if !ok {
+		return domain.Character{}, domain.ErrNotFound
+	}
+	bible := params.CharacterBible
+	character.CharacterBible = &bible
+	character.UpdatedAt = time.Now().UTC()
+	r.chars[character.ID] = character
+	return character, nil
 }
 
 func sortStoryMap(storyMap StoryMap) {
@@ -700,6 +767,17 @@ func (r *MemoryProductionRepository) ListAssetsByEpisode(_ context.Context, epis
 	return assets, nil
 }
 
+func (r *MemoryProductionRepository) GetAsset(_ context.Context, assetID string) (domain.Asset, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	asset, ok := r.assets[assetID]
+	if !ok {
+		return domain.Asset{}, domain.ErrNotFound
+	}
+	return asset, nil
+}
+
 func (r *MemoryProductionRepository) LockAsset(_ context.Context, assetID string) (domain.Asset, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -726,6 +804,18 @@ func (r *MemoryProductionRepository) GetEpisodeTimeline(
 		return domain.Timeline{}, domain.ErrNotFound
 	}
 	return timeline, nil
+}
+
+func (r *MemoryProductionRepository) GetTimelineByID(_ context.Context, timelineID string) (domain.Timeline, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	for _, timeline := range r.timelines {
+		if timeline.ID == timelineID {
+			return timeline, nil
+		}
+	}
+	return domain.Timeline{}, domain.ErrNotFound
 }
 
 func (r *MemoryProductionRepository) SaveEpisodeTimeline(

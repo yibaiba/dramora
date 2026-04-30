@@ -34,12 +34,22 @@ func (s *ProductionService) ListEpisodeAssets(ctx context.Context, episodeID str
 	if strings.TrimSpace(episodeID) == "" {
 		return nil, fmt.Errorf("%w: episode id is required", domain.ErrInvalidInput)
 	}
+	if err := s.authorizeEpisode(ctx, episodeID); err != nil {
+		return nil, err
+	}
 	return s.production.ListAssetsByEpisode(ctx, episodeID)
 }
 
 func (s *ProductionService) LockAsset(ctx context.Context, assetID string) (domain.Asset, error) {
 	if strings.TrimSpace(assetID) == "" {
 		return domain.Asset{}, fmt.Errorf("%w: asset id is required", domain.ErrInvalidInput)
+	}
+	asset, err := s.production.GetAsset(ctx, assetID)
+	if err != nil {
+		return domain.Asset{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, asset.ProjectID, asset.EpisodeID); err != nil {
+		return domain.Asset{}, err
 	}
 	return s.production.LockAsset(ctx, assetID)
 }
