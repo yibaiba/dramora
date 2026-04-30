@@ -12,6 +12,7 @@ import {
 import { useExport, useExportRecovery, useSaveEpisodeTimeline, useStartEpisodeExport } from '../../api/hooks'
 import type { Episode, Timeline } from '../../api/types'
 import type { StudioShot } from '../types'
+import { RecoveryPanel } from './RecoveryPanel'
 import {
   buildTimelineRequest,
   exportStatusLabel,
@@ -97,12 +98,27 @@ export function TimelineWorkspace({
         </span>
         <span>导出预设 1080p · H.264 · 24fps</span>
         <span>导出状态 {activeExport ? exportStatusLabel(activeExport.status) : '可预览'}</span>
-        {exportRecovery.data ? (
-          <span className="export-recovery-hint" title={exportRecovery.data.summary.next_hint}>
-            恢复提示：{exportRecovery.data.summary.next_hint || '—'}
-          </span>
-        ) : null}
       </footer>
+      {activeExport ? (
+        <RecoveryPanel
+          title="导出任务恢复"
+          subtitle={`Export ${activeExport.id.slice(0, 8)} · ${exportStatusLabel(activeExport.status)}`}
+          isLoading={exportRecovery.isLoading}
+          isError={exportRecovery.isError}
+          status={exportRecovery.data?.summary.current_status}
+          isTerminal={exportRecovery.data?.summary.is_terminal}
+          isRecoverable={exportRecovery.data?.summary.is_recoverable}
+          statusEnteredAt={exportRecovery.data?.summary.status_entered_at}
+          lastEventAt={exportRecovery.data?.summary.last_event_at}
+          totalEventCount={exportRecovery.data?.summary.total_event_count}
+          nextHint={exportRecovery.data?.summary.next_hint}
+          events={exportRecovery.data?.events.map((event) => ({
+            status: event.status,
+            message: event.message,
+            created_at: event.created_at,
+          }))}
+        />
+      ) : null}
     </section>
   )
 }

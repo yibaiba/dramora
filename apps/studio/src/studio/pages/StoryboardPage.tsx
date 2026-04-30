@@ -50,6 +50,7 @@ import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
 import { demoReferences } from '../mockData'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
+import { RecoveryPanel } from '../components/RecoveryPanel'
 import type { InspectorTab, ShotDraft, StudioShot, ViewMode } from '../types'
 import type {
   ApprovalGateOverview,
@@ -1749,61 +1750,29 @@ function GenerationRecoveryCard({ jobId }: { jobId?: string }) {
   const { data, isLoading, isError } = useGenerationJobRecovery(jobId)
   if (!jobId) return null
   return (
-    <section className="inspector-card recovery-card" aria-label="生成任务恢复">
-      <header>
-        <strong>生成任务恢复</strong>
-        <span className="recovery-card-subtle">最近一次生成的轨迹</span>
-      </header>
-      {isLoading ? <p className="recovery-card-subtle">读取恢复轨迹…</p> : null}
-      {isError ? <p className="recovery-card-subtle">暂时无法读取恢复轨迹</p> : null}
-      {data ? (
-        <div className="recovery-card-body">
-          <div className="recovery-card-row">
-            <span className={`recovery-badge recovery-badge-${data.summary.current_status}`}>
-              {data.summary.current_status}
-            </span>
-            <span className="recovery-card-subtle">
-              {data.summary.is_terminal
-                ? '已进入终态'
-                : data.summary.is_recoverable
-                  ? '在线 / 可恢复'
-                  : '其他状态'}
-            </span>
-          </div>
-          <dl className="recovery-card-meta">
-            <div>
-              <dt>当前状态停留</dt>
-              <dd>{relativeFromNow(data.summary.status_entered_at)}</dd>
-            </div>
-            <div>
-              <dt>事件总数</dt>
-              <dd>
-                {data.summary.total_event_count}
-                <span className="recovery-card-subtle"> · 同状态 {data.summary.status_event_count} 次</span>
-              </dd>
-            </div>
-          </dl>
-          {data.summary.next_hint ? (
-            <p className="recovery-card-hint">下一步：{data.summary.next_hint}</p>
-          ) : null}
-        </div>
-      ) : null}
-    </section>
+    <RecoveryPanel
+      title="生成任务恢复"
+      subtitle="最近一次生成的轨迹"
+      isLoading={isLoading}
+      isError={isError}
+      status={data?.summary.current_status}
+      isTerminal={data?.summary.is_terminal}
+      isRecoverable={data?.summary.is_recoverable}
+      statusEnteredAt={data?.summary.status_entered_at}
+      lastEventAt={data?.summary.last_event_at}
+      totalEventCount={data?.summary.total_event_count}
+      sameStatusCount={data?.summary.status_event_count}
+      nextHint={data?.summary.next_hint}
+      events={data?.events.map((event) => ({
+        status: event.status,
+        message: event.message,
+        created_at: event.created_at,
+      }))}
+    />
   )
 }
 
-function relativeFromNow(iso?: string): string {
-  if (!iso) return '—'
-  const t = new Date(iso).getTime()
-  if (Number.isNaN(t)) return '—'
-  const diffMs = Date.now() - t
-  const minutes = Math.floor(diffMs / 60000)
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes} 分钟前`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours} 小时前`
-  return `${Math.floor(hours / 24)} 天前`
-}
+
 
 function InspectorActions({
   activeEpisode,

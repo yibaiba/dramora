@@ -1779,6 +1779,55 @@ p {
   border-radius: 0.55rem;
 }
 
+.recovery-card-events {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.recovery-card-events li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.4rem 0.55rem;
+  border-radius: 0.55rem;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  font-size: 0.78rem;
+}
+
+.recovery-card-events li > .recovery-badge {
+  align-self: flex-start;
+}
+
+.recovery-card-events li p {
+  margin: 0;
+  color: #e2e8f0;
+}
+
+.recovery-card-events-toggle {
+  background: transparent !important;
+  border: none !important;
+  padding: 0.2rem 0 !important;
+}
+
+.recovery-card-events-toggle button {
+  background: transparent;
+  border: 1px dashed rgba(148, 163, 184, 0.3);
+  color: #c7d2fe;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 0.45rem;
+  cursor: pointer;
+}
+
+.recovery-card-events-toggle button:hover {
+  background: rgba(99, 102, 241, 0.12);
+}
+
 .ghost-action {
   min-height: 44px;
   display: inline-flex;
