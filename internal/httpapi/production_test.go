@@ -649,6 +649,27 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 	if exportDetailPayload.Export.Status != "succeeded" {
 		t.Fatalf("expected succeeded export, got %q", exportDetailPayload.Export.Status)
 	}
+
+	exportRecoveryResp := httptest.NewRecorder()
+	exportRecoveryReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/exports/"+exportPayload.Export.ID+"/recovery",
+		nil,
+	)
+	router.ServeHTTP(exportRecoveryResp, exportRecoveryReq)
+	if exportRecoveryResp.Code != http.StatusOK {
+		t.Fatalf("expected export recovery 200, got %d: %s", exportRecoveryResp.Code, exportRecoveryResp.Body.String())
+	}
+	var exportRecoveryPayload struct {
+		Recovery exportRecoveryResponse `json:"export_recovery"`
+	}
+	decodeBody(t, exportRecoveryResp, &exportRecoveryPayload)
+	if !exportRecoveryPayload.Recovery.Summary.IsTerminal {
+		t.Fatalf("expected terminal export recovery summary, got %+v", exportRecoveryPayload.Recovery.Summary)
+	}
+	if exportRecoveryPayload.Recovery.Summary.NextHint == "" {
+		t.Fatalf("expected non-empty next_hint")
+	}
 }
 
 func TestSeedEpisodeProductionRoute(t *testing.T) {

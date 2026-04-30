@@ -29,3 +29,12 @@ func (api *api) getExport(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, Envelope{"export": exportDTO(export)})
 }
+
+func (api *api) getExportRecovery(w http.ResponseWriter, r *http.Request) {
+	recovery, err := api.productionService.GetExportRecovery(r.Context(), chi.URLParam(r, "exportId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"export_recovery": exportRecoveryDTO(recovery)})
+}

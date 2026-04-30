@@ -10,6 +10,7 @@ import type {
   SaveCharacterBibleRequest,
   Asset,
   Export,
+  ExportRecovery,
   GenerationJob,
   GenerationJobRecovery,
   Project,
@@ -348,6 +349,13 @@ export async function startEpisodeExport(episodeId: string): Promise<Export> {
 export async function getExport(exportId: string): Promise<Export> {
   const payload = await fetchJSON<{ export: Export }>(`/api/v1/exports/${exportId}`)
   return payload.export
+}
+
+export async function getExportRecovery(exportId: string): Promise<ExportRecovery> {
+  const payload = await fetchJSON<{ export_recovery: ExportRecovery }>(
+    `/api/v1/exports/${exportId}/recovery`,
+  )
+  return payload.export_recovery
 }
 
 // admin: provider configs

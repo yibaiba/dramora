@@ -8,7 +8,8 @@ import {
   register,
   approveApprovalGate,
   generateShotPromptPack,
- getExport,
+  getExport,
+  getExportRecovery,
   getEpisodeTimeline,
   getShotPromptPack,
   getStoryAnalysis,
@@ -443,6 +444,16 @@ export function useExport(exportId?: string) {
     queryFn: () => getExport(exportId ?? ''),
     queryKey: ['export', exportId],
     refetchInterval: (query) => (isExportInProgress(query.state.data?.status) ? 3_000 : false),
+  })
+}
+
+export function useExportRecovery(exportId?: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? Boolean(exportId)
+  return useQuery({
+    enabled,
+    queryFn: () => getExportRecovery(exportId ?? ''),
+    queryKey: ['export-recovery', exportId],
+    refetchInterval: 15_000,
   })
 }
 

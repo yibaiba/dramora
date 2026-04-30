@@ -329,3 +329,108 @@ func recoveryNextHint(job domain.GenerationJob, summary GenerationJobRecoverySum
 	}
 	return ""
 }
+
+type ExportRecoveryEvent struct {
+	Status    domain.ExportStatus
+	Message   string
+	CreatedAt time.Time
+}
+
+type ExportRecoverySummary struct {
+	IsTerminal      bool
+	IsRecoverable   bool
+	CurrentStatus   domain.ExportStatus
+	StatusEnteredAt time.Time
+	LastEventAt     time.Time
+	TotalEventCount int
+	NextHint        string
+}
+
+type ExportRecovery struct {
+	Export  domain.Export
+	Events  []ExportRecoveryEvent
+	Summary ExportRecoverySummary
+}
+
+func (s *ProductionService) GetExportRecovery(ctx context.Context, id string) (ExportRecovery, error) {
+	export, err := s.GetExport(ctx, id)
+	if err != nil {
+		return ExportRecovery{}, err
+	}
+	events := buildExportRecoveryEvents(export)
+	return ExportRecovery{
+		Export:  export,
+		Events:  events,
+		Summary: buildExportRecoverySummary(export, events),
+	}, nil
+}
+
+func buildExportRecoveryEvents(export domain.Export) []ExportRecoveryEvent {
+	events := []ExportRecoveryEvent{
+		{Status: domain.ExportStatusQueued, Message: "export queued", CreatedAt: export.CreatedAt},
+	}
+	if export.Status != domain.ExportStatusQueued && !export.UpdatedAt.Equal(export.CreatedAt) {
+		events = append(events, ExportRecoveryEvent{
+			Status:    export.Status,
+			Message:   "current status",
+			CreatedAt: export.UpdatedAt,
+		})
+	}
+	return events
+}
+
+func buildExportRecoverySummary(export domain.Export, events []ExportRecoveryEvent) ExportRecoverySummary {
+	summary := ExportRecoverySummary{
+		CurrentStatus:   export.Status,
+		IsTerminal:      isTerminalExportStatus(export.Status),
+		IsRecoverable:   isRecoverableExportStatus(export.Status),
+		TotalEventCount: len(events),
+		StatusEnteredAt: export.UpdatedAt,
+		LastEventAt:     export.UpdatedAt,
+	}
+	if summary.StatusEnteredAt.IsZero() {
+		summary.StatusEnteredAt = export.CreatedAt
+	}
+	if summary.LastEventAt.IsZero() {
+		summary.LastEventAt = export.CreatedAt
+	}
+	for _, ev := range events {
+		if ev.CreatedAt.After(summary.LastEventAt) {
+			summary.LastEventAt = ev.CreatedAt
+		}
+	}
+	summary.NextHint = exportRecoveryNextHint(export.Status)
+	return summary
+}
+
+func isTerminalExportStatus(status domain.ExportStatus) bool {
+	switch status {
+	case domain.ExportStatusSucceeded, domain.ExportStatusFailed, domain.ExportStatusCanceled:
+		return true
+	}
+	return false
+}
+
+func isRecoverableExportStatus(status domain.ExportStatus) bool {
+	switch status {
+	case domain.ExportStatusQueued, domain.ExportStatusRendering:
+		return true
+	}
+	return false
+}
+
+func exportRecoveryNextHint(status domain.ExportStatus) string {
+	switch status {
+	case domain.ExportStatusQueued:
+		return "waiting for worker to start rendering"
+	case domain.ExportStatusRendering:
+		return "worker will finalize rendering on next tick"
+	case domain.ExportStatusSucceeded:
+		return "export complete; artifact available"
+	case domain.ExportStatusFailed:
+		return "export failed; create a new request to retry"
+	case domain.ExportStatusCanceled:
+		return "export canceled"
+	}
+	return ""
+}

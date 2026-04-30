@@ -76,6 +76,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/approval-gates/{gateId}:resubmit", api.resubmitApprovalGate)
 		r.Get("/story-analyses/{analysisId}", api.getStoryAnalysis)
 		r.Get("/exports/{exportId}", api.getExport)
+		r.Get("/exports/{exportId}/recovery", api.getExportRecovery)
 		r.Get("/workflow-runs/{workflowRunId}", api.getWorkflowRun)
 		r.Get("/generation-jobs", api.listGenerationJobs)
 		r.Get("/generation-jobs/{jobId}", api.getGenerationJob)

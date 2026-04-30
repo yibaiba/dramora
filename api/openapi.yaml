@@ -947,6 +947,57 @@ paths:
                     $ref: "#/components/schemas/Export"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/exports/{exportId}/recovery:
+    get:
+      summary: Get export recovery snapshot
+      parameters:
+        - $ref: "#/components/parameters/ExportID"
+      responses:
+        "200":
+          description: Export recovery detail (synthetic events + summary)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  export_recovery:
+                    type: object
+                    properties:
+                      export:
+                        $ref: "#/components/schemas/Export"
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                            message:
+                              type: string
+                            created_at:
+                              type: string
+                              format: date-time
+                      summary:
+                        type: object
+                        properties:
+                          is_terminal:
+                            type: boolean
+                          is_recoverable:
+                            type: boolean
+                          current_status:
+                            type: string
+                          status_entered_at:
+                            type: string
+                            format: date-time
+                          last_event_at:
+                            type: string
+                            format: date-time
+                          total_event_count:
+                            type: integer
+                          next_hint:
+                            type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/events/stream:
     get:
       summary: Stream server-sent workflow and job events

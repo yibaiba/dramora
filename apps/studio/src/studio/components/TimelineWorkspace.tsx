@@ -9,7 +9,7 @@ import {
   Scissors,
   Subtitles,
 } from 'lucide-react'
-import { useExport, useSaveEpisodeTimeline, useStartEpisodeExport } from '../../api/hooks'
+import { useExport, useExportRecovery, useSaveEpisodeTimeline, useStartEpisodeExport } from '../../api/hooks'
 import type { Episode, Timeline } from '../../api/types'
 import type { StudioShot } from '../types'
 import {
@@ -39,6 +39,7 @@ export function TimelineWorkspace({
   const startExport = useStartEpisodeExport()
   const exportQuery = useExport(startExport.data?.id)
   const activeExport = exportQuery.data ?? startExport.data
+  const exportRecovery = useExportRecovery(activeExport?.id)
   const duration = displayShots.reduce((total, shot) => total + shot.durationMS, 0)
 
   const saveDraft = () => {
@@ -96,6 +97,11 @@ export function TimelineWorkspace({
         </span>
         <span>导出预设 1080p · H.264 · 24fps</span>
         <span>导出状态 {activeExport ? exportStatusLabel(activeExport.status) : '可预览'}</span>
+        {exportRecovery.data ? (
+          <span className="export-recovery-hint" title={exportRecovery.data.summary.next_hint}>
+            恢复提示：{exportRecovery.data.summary.next_hint || '—'}
+          </span>
+        ) : null}
       </footer>
     </section>
   )

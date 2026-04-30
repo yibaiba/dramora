@@ -3594,6 +3594,14 @@ p {
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
+.export-recovery-hint {
+  color: rgba(199, 210, 254, 0.85);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .timeline-ruler span {
   color: var(--muted);
   font-size: 0.78rem;

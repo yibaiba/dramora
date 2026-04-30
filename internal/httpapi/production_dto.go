@@ -709,3 +709,49 @@ func exportDTO(item domain.Export) exportResponse {
 		Format: item.Format, CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
 	}
 }
+
+type exportRecoveryEventResponse struct {
+	Status    domain.ExportStatus `json:"status"`
+	Message   string              `json:"message"`
+	CreatedAt time.Time           `json:"created_at"`
+}
+
+type exportRecoverySummaryResponse struct {
+	IsTerminal      bool                `json:"is_terminal"`
+	IsRecoverable   bool                `json:"is_recoverable"`
+	CurrentStatus   domain.ExportStatus `json:"current_status"`
+	StatusEnteredAt time.Time           `json:"status_entered_at"`
+	LastEventAt     time.Time           `json:"last_event_at"`
+	TotalEventCount int                 `json:"total_event_count"`
+	NextHint        string              `json:"next_hint"`
+}
+
+type exportRecoveryResponse struct {
+	Export  exportResponse                `json:"export"`
+	Events  []exportRecoveryEventResponse `json:"events"`
+	Summary exportRecoverySummaryResponse `json:"summary"`
+}
+
+func exportRecoveryDTO(recovery service.ExportRecovery) exportRecoveryResponse {
+	events := make([]exportRecoveryEventResponse, 0, len(recovery.Events))
+	for _, ev := range recovery.Events {
+		events = append(events, exportRecoveryEventResponse{
+			Status:    ev.Status,
+			Message:   ev.Message,
+			CreatedAt: ev.CreatedAt,
+		})
+	}
+	return exportRecoveryResponse{
+		Export: exportDTO(recovery.Export),
+		Events: events,
+		Summary: exportRecoverySummaryResponse{
+			IsTerminal:      recovery.Summary.IsTerminal,
+			IsRecoverable:   recovery.Summary.IsRecoverable,
+			CurrentStatus:   recovery.Summary.CurrentStatus,
+			StatusEnteredAt: recovery.Summary.StatusEnteredAt,
+			LastEventAt:     recovery.Summary.LastEventAt,
+			TotalEventCount: recovery.Summary.TotalEventCount,
+			NextHint:        recovery.Summary.NextHint,
+		},
+	}
+}

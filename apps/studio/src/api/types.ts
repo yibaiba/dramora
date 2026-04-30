@@ -414,6 +414,28 @@ export type Export = {
   updated_at: string
 }
 
+export type ExportRecoveryEvent = {
+  status: Export['status']
+  message: string
+  created_at: string
+}
+
+export type ExportRecoverySummary = {
+  is_terminal: boolean
+  is_recoverable: boolean
+  current_status: Export['status']
+  status_entered_at: string
+  last_event_at: string
+  total_event_count: number
+  next_hint: string
+}
+
+export type ExportRecovery = {
+  export: Export
+  events: ExportRecoveryEvent[]
+  summary: ExportRecoverySummary
+}
+
 export type CreateProjectRequest = {
   name: string
   description?: string
