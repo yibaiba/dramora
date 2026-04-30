@@ -1670,6 +1670,24 @@ p {
   background: rgba(148, 163, 184, 0.08);
 }
 
+.blackboard-chip-link {
+  color: #c7d2fe;
+  text-decoration: none;
+  border-color: rgba(99, 102, 241, 0.45);
+  background: rgba(99, 102, 241, 0.12);
+  transition:
+    border-color 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+}
+
+.blackboard-chip-link:hover,
+.blackboard-chip-link:focus-visible {
+  border-color: rgba(129, 140, 248, 0.75);
+  background: rgba(99, 102, 241, 0.22);
+  color: #eef2ff;
+}
+
 .ghost-action {
   min-height: 44px;
   display: inline-flex;

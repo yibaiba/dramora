@@ -399,12 +399,33 @@ export function AssetsGraphPage() {
                 <span className="blackboard-chip">
                   Assets / Graph 待跟进 {agentOutputHandoff.reviewContext.assetsGraphPendingCount}
                 </span>
-                <span className="blackboard-chip">
-                  Storyboard 待跟进 {agentOutputHandoff.reviewContext.storyboardPendingCount}
-                </span>
-                <span className="blackboard-chip">
-                  累计回传 {agentOutputHandoff.reviewContext.totalReturnedCount}
-                </span>
+                {agentOutputHandoff.reviewContext.storyboardPendingCount > 0 ? (
+                  <Link
+                    className="blackboard-chip blackboard-chip-link"
+                    to={studioRoutePaths.storyboard}
+                    title="去 Storyboard 处理待跟进"
+                  >
+                    Storyboard 待跟进 {agentOutputHandoff.reviewContext.storyboardPendingCount}
+                  </Link>
+                ) : (
+                  <span className="blackboard-chip">
+                    Storyboard 待跟进 {agentOutputHandoff.reviewContext.storyboardPendingCount}
+                  </span>
+                )}
+                {agentOutputHandoff.reviewContext.totalReturnedCount > 0 ? (
+                  <Link
+                    className="blackboard-chip blackboard-chip-link"
+                    to={studioRoutePaths.storyAnalysis}
+                    state={buildStoryAnalysisFollowUpReturnState(agentOutputHandoff, 'Assets / Graph')}
+                    title="回到解析查看本轮回传历史"
+                  >
+                    累计回传 {agentOutputHandoff.reviewContext.totalReturnedCount}
+                  </Link>
+                ) : (
+                  <span className="blackboard-chip">
+                    累计回传 {agentOutputHandoff.reviewContext.totalReturnedCount}
+                  </span>
+                )}
               </div>
             ) : null}
           </>

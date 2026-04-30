@@ -352,12 +352,33 @@ export function StoryboardPage() {
               <span className="blackboard-chip">
                 Storyboard 待跟进 {assetsGraphHandoff.reviewContext.storyboardPendingCount}
               </span>
-              <span className="blackboard-chip">
-                Assets / Graph 待跟进 {assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
-              </span>
-              <span className="blackboard-chip">
-                累计回传 {assetsGraphHandoff.reviewContext.totalReturnedCount}
-              </span>
+              {assetsGraphHandoff.reviewContext.assetsGraphPendingCount > 0 ? (
+                <Link
+                  className="blackboard-chip blackboard-chip-link"
+                  to={studioRoutePaths.assetsGraph}
+                  title="去 Assets / Graph 处理待跟进"
+                >
+                  Assets / Graph 待跟进 {assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
+                </Link>
+              ) : (
+                <span className="blackboard-chip">
+                  Assets / Graph 待跟进 {assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
+                </span>
+              )}
+              {assetsGraphHandoff.reviewContext.totalReturnedCount > 0 ? (
+                <Link
+                  className="blackboard-chip blackboard-chip-link"
+                  to={studioRoutePaths.storyAnalysis}
+                  state={buildStoryAnalysisFollowUpReturnState(assetsGraphHandoff, 'Storyboard')}
+                  title="回到解析查看本轮回传历史"
+                >
+                  累计回传 {assetsGraphHandoff.reviewContext.totalReturnedCount}
+                </Link>
+              ) : (
+                <span className="blackboard-chip">
+                  累计回传 {assetsGraphHandoff.reviewContext.totalReturnedCount}
+                </span>
+              )}
             </div>
           ) : null}
         </>
