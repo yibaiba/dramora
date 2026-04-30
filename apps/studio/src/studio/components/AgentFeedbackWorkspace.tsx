@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ListFilter } from 'lucide-react'
 import type { StoryAgentOutput } from '../../api/types'
 import type {
@@ -17,6 +17,7 @@ import {
 import {
   RETURN_HISTORY_INITIAL_PAGE_SIZE,
   RETURN_HISTORY_PAGE_INCREMENT,
+  sanitizeReturnedFollowUpHistory,
 } from '../reviewPersistence'
 import { agentRoleLabel, agentStatusLabel } from '../utils'
 
@@ -34,6 +35,7 @@ type AgentFeedbackWorkspaceProps = {
   onOpenNextFollowUp: () => void
   onOpenFollowUpTarget: (agent: StoryAgentOutput) => void
   onOpenHistorySource: (entry: ReturnedFollowUpHistoryEntry) => void
+  onImportHistoryEntries?: (entries: ReturnedFollowUpHistoryEntry[]) => number
   onRemoveHistoryEntry?: (entry: ReturnedFollowUpHistoryEntry) => void
   onRemoveHistoryEntries?: (entries: ReturnedFollowUpHistoryEntry[]) => void
   onSelectAgent: (agent: StoryAgentOutput) => void
@@ -67,6 +69,7 @@ export function AgentFeedbackWorkspace({
   onOpenNextFollowUp,
   onOpenFollowUpTarget,
   onOpenHistorySource,
+  onImportHistoryEntries,
   onRemoveHistoryEntry,
   onRemoveHistoryEntries,
   onSelectAgent,
@@ -81,6 +84,12 @@ export function AgentFeedbackWorkspace({
   const [historyPageSize, setHistoryPageSize] = useState(RETURN_HISTORY_INITIAL_PAGE_SIZE)
   const [historySearch, setHistorySearch] = useState('')
   const [historyCopyState, setHistoryCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [historyImportState, setHistoryImportState] = useState<
+    | { kind: 'idle' }
+    | { kind: 'imported'; count: number }
+    | { kind: 'error'; message: string }
+  >({ kind: 'idle' })
+  const historyImportInputRef = useRef<HTMLInputElement | null>(null)
   const filteredAgents = agents
     .filter((agent) => matchesAgentFeedbackFilter(agent.role, feedbackByRole, filter))
     .sort((left, right) => {
@@ -163,6 +172,56 @@ export function AgentFeedbackWorkspace({
       ) : closureNotice ? (
         <div className="board-notice agent-feedback-empty">{closureNotice}</div>
       ) : null}
+      {returnedFollowUpHistory.length === 0 && onImportHistoryEntries ? (
+        <div className="agent-feedback-history-toolbar">
+          <small>无回传历史。可从他处导入：</small>
+          <input
+            ref={historyImportInputRef}
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              event.target.value = ''
+              if (!file) return
+              file
+                .text()
+                .then((raw) => {
+                  let parsed: unknown
+                  try {
+                    parsed = JSON.parse(raw)
+                  } catch {
+                    throw new Error('JSON 格式无法解析')
+                  }
+                  const sanitized = sanitizeReturnedFollowUpHistory(parsed)
+                  if (sanitized.length === 0) {
+                    throw new Error('JSON 中没有可识别的回传记录')
+                  }
+                  const imported = onImportHistoryEntries(sanitized)
+                  setHistoryImportState({ kind: 'imported', count: imported })
+                })
+                .catch((err: unknown) => {
+                  const message = err instanceof Error ? err.message : '导入失败'
+                  setHistoryImportState({ kind: 'error', message })
+                })
+                .finally(() => {
+                  window.setTimeout(() => setHistoryImportState({ kind: 'idle' }), 2500)
+                })
+            }}
+          />
+          <button
+            type="button"
+            className="ghost-action"
+            onClick={() => historyImportInputRef.current?.click()}
+          >
+            {historyImportState.kind === 'imported'
+              ? `已导入 ${historyImportState.count} 条`
+              : historyImportState.kind === 'error'
+                ? `导入失败：${historyImportState.message}`
+                : '导入 JSON'}
+          </button>
+        </div>
+      ) : null}
       {returnedFollowUpHistory.length > 0 ? (
         <div className="agent-feedback-history">
           <div className="panel-title-row">
@@ -218,6 +277,55 @@ export function AgentFeedbackWorkspace({
                     ? '复制失败'
                     : `复制为 JSON（${filteredReturnHistory.length}）`}
               </button>
+            ) : null}
+            {onImportHistoryEntries ? (
+              <>
+                <input
+                  ref={historyImportInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    event.target.value = ''
+                    if (!file) return
+                    file
+                      .text()
+                      .then((raw) => {
+                        let parsed: unknown
+                        try {
+                          parsed = JSON.parse(raw)
+                        } catch {
+                          throw new Error('JSON 格式无法解析')
+                        }
+                        const sanitized = sanitizeReturnedFollowUpHistory(parsed)
+                        if (sanitized.length === 0) {
+                          throw new Error('JSON 中没有可识别的回传记录')
+                        }
+                        const imported = onImportHistoryEntries(sanitized)
+                        setHistoryImportState({ kind: 'imported', count: imported })
+                      })
+                      .catch((err: unknown) => {
+                        const message = err instanceof Error ? err.message : '导入失败'
+                        setHistoryImportState({ kind: 'error', message })
+                      })
+                      .finally(() => {
+                        window.setTimeout(() => setHistoryImportState({ kind: 'idle' }), 2500)
+                      })
+                  }}
+                />
+                <button
+                  type="button"
+                  className="ghost-action"
+                  onClick={() => historyImportInputRef.current?.click()}
+                >
+                  {historyImportState.kind === 'imported'
+                    ? `已导入 ${historyImportState.count} 条`
+                    : historyImportState.kind === 'error'
+                      ? `导入失败：${historyImportState.message}`
+                      : '导入 JSON'}
+                </button>
+              </>
             ) : null}
           </div>
           <div className="asset-filter-row" role="toolbar" aria-label="回传历史筛选">

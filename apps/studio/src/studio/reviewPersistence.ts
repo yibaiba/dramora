@@ -170,7 +170,22 @@ function sanitizePersistedAgentFeedback(
   )
 }
 
-function sanitizeReturnedFollowUpHistory(value: unknown): ReturnedFollowUpHistoryEntry[] {
+export function mergeReturnedFollowUpHistoryEntries(
+  current: ReturnedFollowUpHistoryEntry[],
+  incoming: ReturnedFollowUpHistoryEntry[],
+): ReturnedFollowUpHistoryEntry[] {
+  const seen = new Set<string>()
+  const merged: ReturnedFollowUpHistoryEntry[] = []
+  for (const entry of [...incoming, ...current]) {
+    if (seen.has(entry.id)) continue
+    seen.add(entry.id)
+    merged.push(entry)
+  }
+  merged.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+  return merged.slice(0, RETURN_HISTORY_CAPACITY)
+}
+
+export function sanitizeReturnedFollowUpHistory(value: unknown): ReturnedFollowUpHistoryEntry[] {
   if (!Array.isArray(value)) {
     return []
   }

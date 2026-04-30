@@ -39,6 +39,7 @@ import { useStudioSelection } from '../hooks/useStudioSelection'
 import {
   appendReturnedFollowUpHistoryEntry,
   buildStoryAnalysisFeedbackStorageEntryKey,
+  mergeReturnedFollowUpHistoryEntries,
   persistStoryAnalysisFeedback,
   persistStoryAnalysisReturnHistory,
   readPersistedStoryAnalysisFeedback,
@@ -391,6 +392,24 @@ export function StoryAnalysisPage() {
       handleOpenFollowUpTarget(agent)
     }
   }
+  const handleImportHistoryEntries = (entries: ReturnedFollowUpHistoryEntry[]): number => {
+    if (!feedbackStorageEntryKey || entries.length === 0) return 0
+
+    let importedCount = 0
+    setPersistedReturnHistory((current) => {
+      const existing = current[feedbackStorageEntryKey] ?? []
+      const merged = mergeReturnedFollowUpHistoryEntries(existing, entries)
+      importedCount = merged.length - existing.length
+      if (merged.length === existing.length) {
+        return current
+      }
+      return { ...current, [feedbackStorageEntryKey]: merged }
+    })
+    if (importedCount > 0) {
+      setReviewClosureNotice(`已导入 ${importedCount} 条回传记录到当前分析。`)
+    }
+    return Math.max(importedCount, 0)
+  }
   const handleRemoveHistoryEntry = (entry: ReturnedFollowUpHistoryEntry) => {
     if (!feedbackStorageEntryKey) return
 
@@ -627,6 +646,7 @@ export function StoryAnalysisPage() {
             onOpenNextFollowUp={handleOpenNextFollowUp}
             onOpenFollowUpTarget={handleOpenFollowUpTarget}
             onOpenHistorySource={handleOpenHistorySource}
+            onImportHistoryEntries={handleImportHistoryEntries}
             onRemoveHistoryEntry={handleRemoveHistoryEntry}
             onRemoveHistoryEntries={handleRemoveHistoryEntries}
             onSelectAgent={setSelectedAgent}
