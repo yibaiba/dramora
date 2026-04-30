@@ -43,6 +43,7 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 		}
 		jobCtx, ctxErr := s.workerJobAuthContextForProject(ctx, generationJob.ProjectID)
 		if ctxErr != nil {
+			s.metrics.recordGenerationSkip(ctxErr.Error())
 			slog.Default().Warn("worker skipped generation job: cannot resolve organization context",
 				"job_id", generationJob.ID,
 				"project_id", generationJob.ProjectID,

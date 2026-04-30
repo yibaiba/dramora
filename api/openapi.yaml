@@ -1062,6 +1062,35 @@ paths:
                     $ref: "#/components/schemas/TestProviderResult"
         "400":
           $ref: "#/components/responses/BadRequest"
+  /api/v1/admin/worker-metrics:
+    get:
+      summary: Snapshot of in-process worker observability counters (owner/admin)
+      responses:
+        "200":
+          description: Worker metrics snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_metrics:
+                    type: object
+                    properties:
+                      generation_org_unresolved_skips:
+                        type: integer
+                        format: int64
+                      export_org_unresolved_skips:
+                        type: integer
+                        format: int64
+                      last_skip_kind:
+                        type: string
+                      last_skip_reason:
+                        type: string
+                      last_skip_at:
+                        type: string
+                        format: date-time
+        "403":
+          description: Forbidden — owner/admin role required
 components:
   securitySchemes:
     bearerAuth:

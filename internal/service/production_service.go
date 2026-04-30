@@ -19,6 +19,7 @@ type ProductionService struct {
 	seedance   seedanceProvider
 	agentSvc   *AgentService
 	projectSvc *ProjectService
+	metrics    workerMetrics
 }
 
 type StartStoryAnalysisResult struct {
@@ -177,6 +178,7 @@ func (s *ProductionService) processExportsByStatus(
 	for _, export := range exports {
 		jobCtx, ctxErr := s.workerJobAuthContextForTimeline(ctx, export.TimelineID)
 		if ctxErr != nil {
+			s.metrics.recordExportSkip(ctxErr.Error())
 			slog.Default().Warn("worker skipped export: cannot resolve organization context",
 				"export_id", export.ID,
 				"timeline_id", export.TimelineID,
