@@ -51,6 +51,18 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 }
 
 func shouldProcessGenerationJob(generationJob domain.GenerationJob) bool {
+	if isStoryAnalysisJob(generationJob) {
+		switch generationJob.Status {
+		case domain.GenerationJobStatusQueued,
+			domain.GenerationJobStatusSubmitting,
+			domain.GenerationJobStatusSubmitted,
+			domain.GenerationJobStatusDownloading,
+			domain.GenerationJobStatusPostprocessing:
+			return true
+		default:
+			return false
+		}
+	}
 	return generationJob.Status == domain.GenerationJobStatusQueued || isSeedanceVideoJob(generationJob)
 }
 
@@ -82,6 +94,9 @@ func (s *ProductionService) listProcessableGenerationJobs(
 }
 
 func (s *ProductionService) processGenerationJob(ctx context.Context, generationJob domain.GenerationJob) error {
+	if isStoryAnalysisJob(generationJob) {
+		return s.processStoryAnalysisJob(ctx, generationJob)
+	}
 	if !isSeedanceVideoJob(generationJob) {
 		if generationJob.Status != domain.GenerationJobStatusQueued {
 			return nil
@@ -100,6 +115,43 @@ func (s *ProductionService) processGenerationJob(ctx context.Context, generation
 	default:
 		return nil
 	}
+}
+
+func (s *ProductionService) processStoryAnalysisJob(ctx context.Context, generationJob domain.GenerationJob) error {
+	current := generationJob
+	if current.Status == domain.GenerationJobStatusQueued {
+		next, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusSubmitting, "", "no-op worker submitting generation job")
+		if err != nil {
+			return err
+		}
+		current = next
+	}
+	if current.Status == domain.GenerationJobStatusSubmitting {
+		next, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusSubmitted, "", "no-op worker submitted generation job")
+		if err != nil {
+			return err
+		}
+		current = next
+	}
+	if current.Status == domain.GenerationJobStatusSubmitted {
+		next, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusDownloading, "", "no-op worker downloading generated output")
+		if err != nil {
+			return err
+		}
+		current = next
+	}
+	if current.Status == domain.GenerationJobStatusDownloading {
+		next, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusPostprocessing, "", "no-op worker postprocessing generated output")
+		if err != nil {
+			return err
+		}
+		current = next
+	}
+	if current.Status == domain.GenerationJobStatusPostprocessing {
+		_, err := s.completeGeneratedStoryAnalysis(ctx, current)
+		return err
+	}
+	return nil
 }
 
 func (s *ProductionService) recoverSubmittingSeedanceJob(ctx context.Context, generationJob domain.GenerationJob) error {
@@ -296,6 +348,10 @@ func isSeedanceVideoJob(generationJob domain.GenerationJob) bool {
 	default:
 		return false
 	}
+}
+
+func isStoryAnalysisJob(generationJob domain.GenerationJob) bool {
+	return generationJob.TaskType == "story_analysis"
 }
 
 func seedanceRequestInput(generationJob domain.GenerationJob) provider.SeedanceRequestInput {

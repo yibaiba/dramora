@@ -15,6 +15,8 @@ type ProductionService struct {
 	production repo.ProductionRepository
 	jobClient  jobs.Client
 	seedance   seedanceProvider
+	agentSvc   *AgentService
+	projectSvc *ProjectService
 }
 
 type StartStoryAnalysisResult struct {
@@ -66,6 +68,14 @@ func NewProductionServiceWithSeedance(
 	return service
 }
 
+func (s *ProductionService) SetAgentService(agentSvc *AgentService) {
+	s.agentSvc = agentSvc
+}
+
+func (s *ProductionService) SetProjectService(projectSvc *ProjectService) {
+	s.projectSvc = projectSvc
+}
+
 func (s *ProductionService) StartStoryAnalysis(
 	ctx context.Context,
 	episode domain.Episode,
@@ -114,11 +124,22 @@ func (s *ProductionService) GetWorkflowRun(ctx context.Context, id string) (doma
 	if strings.TrimSpace(id) == "" {
 		return domain.WorkflowRun{}, fmt.Errorf("%w: workflow run id is required", domain.ErrInvalidInput)
 	}
-	return s.production.GetWorkflowRun(ctx, id)
+	run, err := s.production.GetWorkflowRun(ctx, id)
+	if err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, run.ProjectID, run.EpisodeID); err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	return run, nil
 }
 
 func (s *ProductionService) ListGenerationJobs(ctx context.Context) ([]domain.GenerationJob, error) {
-	return s.production.ListGenerationJobs(ctx)
+	jobs, err := s.production.ListGenerationJobs(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterGenerationJobsForContext(ctx, jobs)
 }
 
 func (s *ProductionService) ProcessQueuedExports(ctx context.Context, limit int) (jobs.ExecutionSummary, error) {
@@ -192,5 +213,12 @@ func (s *ProductionService) GetGenerationJob(ctx context.Context, id string) (do
 	if strings.TrimSpace(id) == "" {
 		return domain.GenerationJob{}, fmt.Errorf("%w: generation job id is required", domain.ErrInvalidInput)
 	}
-	return s.production.GetGenerationJob(ctx, id)
+	job, err := s.production.GetGenerationJob(ctx, id)
+	if err != nil {
+		return domain.GenerationJob{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, job.ProjectID, job.EpisodeID); err != nil {
+		return domain.GenerationJob{}, err
+	}
+	return job, nil
 }

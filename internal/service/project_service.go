@@ -33,7 +33,7 @@ func NewProjectService(projects repo.ProjectRepository, defaultOrganizationID st
 }
 
 func (s *ProjectService) ListProjects(ctx context.Context) ([]domain.Project, error) {
-	return s.projects.ListProjects(ctx, s.defaultOrganizationID)
+	return s.projects.ListProjects(ctx, s.organizationIDFromContext(ctx))
 }
 
 func (s *ProjectService) CreateProject(ctx context.Context, input CreateProjectInput) (domain.Project, error) {
@@ -49,7 +49,7 @@ func (s *ProjectService) CreateProject(ctx context.Context, input CreateProjectI
 
 	return s.projects.CreateProject(ctx, repo.CreateProjectParams{
 		ID:             id,
-		OrganizationID: s.defaultOrganizationID,
+		OrganizationID: s.organizationIDFromContext(ctx),
 		Name:           name,
 		Description:    strings.TrimSpace(input.Description),
 		Status:         domain.ProjectStatusDraft,
@@ -60,7 +60,7 @@ func (s *ProjectService) GetProject(ctx context.Context, projectID string) (doma
 	if strings.TrimSpace(projectID) == "" {
 		return domain.Project{}, fmt.Errorf("%w: project id is required", domain.ErrInvalidInput)
 	}
-	return s.projects.GetProject(ctx, s.defaultOrganizationID, projectID)
+	return s.projects.GetProject(ctx, s.organizationIDFromContext(ctx), projectID)
 }
 
 func (s *ProjectService) ListEpisodes(ctx context.Context, projectID string) ([]domain.Episode, error) {
@@ -122,4 +122,11 @@ func (s *ProjectService) nextEpisodeNumber(ctx context.Context, projectID string
 		return 0, err
 	}
 	return len(episodes) + 1, nil
+}
+
+func (s *ProjectService) organizationIDFromContext(ctx context.Context) string {
+	if auth, ok := RequestAuthFromContext(ctx); ok && strings.TrimSpace(auth.OrganizationID) != "" {
+		return auth.OrganizationID
+	}
+	return s.defaultOrganizationID
 }

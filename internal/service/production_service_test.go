@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
 	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/repo"
+	"github.com/yibaiba/dramora/internal/workflow"
 )
 
 func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
@@ -48,6 +50,23 @@ func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 	if got := generationJobs[0].Status; got != domain.GenerationJobStatusSucceeded {
 		t.Fatalf("expected succeeded job, got %q", got)
 	}
+	workflowRun, err := productionService.GetWorkflowRun(ctx, generationJobs[0].WorkflowRunID)
+	if err != nil {
+		t.Fatalf("get workflow run: %v", err)
+	}
+	if workflowRun.Status != domain.WorkflowRunStatusSucceeded {
+		t.Fatalf("expected workflow run succeeded, got %+v", workflowRun)
+	}
+	detail, err := productionService.GetWorkflowRunDetail(ctx, generationJobs[0].WorkflowRunID)
+	if err != nil {
+		t.Fatalf("get workflow run detail: %v", err)
+	}
+	if detail.Checkpoint == nil || detail.Checkpoint.CompletedNodes != len(workflow.Phase1Graph.Nodes) {
+		t.Fatalf("expected local story analysis checkpoint summary, got %+v", detail.Checkpoint)
+	}
+	if len(detail.NodeRuns) != len(workflow.Phase1Graph.Nodes) {
+		t.Fatalf("expected local story analysis node runs, got %+v", detail.NodeRuns)
+	}
 
 	analyses, err := productionService.ListStoryAnalyses(ctx, episode.ID)
 	if err != nil {
@@ -58,6 +77,185 @@ func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 	}
 	if len(analyses[0].CharacterSeeds) == 0 || len(analyses[0].SceneSeeds) == 0 {
 		t.Fatalf("expected story analysis seeds, got %+v", analyses[0])
+	}
+}
+
+func TestProductionServiceResumesStoryAnalysisFromCheckpoint(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	projectRepo := repo.NewMemoryProjectRepository()
+	projectService := NewProjectService(projectRepo, testOrganizationID)
+	productionRepo := repo.NewMemoryProductionRepository()
+	productionService := NewProductionService(productionRepo, nil)
+
+	var (
+		mu    sync.Mutex
+		calls []string
+	)
+	productionService.SetAgentService(&AgentService{
+		availabilityFunc: func(context.Context) bool { return true },
+		executorFactory: func(_ string) workflow.NodeExecutor {
+			return func(_ context.Context, nodeID string, _ workflow.NodeKind, bb *workflow.Blackboard) (any, error) {
+				mu.Lock()
+				calls = append(calls, nodeID)
+				mu.Unlock()
+				if nodeID == "outline_planner" {
+					value, ok := bb.Read("story_analyst")
+					if !ok {
+						t.Fatalf("expected restored story_analyst output")
+					}
+					result, ok := value.(*AgentResult)
+					if !ok || result.Output != "restored-story-output" {
+						t.Fatalf("expected restored AgentResult, got %#v", value)
+					}
+				}
+				result := &AgentResult{
+					Role:       nodeID,
+					Output:     nodeID + "-output",
+					Highlights: []string{nodeID + "-highlight"},
+				}
+				bb.Write(nodeID, result)
+				return result, nil
+			}
+		},
+	})
+
+	project, err := projectService.CreateProject(ctx, CreateProjectInput{Name: "Checkpoint Resume"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	episode, err := projectService.CreateEpisode(ctx, CreateEpisodeInput{ProjectID: project.ID, Title: "Resume Episode"})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+	if _, err := productionRepo.CreateStorySource(ctx, repo.CreateStorySourceParams{
+		ID:          "00000000-0000-0000-0000-00000000ca11",
+		ProjectID:   project.ID,
+		EpisodeID:   episode.ID,
+		SourceType:  "novel",
+		Title:       "恢复测试",
+		ContentText: "主角在废墟中找到了遗失的徽章。",
+		Language:    "zh-CN",
+	}); err != nil {
+		t.Fatalf("create story source: %v", err)
+	}
+
+	started, err := productionService.StartStoryAnalysis(ctx, episode)
+	if err != nil {
+		t.Fatalf("start story analysis: %v", err)
+	}
+	current := started.GenerationJob
+	for _, status := range []domain.GenerationJobStatus{
+		domain.GenerationJobStatusSubmitting,
+		domain.GenerationJobStatusSubmitted,
+		domain.GenerationJobStatusDownloading,
+		domain.GenerationJobStatusPostprocessing,
+	} {
+		current, err = productionRepo.AdvanceGenerationJobStatus(ctx, repo.AdvanceGenerationJobStatusParams{
+			ID: current.ID, From: current.Status, To: status, EventMessage: "resume setup",
+		})
+		if err != nil {
+			t.Fatalf("advance generation job to %s: %v", status, err)
+		}
+	}
+
+	checkpointStore := newStoryAnalysisCheckpointStore(productionRepo)
+	if err := checkpointStore.Save(ctx, started.WorkflowRun.ID, &workflow.Checkpoint{
+		WorkflowID: started.WorkflowRun.ID,
+		Sequence:   7,
+		Runs: map[string]workflow.NodeRunSnapshot{
+			"story_analyst": {
+				NodeID: "story_analyst",
+				Kind:   workflow.NodeKindStoryAnalysis,
+				Status: workflow.NodeSucceeded,
+				Output: &AgentResult{
+					Role:       "story_analyst",
+					Output:     "restored-story-output",
+					Highlights: []string{"theme"},
+				},
+			},
+		},
+		Blackboard: map[string]any{
+			"story_analyst": &AgentResult{
+				Role:       "story_analyst",
+				Output:     "restored-story-output",
+				Highlights: []string{"theme"},
+			},
+		},
+	}); err != nil {
+		t.Fatalf("save checkpoint: %v", err)
+	}
+
+	summary, err := productionService.ProcessQueuedGenerationJobs(ctx, jobs.DefaultExecutionLimit)
+	if err != nil {
+		t.Fatalf("resume story analysis job: %v", err)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("unexpected summary: %+v", summary)
+	}
+
+	mu.Lock()
+	recordedCalls := append([]string(nil), calls...)
+	mu.Unlock()
+	for _, unexpected := range []string{"story_analyst"} {
+		for _, call := range recordedCalls {
+			if call == unexpected {
+				t.Fatalf("expected checkpoint resume to skip %s, calls=%v", unexpected, recordedCalls)
+			}
+		}
+	}
+	for _, expected := range []string{"outline_planner", "character_analyst", "scene_analyst", "prop_analyst"} {
+		found := false
+		for _, call := range recordedCalls {
+			if call == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected resumed execution to include %s, calls=%v", expected, recordedCalls)
+		}
+	}
+
+	workflowRun, err := productionService.GetWorkflowRun(ctx, started.WorkflowRun.ID)
+	if err != nil {
+		t.Fatalf("get workflow run: %v", err)
+	}
+	if workflowRun.Status != domain.WorkflowRunStatusSucceeded {
+		t.Fatalf("expected workflow run succeeded, got %+v", workflowRun)
+	}
+	detail, err := productionService.GetWorkflowRunDetail(ctx, started.WorkflowRun.ID)
+	if err != nil {
+		t.Fatalf("get workflow run detail: %v", err)
+	}
+	if detail.Checkpoint == nil {
+		t.Fatal("expected checkpoint summary")
+	}
+	if detail.Checkpoint.CompletedNodes != len(workflow.Phase1Graph.Nodes) || detail.Checkpoint.FailedNodes != 0 {
+		t.Fatalf("unexpected checkpoint summary: %+v", detail.Checkpoint)
+	}
+	if len(detail.Checkpoint.BlackboardRoles) == 0 {
+		t.Fatalf("expected checkpoint summary blackboard roles, got %+v", detail.Checkpoint)
+	}
+	if len(detail.NodeRuns) != len(workflow.Phase1Graph.Nodes) {
+		t.Fatalf("expected node details for each workflow node, got %+v", detail.NodeRuns)
+	}
+	if detail.NodeRuns[0].NodeID != "story_analyst" || detail.NodeRuns[0].Status != domain.WorkflowNodeRunStatusSucceeded {
+		t.Fatalf("expected ordered succeeded node details, got %+v", detail.NodeRuns[0])
+	}
+	if len(detail.NodeRuns[0].Highlights) == 0 {
+		t.Fatalf("expected node highlights in recovery detail, got %+v", detail.NodeRuns[0])
+	}
+	analyses, err := productionService.ListStoryAnalyses(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("list analyses: %v", err)
+	}
+	if len(analyses) != 1 {
+		t.Fatalf("expected 1 analysis after resume, got %d", len(analyses))
+	}
+	if len(analyses[0].AgentOutputs) != len(workflow.Phase1Graph.Nodes) {
+		t.Fatalf("expected full agent outputs after resume, got %+v", analyses[0].AgentOutputs)
 	}
 }
 

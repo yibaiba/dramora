@@ -91,14 +91,21 @@ func testRouterWithProductionService() (http.Handler, *service.ProductionService
 		repo.NewMemoryProjectRepository(),
 		"00000000-0000-0000-0000-000000000001",
 	)
+	authService := service.NewAuthService(
+		repo.NewMemoryIdentityRepository(),
+		"00000000-0000-0000-0000-000000000001",
+		"test-secret",
+	)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	productionService.SetProjectService(projectService)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",
+		AuthService:       authService,
 		ProjectService:    projectService,
 		ProductionService: productionService,
 	})
-	return router, productionService
+	return newAuthenticatedTestRouter(router, authService), productionService
 }
 
 func decodeBody(t *testing.T, resp *httptest.ResponseRecorder, dest any) {

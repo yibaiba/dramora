@@ -14,6 +14,9 @@ func (s *ProductionService) GetEpisodeTimeline(ctx context.Context, episodeID st
 	if strings.TrimSpace(episodeID) == "" {
 		return domain.Timeline{}, fmt.Errorf("%w: episode id is required", domain.ErrInvalidInput)
 	}
+	if err := s.authorizeEpisode(ctx, episodeID); err != nil {
+		return domain.Timeline{}, err
+	}
 	return s.production.GetEpisodeTimeline(ctx, episodeID)
 }
 
@@ -93,7 +96,18 @@ func (s *ProductionService) GetExport(ctx context.Context, id string) (domain.Ex
 	if strings.TrimSpace(id) == "" {
 		return domain.Export{}, fmt.Errorf("%w: export id is required", domain.ErrInvalidInput)
 	}
-	return s.production.GetExport(ctx, id)
+	export, err := s.production.GetExport(ctx, id)
+	if err != nil {
+		return domain.Export{}, err
+	}
+	timeline, err := s.production.GetTimelineByID(ctx, export.TimelineID)
+	if err != nil {
+		return domain.Export{}, err
+	}
+	if err := s.authorizeEpisode(ctx, timeline.EpisodeID); err != nil {
+		return domain.Export{}, err
+	}
+	return export, nil
 }
 
 func timelineTrackParams(

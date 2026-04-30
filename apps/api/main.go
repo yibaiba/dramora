@@ -36,6 +36,7 @@ func main() {
 		Readiness:         container,
 		ProjectService:    container.ProjectService,
 		ProductionService: container.ProductionService,
+		ProviderService:   container.ProviderService,
 	})
 
 	server := &http.Server{
