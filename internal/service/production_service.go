@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -174,8 +175,16 @@ func (s *ProductionService) processExportsByStatus(
 
 	summary := jobs.ExecutionSummary{}
 	for _, export := range exports {
+		jobCtx, ctxErr := s.workerJobAuthContextForTimeline(ctx, export.TimelineID)
+		if ctxErr != nil {
+			slog.Default().Warn("worker skipped export: cannot resolve organization context",
+				"export_id", export.ID,
+				"timeline_id", export.TimelineID,
+				"error", ctxErr,
+			)
+			continue
+		}
 		summary.Processed++
-		jobCtx := s.workerJobAuthContextForTimeline(ctx, export.TimelineID)
 		if err := s.processExportNoop(jobCtx, export); err != nil {
 			summary.Failed++
 			return summary, fmt.Errorf("process export %s: %w", export.ID, err)

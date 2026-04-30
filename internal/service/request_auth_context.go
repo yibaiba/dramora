@@ -2,17 +2,12 @@ package service
 
 import (
 	"context"
-	"strings"
 )
 
 const (
-	// RoleSystem 标识来自后台 worker / 内部任务的系统级身份。
-	// 该上下文绕过组织归属过滤，仅供 inline worker / job runner 等
-	// 没有真实用户会话但可信的执行环境注入。
-	RoleSystem = "system"
-
-	// RoleWorker 标识 worker 处理具体 job 时按 job 所属组织注入的上下文，
-	// 不绕过 authorize 检查；与 RoleSystem 的区别是要求显式 OrganizationID。
+	// RoleWorker 标识 worker 处理具体 job 时按 job 所属组织注入的上下文。
+	// Worker 上下文必须显式携带真实 OrganizationID，与普通用户身份一样
+	// 走 authorize 检查；不再提供任何"系统级 bypass"。
 	RoleWorker = "worker"
 )
 
@@ -31,18 +26,4 @@ func WithRequestAuthContext(ctx context.Context, auth RequestAuthContext) contex
 func RequestAuthFromContext(ctx context.Context) (RequestAuthContext, bool) {
 	auth, ok := ctx.Value(requestAuthContextKey{}).(RequestAuthContext)
 	return auth, ok
-}
-
-// WithSystemAuthContext 为后台任务注入系统身份。
-func WithSystemAuthContext(ctx context.Context) context.Context {
-	return WithRequestAuthContext(ctx, RequestAuthContext{Role: RoleSystem})
-}
-
-// IsSystemAuthContext 判断当前 ctx 是否带有 system 角色。
-func IsSystemAuthContext(ctx context.Context) bool {
-	auth, ok := RequestAuthFromContext(ctx)
-	if !ok {
-		return false
-	}
-	return strings.EqualFold(strings.TrimSpace(auth.Role), RoleSystem)
 }

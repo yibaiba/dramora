@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/yibaiba/dramora/internal/jobs"
-	"github.com/yibaiba/dramora/internal/service"
 )
 
 func StartInlineWorker(ctx context.Context, cfg Config, logger *slog.Logger, executor jobs.Executor) context.CancelFunc {
@@ -20,8 +19,9 @@ func StartInlineWorker(ctx context.Context, cfg Config, logger *slog.Logger, exe
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		systemCtx := service.WithSystemAuthContext(workerCtx)
-		if err := worker.Run(systemCtx, cfg.WorkerQueues); err != nil {
+		// Worker 不再注入 system bypass 上下文；每个 job 在
+		// production service 内部按真实归属派生 RoleWorker 上下文。
+		if err := worker.Run(workerCtx, cfg.WorkerQueues); err != nil {
 			logger.Error("inline worker stopped", "error", err)
 		}
 	}()

@@ -229,42 +229,47 @@ func TestGlobalResourceWriteRoutesRespectOrganizationContext(t *testing.T) {
 		ProductionService: productionService,
 	})
 
-	project, err := projectService.CreateProject(context.Background(), service.CreateProjectInput{Name: "Protected Project"})
+	seedCtx := service.WithRequestAuthContext(context.Background(), service.RequestAuthContext{
+		OrganizationID: defaultOrgID,
+		Role:           "owner",
+	})
+
+	project, err := projectService.CreateProject(seedCtx, service.CreateProjectInput{Name: "Protected Project"})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
-	episode, err := projectService.CreateEpisode(context.Background(), service.CreateEpisodeInput{
+	episode, err := projectService.CreateEpisode(seedCtx, service.CreateEpisodeInput{
 		ProjectID: project.ID,
 		Title:     "Protected Episode",
 	})
 	if err != nil {
 		t.Fatalf("create episode: %v", err)
 	}
-	if _, err := productionService.StartStoryAnalysis(context.Background(), episode); err != nil {
+	if _, err := productionService.StartStoryAnalysis(seedCtx, episode); err != nil {
 		t.Fatalf("start story analysis: %v", err)
 	}
 	if _, err := productionService.ProcessQueuedGenerationJobs(context.Background(), jobs.DefaultExecutionLimit); err != nil {
 		t.Fatalf("process generation jobs: %v", err)
 	}
-	storyMap, err := productionService.SeedStoryMap(context.Background(), episode)
+	storyMap, err := productionService.SeedStoryMap(seedCtx, episode)
 	if err != nil {
 		t.Fatalf("seed story map: %v", err)
 	}
-	assets, err := productionService.SeedEpisodeAssets(context.Background(), episode)
+	assets, err := productionService.SeedEpisodeAssets(seedCtx, episode)
 	if err != nil {
 		t.Fatalf("seed assets: %v", err)
 	}
-	shots, err := productionService.SeedStoryboardShots(context.Background(), episode)
+	shots, err := productionService.SeedStoryboardShots(seedCtx, episode)
 	if err != nil {
 		t.Fatalf("seed shots: %v", err)
 	}
-	if _, err := productionService.SaveEpisodeTimeline(context.Background(), service.SaveTimelineInput{
+	if _, err := productionService.SaveEpisodeTimeline(seedCtx, service.SaveTimelineInput{
 		EpisodeID:  episode.ID,
 		DurationMS: 12_000,
 	}); err != nil {
 		t.Fatalf("save timeline: %v", err)
 	}
-	gates, err := productionService.SeedEpisodeApprovalGates(context.Background(), episode)
+	gates, err := productionService.SeedEpisodeApprovalGates(seedCtx, episode)
 	if err != nil {
 		t.Fatalf("seed approval gates: %v", err)
 	}

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
@@ -22,18 +23,12 @@ func (s *ProductionService) authorizeProject(ctx context.Context, projectID stri
 	if s.projectSvc == nil || projectID == "" {
 		return nil
 	}
-	if IsSystemAuthContext(ctx) {
-		return nil
-	}
 	_, err := s.projectSvc.GetProject(ctx, projectID)
 	return err
 }
 
 func (s *ProductionService) authorizeEpisode(ctx context.Context, episodeID string) error {
 	if s.projectSvc == nil || episodeID == "" {
-		return nil
-	}
-	if IsSystemAuthContext(ctx) {
 		return nil
 	}
 	_, err := s.projectSvc.GetEpisode(ctx, episodeID)
@@ -45,9 +40,6 @@ func (s *ProductionService) filterGenerationJobsForContext(
 	jobs []domain.GenerationJob,
 ) ([]domain.GenerationJob, error) {
 	if s.projectSvc == nil {
-		return jobs, nil
-	}
-	if IsSystemAuthContext(ctx) {
 		return jobs, nil
 	}
 
@@ -73,35 +65,54 @@ func (s *ProductionService) filterGenerationJobsForContext(
 }
 
 // workerJobAuthContextForProject 根据 project id 解析所属组织，并把当前 ctx
-// 派生为带该组织上下文的 worker 身份。解析失败时返回原 ctx，让上层维持
-// 既有 system 兜底语义。
-func (s *ProductionService) workerJobAuthContextForProject(ctx context.Context, projectID string) context.Context {
-	if s.projectSvc == nil || strings.TrimSpace(projectID) == "" {
-		return ctx
+// 派生为带该组织上下文的 worker 身份。
+//
+// 行为契约：
+//   - projectSvc 未注入（多见于单元测试）时返回 (ctx, nil)，由 authorize* 自身的
+//     "projectSvc == nil 即放行" 兜底。
+//   - 真实运行环境下若 lookup 失败或组织缺失，返回 (ctx, error)，由 worker 调用方
+//     跳过该 job 并记录日志，不再静默回退到 system bypass。
+func (s *ProductionService) workerJobAuthContextForProject(ctx context.Context, projectID string) (context.Context, error) {
+	if s.projectSvc == nil {
+		return ctx, nil
+	}
+	if strings.TrimSpace(projectID) == "" {
+		return ctx, fmt.Errorf("%w: worker job missing project id", domain.ErrInvalidInput)
 	}
 	project, err := s.projectSvc.LookupProjectByID(ctx, projectID)
-	if err != nil || strings.TrimSpace(project.OrganizationID) == "" {
-		return ctx
+	if err != nil {
+		return ctx, fmt.Errorf("lookup project %s for worker context: %w", projectID, err)
+	}
+	orgID := strings.TrimSpace(project.OrganizationID)
+	if orgID == "" {
+		return ctx, fmt.Errorf("%w: project %s has no organization", domain.ErrInvalidInput, projectID)
 	}
 	return WithRequestAuthContext(ctx, RequestAuthContext{
-		OrganizationID: project.OrganizationID,
+		OrganizationID: orgID,
 		Role:           RoleWorker,
-	})
+	}), nil
 }
 
 // workerJobAuthContextForTimeline 通过 timeline -> episode -> project 链路
-// 解析 export 所属组织，并派生 worker auth context。
-func (s *ProductionService) workerJobAuthContextForTimeline(ctx context.Context, timelineID string) context.Context {
-	if s.projectSvc == nil || strings.TrimSpace(timelineID) == "" {
-		return ctx
+// 解析 export 所属组织，并派生 worker auth context。失败语义与
+// workerJobAuthContextForProject 相同。
+func (s *ProductionService) workerJobAuthContextForTimeline(ctx context.Context, timelineID string) (context.Context, error) {
+	if s.projectSvc == nil {
+		return ctx, nil
+	}
+	if strings.TrimSpace(timelineID) == "" {
+		return ctx, fmt.Errorf("%w: worker export missing timeline id", domain.ErrInvalidInput)
 	}
 	timeline, err := s.production.GetTimelineByID(ctx, timelineID)
-	if err != nil || strings.TrimSpace(timeline.EpisodeID) == "" {
-		return ctx
+	if err != nil {
+		return ctx, fmt.Errorf("lookup timeline %s for worker context: %w", timelineID, err)
+	}
+	if strings.TrimSpace(timeline.EpisodeID) == "" {
+		return ctx, fmt.Errorf("%w: timeline %s has no episode", domain.ErrInvalidInput, timelineID)
 	}
 	episode, err := s.projectSvc.LookupEpisodeByID(ctx, timeline.EpisodeID)
 	if err != nil {
-		return ctx
+		return ctx, fmt.Errorf("lookup episode %s for worker context: %w", timeline.EpisodeID, err)
 	}
 	return s.workerJobAuthContextForProject(ctx, episode.ProjectID)
 }

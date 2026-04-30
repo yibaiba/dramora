@@ -9,7 +9,6 @@ import (
 
 	"github.com/yibaiba/dramora/internal/app"
 	"github.com/yibaiba/dramora/internal/jobs"
-	"github.com/yibaiba/dramora/internal/service"
 )
 
 func main() {
@@ -32,8 +31,9 @@ func main() {
 
 	worker := jobs.NewWorker(logger, container.ProductionService)
 
-	systemCtx := service.WithSystemAuthContext(ctx)
-	if err := worker.Run(systemCtx, cfg.WorkerQueues); err != nil {
+	// Worker 不再注入 system bypass 上下文；每个 job 在 production service
+	// 内部按真实归属派生 RoleWorker 上下文。
+	if err := worker.Run(ctx, cfg.WorkerQueues); err != nil {
 		logger.Error("worker stopped", "error", err)
 		os.Exit(1)
 	}

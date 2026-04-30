@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/yibaiba/dramora/internal/domain"
@@ -40,8 +41,16 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 		if !shouldProcessGenerationJob(generationJob) {
 			continue
 		}
+		jobCtx, ctxErr := s.workerJobAuthContextForProject(ctx, generationJob.ProjectID)
+		if ctxErr != nil {
+			slog.Default().Warn("worker skipped generation job: cannot resolve organization context",
+				"job_id", generationJob.ID,
+				"project_id", generationJob.ProjectID,
+				"error", ctxErr,
+			)
+			continue
+		}
 		summary.Processed++
-		jobCtx := s.workerJobAuthContextForProject(ctx, generationJob.ProjectID)
 		if err := s.processGenerationJob(jobCtx, generationJob); err != nil {
 			summary.Failed++
 			return summary, fmt.Errorf("process generation job %s: %w", generationJob.ID, err)
