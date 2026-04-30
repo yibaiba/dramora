@@ -35,3 +35,48 @@ WHERE users.id = ?
 ORDER BY organization_members.created_at ASC
 LIMIT 1
 `
+
+const sqliteCreateOrganizationSQL = `
+INSERT INTO organizations (id, name) VALUES (?, ?)
+`
+
+const sqliteInvitationSelect = `
+SELECT
+    id,
+    organization_id,
+    email,
+    role,
+    token,
+    invited_by_user_id,
+    status,
+    expires_at,
+    accepted_at,
+    accepted_by_user_id,
+    created_at,
+    updated_at
+FROM organization_invitations
+`
+
+const sqliteCreateInvitationSQL = `
+INSERT INTO organization_invitations
+    (id, organization_id, email, role, token, invited_by_user_id, expires_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+const sqliteGetInvitationByTokenSQL = sqliteInvitationSelect + `WHERE token = ?`
+
+const sqliteGetInvitationByIDSQL = sqliteInvitationSelect + `WHERE id = ?`
+
+const sqliteMarkInvitationAcceptedSQL = `
+UPDATE organization_invitations
+SET status = 'accepted',
+    accepted_at = ?,
+    accepted_by_user_id = ?,
+    updated_at = ?
+WHERE id = ? AND status = 'pending'
+`
+
+const sqliteListInvitationsByOrgSQL = sqliteInvitationSelect + `
+WHERE organization_id = ?
+ORDER BY created_at DESC
+`

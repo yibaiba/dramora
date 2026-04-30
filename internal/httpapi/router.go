@@ -88,6 +88,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Get("/admin/providers", api.listProviderConfigs)
 			admin.Post("/admin/providers:save", api.saveProviderConfig)
 			admin.Post("/admin/providers/{capability}:test", api.testProviderConfig)
+			admin.Post("/organizations/invitations", api.createInvitation)
+			admin.Get("/organizations/invitations", api.listInvitations)
 		})
 	})
 

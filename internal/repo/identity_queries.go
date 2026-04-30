@@ -35,3 +35,60 @@ WHERE users.id = $1::uuid
 ORDER BY organization_members.created_at ASC
 LIMIT 1
 `
+
+const createOrganizationSQL = `
+INSERT INTO organizations (id, name)
+VALUES ($1::uuid, $2)
+`
+
+const invitationSelect = `
+SELECT
+    id::text,
+    organization_id::text,
+    email,
+    role,
+    token,
+    invited_by_user_id::text,
+    status,
+    expires_at,
+    accepted_at,
+    accepted_by_user_id::text,
+    created_at,
+    updated_at
+FROM organization_invitations
+`
+
+const createInvitationSQL = `
+INSERT INTO organization_invitations
+    (id, organization_id, email, role, token, invited_by_user_id, expires_at)
+VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid, $7)
+RETURNING
+    id::text,
+    organization_id::text,
+    email,
+    role,
+    token,
+    invited_by_user_id::text,
+    status,
+    expires_at,
+    accepted_at,
+    accepted_by_user_id::text,
+    created_at,
+    updated_at
+`
+
+const getInvitationByTokenSQL = invitationSelect + `WHERE token = $1`
+
+const markInvitationAcceptedSQL = `
+UPDATE organization_invitations
+SET status = 'accepted',
+    accepted_at = $3,
+    accepted_by_user_id = $2::uuid,
+    updated_at = $3
+WHERE id = $1::uuid AND status = 'pending'
+`
+
+const listInvitationsByOrgSQL = invitationSelect + `
+WHERE organization_id = $1::uuid
+ORDER BY created_at DESC
+`

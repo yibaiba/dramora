@@ -11,9 +11,10 @@ import (
 )
 
 type authRequest struct {
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-	Password    string `json:"password"`
+	Email           string `json:"email"`
+	DisplayName     string `json:"display_name"`
+	Password        string `json:"password"`
+	InvitationToken string `json:"invitation_token,omitempty"`
 }
 
 type authSessionResponse struct {
@@ -61,9 +62,10 @@ func (a *api) register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session, err := a.authService.Register(r.Context(), service.RegisterInput{
-		Email:       request.Email,
-		DisplayName: request.DisplayName,
-		Password:    request.Password,
+		Email:           request.Email,
+		DisplayName:     request.DisplayName,
+		Password:        request.Password,
+		InvitationToken: request.InvitationToken,
 	})
 	if err != nil {
 		writeAuthError(w, err)
@@ -124,4 +126,77 @@ func writeAuthError(w http.ResponseWriter, err error) {
 	default:
 		writeServiceError(w, err)
 	}
+}
+
+type invitationRequest struct {
+	Email string `json:"email"`
+	Role  string `json:"role"`
+}
+
+type invitationResponse struct {
+	ID              string     `json:"id"`
+	OrganizationID  string     `json:"organization_id"`
+	Email           string     `json:"email"`
+	Role            string     `json:"role"`
+	Token           string     `json:"token"`
+	Status          string     `json:"status"`
+	InvitedByUserID string     `json:"invited_by_user_id,omitempty"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	AcceptedAt      *time.Time `json:"accepted_at,omitempty"`
+	AcceptedByUser  string     `json:"accepted_by_user_id,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+func invitationDTO(inv domain.OrganizationInvitation) invitationResponse {
+	return invitationResponse{
+		ID:              inv.ID,
+		OrganizationID:  inv.OrganizationID,
+		Email:           inv.Email,
+		Role:            inv.Role,
+		Token:           inv.Token,
+		Status:          inv.Status,
+		InvitedByUserID: inv.InvitedByUserID,
+		ExpiresAt:       inv.ExpiresAt.UTC(),
+		AcceptedAt:      inv.AcceptedAt,
+		AcceptedByUser:  inv.AcceptedByUserID,
+		CreatedAt:       inv.CreatedAt.UTC(),
+	}
+}
+
+func (a *api) createInvitation(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	var request invitationRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	inv, err := a.authService.CreateInvitation(r.Context(), service.CreateInvitationInput{
+		Email: request.Email,
+		Role:  request.Role,
+	})
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]invitationResponse{"invitation": invitationDTO(inv)})
+}
+
+func (a *api) listInvitations(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	items, err := a.authService.ListInvitations(r.Context())
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	out := make([]invitationResponse, 0, len(items))
+	for _, inv := range items {
+		out = append(out, invitationDTO(inv))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
 }

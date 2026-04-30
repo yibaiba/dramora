@@ -362,4 +362,21 @@ var sqliteMigrations = []string{
 		updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 		updated_by TEXT
 	)`,
+
+	// Phase 2: organization_invitations
+	`CREATE TABLE IF NOT EXISTS organization_invitations (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+		email TEXT NOT NULL,
+		role TEXT NOT NULL,
+		token TEXT NOT NULL UNIQUE,
+		invited_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+		status TEXT NOT NULL DEFAULT 'pending',
+		expires_at TEXT NOT NULL,
+		accepted_at TEXT,
+		accepted_by_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_invitations_org_status ON organization_invitations (organization_id, status)`,
 }

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
@@ -31,9 +32,10 @@ type AuthSession struct {
 }
 
 type RegisterInput struct {
-	Email       string
-	DisplayName string
-	Password    string
+	Email           string
+	DisplayName     string
+	Password        string
+	InvitationToken string
 }
 
 type LoginInput struct {
@@ -61,6 +63,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSe
 	email := strings.TrimSpace(strings.ToLower(input.Email))
 	displayName := strings.TrimSpace(input.DisplayName)
 	password := strings.TrimSpace(input.Password)
+	invitationToken := strings.TrimSpace(input.InvitationToken)
 	if email == "" || displayName == "" || password == "" {
 		return AuthSession{}, fmt.Errorf("email, display_name, and password are required: %w", domain.ErrInvalidInput)
 	}
@@ -73,13 +76,19 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSe
 		return AuthSession{}, fmt.Errorf("hash password: %w", err)
 	}
 
+	organizationID, role, invitationID, err := s.resolveRegistrationOrg(ctx, displayName, email, invitationToken)
+	if err != nil {
+		return AuthSession{}, err
+	}
+
+	userID := uuid.NewString()
 	identity, err := s.identityRepo.CreateUserWithMembership(ctx, repo.CreateUserWithMembershipParams{
-		UserID:         uuid.NewString(),
-		OrganizationID: s.defaultOrganizationID,
+		UserID:         userID,
+		OrganizationID: organizationID,
 		Email:          email,
 		DisplayName:    displayName,
 		PasswordHash:   string(passwordHash),
-		Role:           "owner",
+		Role:           role,
 	})
 	if err != nil {
 		if errors.Is(err, domain.ErrInvalidInput) {
@@ -88,7 +97,53 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSe
 		return AuthSession{}, err
 	}
 
+	if invitationID != "" {
+		if err := s.identityRepo.MarkInvitationAccepted(ctx, invitationID, userID, time.Now().UTC()); err != nil {
+			return AuthSession{}, fmt.Errorf("mark invitation accepted: %w", err)
+		}
+	}
+
 	return s.buildSession(identity)
+}
+
+// resolveRegistrationOrg decides which organization a new user joins:
+//   - With a valid pending invitation token: join that org with the invitation's role.
+//   - Without a token: provision a fresh organization owned by the new user
+//     (rather than dumping every new user into defaultOrganizationID).
+func (s *AuthService) resolveRegistrationOrg(
+	ctx context.Context,
+	displayName, email, invitationToken string,
+) (orgID, role, invitationID string, err error) {
+	if invitationToken != "" {
+		inv, lookupErr := s.identityRepo.GetInvitationByToken(ctx, invitationToken)
+		if lookupErr != nil {
+			if errors.Is(lookupErr, domain.ErrNotFound) {
+				return "", "", "", fmt.Errorf("invitation token is invalid: %w", domain.ErrInvalidInput)
+			}
+			return "", "", "", lookupErr
+		}
+		if inv.Status != domain.InvitationStatusPending {
+			return "", "", "", fmt.Errorf("invitation is no longer pending: %w", domain.ErrInvalidInput)
+		}
+		if !inv.ExpiresAt.IsZero() && time.Now().UTC().After(inv.ExpiresAt) {
+			return "", "", "", fmt.Errorf("invitation has expired: %w", domain.ErrInvalidInput)
+		}
+		if inv.Email != "" && inv.Email != email {
+			return "", "", "", fmt.Errorf("invitation was issued to a different email: %w", domain.ErrInvalidInput)
+		}
+		return inv.OrganizationID, inv.Role, inv.ID, nil
+	}
+
+	// No invitation: create a fresh workspace owned by this user.
+	newOrgID := uuid.NewString()
+	orgName := strings.TrimSpace(displayName) + "'s Workspace"
+	if err := s.identityRepo.CreateOrganization(ctx, repo.CreateOrganizationParams{
+		OrganizationID: newOrgID,
+		Name:           orgName,
+	}); err != nil {
+		return "", "", "", fmt.Errorf("create organization: %w", err)
+	}
+	return newOrgID, "owner", "", nil
 }
 
 func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthSession, error) {
@@ -238,4 +293,55 @@ func parseBearerToken(value string) string {
 		return ""
 	}
 	return strings.TrimSpace(strings.TrimPrefix(value, prefix))
+}
+
+const defaultInvitationTTL = 14 * 24 * time.Hour
+
+type CreateInvitationInput struct {
+	Email string
+	Role  string
+}
+
+func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitationInput) (domain.OrganizationInvitation, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return domain.OrganizationInvitation{}, ErrUnauthorized
+	}
+	email := strings.TrimSpace(strings.ToLower(input.Email))
+	role := strings.TrimSpace(strings.ToLower(input.Role))
+	if email == "" {
+		return domain.OrganizationInvitation{}, fmt.Errorf("email is required: %w", domain.ErrInvalidInput)
+	}
+	if role == "" {
+		role = "editor"
+	}
+	switch role {
+	case "owner", "admin", "editor", "viewer":
+	default:
+		return domain.OrganizationInvitation{}, fmt.Errorf("role must be one of owner/admin/editor/viewer: %w", domain.ErrInvalidInput)
+	}
+
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return domain.OrganizationInvitation{}, fmt.Errorf("generate invitation token: %w", err)
+	}
+	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
+
+	return s.identityRepo.CreateInvitation(ctx, repo.CreateInvitationParams{
+		InvitationID:    uuid.NewString(),
+		OrganizationID:  auth.OrganizationID,
+		Email:           email,
+		Role:            role,
+		Token:           token,
+		InvitedByUserID: auth.UserID,
+		ExpiresAt:       time.Now().UTC().Add(defaultInvitationTTL),
+	})
+}
+
+func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.OrganizationInvitation, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return nil, ErrUnauthorized
+	}
+	return s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
 }
