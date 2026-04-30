@@ -10,8 +10,7 @@ import (
 )
 
 type ProjectService struct {
-	projects              repo.ProjectRepository
-	defaultOrganizationID string
+	projects repo.ProjectRepository
 }
 
 type CreateProjectInput struct {
@@ -25,10 +24,12 @@ type CreateEpisodeInput struct {
 	Title     string
 }
 
-func NewProjectService(projects repo.ProjectRepository, defaultOrganizationID string) *ProjectService {
+// NewProjectService 构建项目服务。
+// ProjectService 依赖 RequestAuthContext 提供组织上下文；没有上下文时
+// 读写都会返回空集合或 ErrNotFound，确保不会跨组织或回退到隐式默认组织。
+func NewProjectService(projects repo.ProjectRepository) *ProjectService {
 	return &ProjectService{
-		projects:              projects,
-		defaultOrganizationID: defaultOrganizationID,
+		projects: projects,
 	}
 }
 
@@ -125,8 +126,9 @@ func (s *ProjectService) nextEpisodeNumber(ctx context.Context, projectID string
 }
 
 func (s *ProjectService) organizationIDFromContext(ctx context.Context) string {
-	if auth, ok := RequestAuthFromContext(ctx); ok && strings.TrimSpace(auth.OrganizationID) != "" {
-		return auth.OrganizationID
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok {
+		return ""
 	}
-	return s.defaultOrganizationID
+	return strings.TrimSpace(auth.OrganizationID)
 }

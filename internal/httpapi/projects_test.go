@@ -87,10 +87,7 @@ func testRouter() http.Handler {
 
 func testRouterWithProductionService() (http.Handler, *service.ProductionService) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	projectService := service.NewProjectService(
-		repo.NewMemoryProjectRepository(),
-		"00000000-0000-0000-0000-000000000001",
-	)
+	projectService := service.NewProjectService(repo.NewMemoryProjectRepository())
 	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)

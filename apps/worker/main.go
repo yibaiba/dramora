@@ -9,6 +9,7 @@ import (
 
 	"github.com/yibaiba/dramora/internal/app"
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/service"
 )
 
 func main() {
@@ -31,7 +32,8 @@ func main() {
 
 	worker := jobs.NewWorker(logger, container.ProductionService)
 
-	if err := worker.Run(ctx, cfg.WorkerQueues); err != nil {
+	systemCtx := service.WithSystemAuthContext(ctx)
+	if err := worker.Run(systemCtx, cfg.WorkerQueues); err != nil {
 		logger.Error("worker stopped", "error", err)
 		os.Exit(1)
 	}

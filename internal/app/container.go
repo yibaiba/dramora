@@ -62,7 +62,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		productionSvc.SetAgentService(service.NewAgentService(providerService))
 	}
 
-	projectSvc := service.NewProjectService(projectRepo, cfg.DefaultOrganizationID)
+	projectSvc := service.NewProjectService(projectRepo)
 	productionSvc.SetProjectService(projectSvc)
 
 	return &Container{

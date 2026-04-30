@@ -21,7 +21,7 @@ func TestProjectRoutesUseOrganizationFromJWTContext(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := service.NewProjectService(projectRepo, defaultOrgID)
+	projectService := service.NewProjectService(projectRepo)
 	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
 	router := NewRouter(RouterConfig{
 		Logger:         logger,
@@ -102,7 +102,7 @@ func TestProjectRoutesRequireAuthentication(t *testing.T) {
 		Logger:         logger,
 		Version:        "test",
 		AuthService:    service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret"),
-		ProjectService: service.NewProjectService(repo.NewMemoryProjectRepository(), "00000000-0000-0000-0000-000000000001"),
+		ProjectService: service.NewProjectService(repo.NewMemoryProjectRepository()),
 	})
 
 	resp := httptest.NewRecorder()
@@ -121,7 +121,7 @@ func TestProductionRoutesRespectOrganizationContext(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := service.NewProjectService(projectRepo, defaultOrgID)
+	projectService := service.NewProjectService(projectRepo)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
 	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
@@ -217,7 +217,7 @@ func TestGlobalResourceWriteRoutesRespectOrganizationContext(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := service.NewProjectService(projectRepo, defaultOrgID)
+	projectService := service.NewProjectService(projectRepo)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
 	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")

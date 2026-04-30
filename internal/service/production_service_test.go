@@ -15,9 +15,9 @@ import (
 func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := NewProjectService(projectRepo, testOrganizationID)
+	projectService := NewProjectService(projectRepo)
 	productionService := NewProductionService(repo.NewMemoryProductionRepository(), nil)
 
 	project, err := projectService.CreateProject(ctx, CreateProjectInput{Name: "Worker Project"})
@@ -83,9 +83,9 @@ func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 func TestProductionServiceResumesStoryAnalysisFromCheckpoint(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := NewProjectService(projectRepo, testOrganizationID)
+	projectService := NewProjectService(projectRepo)
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionService(productionRepo, nil)
 
@@ -262,9 +262,9 @@ func TestProductionServiceResumesStoryAnalysisFromCheckpoint(t *testing.T) {
 func TestProductionServiceProcessesQueuedExportsNoop(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := NewProjectService(projectRepo, testOrganizationID)
+	projectService := NewProjectService(projectRepo)
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionService(productionRepo, nil)
 
@@ -303,7 +303,7 @@ func TestProductionServiceProcessesQueuedExportsNoop(t *testing.T) {
 func TestProductionServiceSubmitsAndPollsSeedanceGenerationJob(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionServiceWithSeedance(productionRepo, nil, provider.NewSeedanceAdapter("", "", nil))
 	jobID := "00000000-0000-0000-0000-000000000201"
@@ -373,7 +373,7 @@ func TestProductionServiceSubmitsAndPollsSeedanceGenerationJob(t *testing.T) {
 func TestProductionServiceRecoversInterruptedSeedanceGenerationJob(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionServiceWithSeedance(productionRepo, nil, provider.NewSeedanceAdapter("", "", nil))
 	jobID := "00000000-0000-0000-0000-000000000211"
@@ -417,7 +417,7 @@ func TestProductionServiceRecoversInterruptedSeedanceGenerationJob(t *testing.T)
 func TestProductionServiceResumesDownloadingSeedanceJobWithResultAsset(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionServiceWithSeedance(productionRepo, nil, fakeSeedanceProvider{
 		pollTask: provider.SeedanceGenerationTask{
@@ -455,7 +455,7 @@ func TestProductionServiceResumesDownloadingSeedanceJobWithResultAsset(t *testin
 func TestMemoryProductionRepositoryDoesNotCreateResultAssetWhenJobTransitionFails(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	productionRepo := repo.NewMemoryProductionRepository()
 	job := createSeedanceVideoJob(t, ctx, productionRepo, "00000000-0000-0000-0000-000000000231")
 
@@ -485,9 +485,9 @@ func TestMemoryProductionRepositoryDoesNotCreateResultAssetWhenJobTransitionFail
 func TestProductionServiceResumesRenderingExportsNoop(t *testing.T) {
 	t.Parallel()
 
-	ctx := context.Background()
+	ctx := testAuthCtx()
 	projectRepo := repo.NewMemoryProjectRepository()
-	projectService := NewProjectService(projectRepo, testOrganizationID)
+	projectService := NewProjectService(projectRepo)
 	productionRepo := repo.NewMemoryProductionRepository()
 	productionService := NewProductionService(productionRepo, nil)
 

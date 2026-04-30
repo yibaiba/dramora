@@ -11,16 +11,15 @@ import (
 const Version = "dev"
 
 type Config struct {
-	Env                   string
-	HTTPAddr              string
-	ReadHeaderTimeout     time.Duration
-	ShutdownTimeout       time.Duration
-	DatabaseURL           string
-	DataDir               string
-	DefaultOrganizationID string
-	JWTSecret             string
-	InlineWorker          bool
-	WorkerQueues          []string
+	Env               string
+	HTTPAddr          string
+	ReadHeaderTimeout time.Duration
+	ShutdownTimeout   time.Duration
+	DatabaseURL       string
+	DataDir           string
+	JWTSecret         string
+	InlineWorker      bool
+	WorkerQueues      []string
 }
 
 func LoadConfig() (Config, error) {
@@ -41,16 +40,15 @@ func LoadConfig() (Config, error) {
 	}
 
 	return Config{
-		Env:                   env,
-		HTTPAddr:              envString("MANMU_HTTP_ADDR", ":8080"),
-		ReadHeaderTimeout:     readHeaderTimeout,
-		ShutdownTimeout:       shutdownTimeout,
-		DatabaseURL:           os.Getenv("MANMU_DATABASE_URL"),
-		DataDir:               envString("MANMU_DATA_DIR", defaultDataDir()),
-		DefaultOrganizationID: envString("MANMU_DEFAULT_ORGANIZATION_ID", "00000000-0000-0000-0000-000000000001"),
-		JWTSecret:             envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
-		InlineWorker:          inlineWorker,
-		WorkerQueues:          envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
+		Env:               env,
+		HTTPAddr:          envString("MANMU_HTTP_ADDR", ":8080"),
+		ReadHeaderTimeout: readHeaderTimeout,
+		ShutdownTimeout:   shutdownTimeout,
+		DatabaseURL:       os.Getenv("MANMU_DATABASE_URL"),
+		DataDir:           envString("MANMU_DATA_DIR", defaultDataDir()),
+		JWTSecret:         envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
+		InlineWorker:      inlineWorker,
+		WorkerQueues:      envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
 	}, nil
 }
 

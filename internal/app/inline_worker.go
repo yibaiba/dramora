@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/service"
 )
 
 func StartInlineWorker(ctx context.Context, cfg Config, logger *slog.Logger, executor jobs.Executor) context.CancelFunc {
@@ -19,7 +20,8 @@ func StartInlineWorker(ctx context.Context, cfg Config, logger *slog.Logger, exe
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		if err := worker.Run(workerCtx, cfg.WorkerQueues); err != nil {
+		systemCtx := service.WithSystemAuthContext(workerCtx)
+		if err := worker.Run(systemCtx, cfg.WorkerQueues); err != nil {
 			logger.Error("inline worker stopped", "error", err)
 		}
 	}()

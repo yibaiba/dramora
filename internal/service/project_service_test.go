@@ -11,12 +11,20 @@ import (
 
 const testOrganizationID = "00000000-0000-0000-0000-000000000001"
 
+func testAuthCtx() context.Context {
+	return WithRequestAuthContext(context.Background(), RequestAuthContext{
+		OrganizationID: testOrganizationID,
+		Role:           "owner",
+	})
+}
+
 func TestProjectServiceCreatesProjectAndEpisode(t *testing.T) {
 	t.Parallel()
 
-	service := NewProjectService(repo.NewMemoryProjectRepository(), testOrganizationID)
+	service := NewProjectService(repo.NewMemoryProjectRepository())
+	ctx := testAuthCtx()
 
-	project, err := service.CreateProject(context.Background(), CreateProjectInput{Name: " 漫幕测试 "})
+	project, err := service.CreateProject(ctx, CreateProjectInput{Name: " 漫幕测试 "})
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}
@@ -24,7 +32,7 @@ func TestProjectServiceCreatesProjectAndEpisode(t *testing.T) {
 		t.Fatalf("expected trimmed project name, got %q", project.Name)
 	}
 
-	episode, err := service.CreateEpisode(context.Background(), CreateEpisodeInput{
+	episode, err := service.CreateEpisode(ctx, CreateEpisodeInput{
 		ProjectID: project.ID,
 		Title:     " 第一集 ",
 	})
@@ -42,14 +50,15 @@ func TestProjectServiceCreatesProjectAndEpisode(t *testing.T) {
 func TestProjectServiceRejectsInvalidInput(t *testing.T) {
 	t.Parallel()
 
-	service := NewProjectService(repo.NewMemoryProjectRepository(), testOrganizationID)
+	service := NewProjectService(repo.NewMemoryProjectRepository())
+	ctx := testAuthCtx()
 
-	_, err := service.CreateProject(context.Background(), CreateProjectInput{Name: " "})
+	_, err := service.CreateProject(ctx, CreateProjectInput{Name: " "})
 	if !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("expected invalid input, got %v", err)
 	}
 
-	_, err = service.GetProject(context.Background(), "missing")
+	_, err = service.GetProject(ctx, "missing")
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("expected not found, got %v", err)
 	}

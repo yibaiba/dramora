@@ -21,12 +21,18 @@ func (s *ProductionService) authorizeProject(ctx context.Context, projectID stri
 	if s.projectSvc == nil || projectID == "" {
 		return nil
 	}
+	if IsSystemAuthContext(ctx) {
+		return nil
+	}
 	_, err := s.projectSvc.GetProject(ctx, projectID)
 	return err
 }
 
 func (s *ProductionService) authorizeEpisode(ctx context.Context, episodeID string) error {
 	if s.projectSvc == nil || episodeID == "" {
+		return nil
+	}
+	if IsSystemAuthContext(ctx) {
 		return nil
 	}
 	_, err := s.projectSvc.GetEpisode(ctx, episodeID)
@@ -38,6 +44,9 @@ func (s *ProductionService) filterGenerationJobsForContext(
 	jobs []domain.GenerationJob,
 ) ([]domain.GenerationJob, error) {
 	if s.projectSvc == nil {
+		return jobs, nil
+	}
+	if IsSystemAuthContext(ctx) {
 		return jobs, nil
 	}
 
