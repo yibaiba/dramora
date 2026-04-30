@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ListFilter } from 'lucide-react'
 import type { StoryAgentOutput } from '../../api/types'
 import type {
@@ -130,6 +130,57 @@ export function AgentFeedbackWorkspace({
     setHistoryPageSize(RETURN_HISTORY_INITIAL_PAGE_SIZE)
   }
 
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null)
+  const validCursor = historyCursor && visibleReturnHistory.some((entry) => entry.id === historyCursor)
+  if (historyCursor && !validCursor) {
+    setHistoryCursor(visibleReturnHistory[0]?.id ?? null)
+  }
+  const historyListRef = useRef<HTMLDivElement | null>(null)
+  const scrollHistoryItemIntoView = (id: string) => {
+    const root = historyListRef.current
+    if (!root) return
+    const node = root.querySelector<HTMLElement>(`[data-history-id="${id}"]`)
+    node?.scrollIntoView({ block: 'nearest' })
+  }
+  useEffect(() => {
+    if (visibleReturnHistory.length === 0) return
+    const handler = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      if (target) {
+        const tag = target.tagName
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
+          return
+        }
+      }
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const key = event.key.toLowerCase()
+      if (key !== 'j' && key !== 'k' && key !== 'enter' && key !== 'o') return
+      const ids = visibleReturnHistory.map((entry) => entry.id)
+      const currentIndex = historyCursor ? ids.indexOf(historyCursor) : -1
+      if (key === 'j') {
+        event.preventDefault()
+        const next = currentIndex < 0 ? 0 : Math.min(currentIndex + 1, ids.length - 1)
+        const nextId = ids[next]
+        setHistoryCursor(nextId)
+        scrollHistoryItemIntoView(nextId)
+      } else if (key === 'k') {
+        event.preventDefault()
+        const prev = currentIndex < 0 ? 0 : Math.max(currentIndex - 1, 0)
+        const prevId = ids[prev]
+        setHistoryCursor(prevId)
+        scrollHistoryItemIntoView(prevId)
+      } else if (key === 'enter' && currentIndex >= 0) {
+        event.preventDefault()
+        onSelectHistoryEntry(visibleReturnHistory[currentIndex])
+      } else if (key === 'o' && currentIndex >= 0) {
+        event.preventDefault()
+        onOpenHistorySource(visibleReturnHistory[currentIndex])
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [historyCursor, visibleReturnHistory, onSelectHistoryEntry, onOpenHistorySource])
+
   return (
     <section className="surface-card agent-feedback-workspace" aria-labelledby="agent-feedback-workspace-title">
       <div className="panel-title-row">
@@ -229,7 +280,9 @@ export function AgentFeedbackWorkspace({
               <span className="section-kicker">Return history</span>
               <strong>最近回传记录</strong>
             </div>
-            <small>最近 {returnedFollowUpHistory.length} 条</small>
+            <small>
+              最近 {returnedFollowUpHistory.length} 条 · j/k 选择 · Enter 打开 Agent · O 回到来源
+            </small>
           </div>
           <div className="agent-feedback-history-toolbar">
             <input
@@ -395,7 +448,7 @@ export function AgentFeedbackWorkspace({
               )
             })}
           </div>
-          <div className="agent-feedback-history-list">
+          <div className="agent-feedback-history-list" ref={historyListRef}>
             {(() => {
               const groups: { key: string; label: string; items: typeof visibleReturnHistory }[] = []
               const today = new Date()
@@ -421,7 +474,16 @@ export function AgentFeedbackWorkspace({
                     <small>{group.items.length} 条</small>
                   </div>
                   {group.items.map((entry) => (
-                    <div className="agent-feedback-history-item" key={entry.id}>
+                    <div
+                      className={
+                        entry.id === historyCursor
+                          ? 'agent-feedback-history-item is-cursor'
+                          : 'agent-feedback-history-item'
+                      }
+                      key={entry.id}
+                      data-history-id={entry.id}
+                      onMouseEnter={() => setHistoryCursor(entry.id)}
+                    >
                       <strong>
                         {entry.sourcePage} · {entry.agentLabel}
                       </strong>
