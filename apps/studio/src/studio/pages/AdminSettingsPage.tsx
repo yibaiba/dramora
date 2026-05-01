@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2 } from 'lucide-react'
 import { useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
   ProviderCapability,
   ProviderConfig,
@@ -47,6 +48,7 @@ export function AdminSettingsPage() {
           )
         })}
       </div>
+      <AgentStreamSandbox />
     </div>
   )
 }
