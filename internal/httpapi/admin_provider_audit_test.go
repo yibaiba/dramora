@@ -1,0 +1,128 @@
+package httpapi
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/yibaiba/dramora/internal/repo"
+	"github.com/yibaiba/dramora/internal/service"
+)
+
+func TestProviderAuditCapturesSaveAndTest(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
+	auditRepo := repo.NewMemoryProviderAuditRepository()
+	providerSvc := service.NewProviderService(providerCfgRepo)
+	providerSvc.SetAuditRepository(auditRepo)
+
+	rawRouter := NewRouter(RouterConfig{
+		Logger:          logger,
+		Version:         "test",
+		AuthService:     authService,
+		ProviderService: providerSvc,
+	})
+	router := newAuthenticatedTestRouter(rawRouter, authService)
+
+	saveBody, _ := json.Marshal(map[string]any{
+		"capability":    "chat",
+		"provider_type": "openai",
+		"base_url":      "https://example.com",
+		"api_key":       "sk-test",
+		"model":         "gpt-4o-mini",
+	})
+	saveResp := httptest.NewRecorder()
+	saveReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers:save", bytes.NewReader(saveBody))
+	saveReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(saveResp, saveReq)
+	if saveResp.Code != http.StatusOK {
+		t.Fatalf("expected save 200, got %d: %s", saveResp.Code, saveResp.Body.String())
+	}
+
+	testResp := httptest.NewRecorder()
+	testReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers/chat:test", nil)
+	router.ServeHTTP(testResp, testReq)
+	if testResp.Code != http.StatusOK {
+		t.Fatalf("expected test 200, got %d: %s", testResp.Code, testResp.Body.String())
+	}
+
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/provider-audit", nil)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected audit list 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var payload struct {
+		Events  []providerAuditEventDTO `json:"events"`
+		HasMore bool                    `json:"has_more"`
+	}
+	if err := json.NewDecoder(listResp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(payload.Events) < 2 {
+		t.Fatalf("expected at least 2 audit events (save+test), got %d", len(payload.Events))
+	}
+	actions := map[string]bool{}
+	for _, ev := range payload.Events {
+		actions[ev.Action] = true
+		if ev.Capability != "chat" {
+			t.Fatalf("expected capability chat, got %q", ev.Capability)
+		}
+		if ev.OrganizationID == "" {
+			t.Fatalf("expected organization_id to be populated, got empty")
+		}
+	}
+	if !actions["save"] || !actions["test"] {
+		t.Fatalf("expected both save and test events, got actions=%v", actions)
+	}
+}
+
+func TestProviderAuditRejectsViewerRole(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	identityRepo := repo.NewMemoryIdentityRepository()
+	const orgID = "00000000-0000-0000-0000-000000000001"
+	authService := service.NewAuthService(identityRepo, "test-secret")
+	providerSvc := service.NewProviderService(repo.NewMemoryProviderConfigRepository())
+	providerSvc.SetAuditRepository(repo.NewMemoryProviderAuditRepository())
+
+	router := NewRouter(RouterConfig{
+		Logger:          logger,
+		Version:         "test",
+		AuthService:     authService,
+		ProviderService: providerSvc,
+	})
+
+	identity, err := identityRepo.CreateUserWithMembership(context.Background(), repo.CreateUserWithMembershipParams{
+		UserID:         "00000000-0000-0000-0000-0000000000aa",
+		OrganizationID: orgID,
+		Email:          "viewer@example.com",
+		DisplayName:    "Viewer",
+		PasswordHash:   "$2a$10$abcdefghijklmnopqrstuv",
+		Role:           "viewer",
+	})
+	if err != nil {
+		t.Fatalf("seed viewer: %v", err)
+	}
+	session, err := authService.IssueSessionForIdentity(identity)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/provider-audit", nil)
+	req.Header.Set("Authorization", "Bearer "+session.Token)
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusForbidden {
+		t.Fatalf("expected 403 for viewer, got %d: %s", resp.Code, resp.Body.String())
+	}
+}

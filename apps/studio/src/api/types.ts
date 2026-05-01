@@ -607,3 +607,22 @@ export type LLMTelemetrySnapshot = {
   recent_events: LLMTelemetryEvent[]
   last_event_at?: string
 }
+
+export type ProviderAuditEvent = {
+  id: string
+  organization_id: string
+  action: 'save' | 'test' | string
+  actor_user_id?: string
+  actor_email?: string
+  capability: string
+  provider_type: string
+  model?: string
+  success: boolean
+  message?: string
+  created_at: string
+}
+
+export type ProviderAuditPage = {
+  events: ProviderAuditEvent[]
+  has_more: boolean
+}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2, Activity } from 'lucide-react'
-import { useLLMTelemetry, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
   ProviderCapability,
@@ -67,7 +67,61 @@ export function AdminSettingsPage() {
       </div>
       <AgentStreamSandbox />
       <LLMTelemetryPanel />
+      <ProviderAuditPanel />
     </div>
+  )
+}
+
+function ProviderAuditPanel() {
+  const { data, isLoading, isError, error } = useProviderAuditEvents()
+  return (
+    <section className="provider-card" style={{ marginTop: 24 }}>
+      <header className="provider-card-header">
+        <Activity size={18} aria-hidden="true" />
+        <h2>Provider 配置审计</h2>
+        <span className="provider-card-hint">每 15s 刷新 · 最近 50 条 save / test 记录</span>
+      </header>
+      {isLoading ? (
+        <p className="muted">加载中…</p>
+      ) : isError ? (
+        <p className="error">无法加载（需要 owner/admin 权限）：{(error as Error)?.message ?? 'unknown'}</p>
+      ) : !data || data.events.length === 0 ? (
+        <p className="muted">尚无 provider 配置审计记录</p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>时间</th>
+                <th style={{ textAlign: 'left' }}>动作</th>
+                <th style={{ textAlign: 'left' }}>Capability</th>
+                <th style={{ textAlign: 'left' }}>Vendor</th>
+                <th style={{ textAlign: 'left' }}>Model</th>
+                <th style={{ textAlign: 'left' }}>操作人</th>
+                <th style={{ textAlign: 'left' }}>状态</th>
+                <th style={{ textAlign: 'left' }}>备注</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.events.map((ev) => (
+                <tr key={ev.id}>
+                  <td>{ev.created_at ? new Date(ev.created_at).toLocaleString() : '-'}</td>
+                  <td>{ev.action}</td>
+                  <td>{ev.capability}</td>
+                  <td>{ev.provider_type}</td>
+                  <td>{ev.model || '-'}</td>
+                  <td>{ev.actor_email || ev.actor_user_id || '-'}</td>
+                  <td style={{ color: ev.success ? '#3ddc84' : '#ff6b6b' }}>{ev.success ? 'OK' : 'FAIL'}</td>
+                  <td style={{ maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {ev.message || '-'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   )
 }
 

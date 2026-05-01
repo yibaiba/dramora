@@ -36,6 +36,7 @@ import type {
   TestProviderResult,
   WorkerMetricsSnapshot,
   LLMTelemetrySnapshot,
+  ProviderAuditPage,
   WorkflowRun,
   UpdateStoryboardShotRequest,
   Timeline,
@@ -499,6 +500,26 @@ export async function fetchLLMTelemetry(): Promise<LLMTelemetrySnapshot> {
     '/api/v1/admin/llm-telemetry',
   )
   return payload.llm_telemetry
+}
+
+export async function fetchProviderAuditEvents(filter?: {
+  action?: string
+  capability?: string
+  since?: string
+  until?: string
+  limit?: number
+  offset?: number
+}): Promise<ProviderAuditPage> {
+  const search = new URLSearchParams()
+  if (filter?.action) search.set('action', filter.action)
+  if (filter?.capability) search.set('capability', filter.capability)
+  if (filter?.since) search.set('since', filter.since)
+  if (filter?.until) search.set('until', filter.until)
+  if (filter?.limit) search.set('limit', String(filter.limit))
+  if (filter?.offset) search.set('offset', String(filter.offset))
+  const qs = search.toString()
+  const path = qs ? `/api/v1/admin/provider-audit?${qs}` : '/api/v1/admin/provider-audit'
+  return fetchJSON<ProviderAuditPage>(path)
 }
 
 // org invitations (owner/admin only)

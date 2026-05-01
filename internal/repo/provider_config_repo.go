@@ -3,6 +3,8 @@ package repo
 import (
 	"context"
 	"database/sql"
+	"sync"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 )
@@ -29,6 +31,60 @@ type ProviderConfigRepository interface {
 
 type SQLiteProviderConfigRepository struct {
 	db *sql.DB
+}
+
+// MemoryProviderConfigRepository 是只用于测试与内存模式的实现。
+// 当前 Container 仅在 SQLite 路径上启用 ProviderService，但 HTTP 测试需要一个
+// 不依赖 SQLite 的轻量实现来覆盖 admin/providers 与 audit log 路径。
+type MemoryProviderConfigRepository struct {
+	mu      sync.Mutex
+	byCapID map[string]domain.ProviderConfig
+}
+
+func NewMemoryProviderConfigRepository() *MemoryProviderConfigRepository {
+	return &MemoryProviderConfigRepository{byCapID: map[string]domain.ProviderConfig{}}
+}
+
+func (r *MemoryProviderConfigRepository) ListProviderConfigs(_ context.Context) ([]domain.ProviderConfig, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]domain.ProviderConfig, 0, len(r.byCapID))
+	for _, c := range r.byCapID {
+		out = append(out, c)
+	}
+	return out, nil
+}
+
+func (r *MemoryProviderConfigRepository) GetProviderConfig(_ context.Context, capability string) (domain.ProviderConfig, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cfg, ok := r.byCapID[capability]
+	if !ok {
+		return domain.ProviderConfig{}, sql.ErrNoRows
+	}
+	return cfg, nil
+}
+
+func (r *MemoryProviderConfigRepository) SaveProviderConfig(_ context.Context, params SaveProviderConfigParams) (domain.ProviderConfig, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cfg := domain.ProviderConfig{
+		ID:             params.ID,
+		Capability:     params.Capability,
+		ProviderType:   params.ProviderType,
+		BaseURL:        params.BaseURL,
+		APIKey:         params.APIKey,
+		Model:          params.Model,
+		CreditsPerUnit: params.CreditsPerUnit,
+		CreditUnit:     params.CreditUnit,
+		TimeoutMS:      params.TimeoutMS,
+		MaxRetries:     params.MaxRetries,
+		IsEnabled:      true,
+		UpdatedAt:      time.Now().UTC(),
+		UpdatedBy:      params.UpdatedBy,
+	}
+	r.byCapID[params.Capability] = cfg
+	return cfg, nil
 }
 
 func NewSQLiteProviderConfigRepository(db *sql.DB) *SQLiteProviderConfigRepository {

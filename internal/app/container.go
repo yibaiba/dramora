@@ -61,6 +61,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		identityRepo = repo.NewSQLiteIdentityRepository(openedDB.DB)
 		refreshRepo = repo.NewSQLiteRefreshTokenRepository(openedDB.DB)
 		providerService = service.NewProviderService(repo.NewSQLiteProviderConfigRepository(openedDB.DB))
+		providerService.SetAuditRepository(repo.NewSQLiteProviderAuditRepository(openedDB.DB))
 		workerMetricsRepo = repo.NewSQLiteWorkerMetricsRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
 	}

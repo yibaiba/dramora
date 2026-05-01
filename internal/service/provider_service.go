@@ -14,10 +14,59 @@ import (
 
 type ProviderService struct {
 	configs repo.ProviderConfigRepository
+	audit   repo.ProviderAuditRepository
 }
 
 func NewProviderService(configs repo.ProviderConfigRepository) *ProviderService {
 	return &ProviderService{configs: configs}
+}
+
+// SetAuditRepository 注入 provider 审计写入器。可选；未注入时 save/test 不会落审计。
+func (s *ProviderService) SetAuditRepository(audit repo.ProviderAuditRepository) {
+	s.audit = audit
+}
+
+func (s *ProviderService) recordAudit(ctx context.Context, action, capability, providerType, model string, success bool, message string) {
+	if s.audit == nil {
+		return
+	}
+	auth, _ := RequestAuthFromContext(ctx)
+	if auth.OrganizationID == "" {
+		return
+	}
+	id, err := domain.NewID()
+	if err != nil {
+		return
+	}
+	_, _ = s.audit.AppendProviderAuditEvent(ctx, repo.AppendProviderAuditParams{
+		EventID:        id,
+		OrganizationID: auth.OrganizationID,
+		Action:         action,
+		ActorUserID:    auth.UserID,
+		Capability:     capability,
+		ProviderType:   providerType,
+		Model:          model,
+		Success:        success,
+		Message:        message,
+		CreatedAt:      time.Now().UTC(),
+	})
+}
+
+// ListProviderAuditEvents 返回当前组织的 provider 审计事件，按 created_at 倒序。
+// 调用方需先在 HTTP 层确认 owner/admin 角色；service 层自身仍按 auth 上下文裁剪到当前 org。
+func (s *ProviderService) ListProviderAuditEvents(ctx context.Context, filter repo.ProviderAuditFilter) (repo.ProviderAuditPage, error) {
+	if s.audit == nil {
+		return repo.ProviderAuditPage{Events: nil, HasMore: false}, nil
+	}
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return repo.ProviderAuditPage{}, ErrUnauthorized
+	}
+	filter.OrganizationID = auth.OrganizationID
+	if filter.Limit <= 0 || filter.Limit > 200 {
+		filter.Limit = 50
+	}
+	return s.audit.ListProviderAuditEvents(ctx, filter)
 }
 
 func (s *ProviderService) ListProviderConfigs(ctx context.Context) ([]domain.ProviderConfig, error) {
@@ -119,7 +168,7 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 		return domain.ProviderConfig{}, err
 	}
 
-	return s.configs.SaveProviderConfig(ctx, repo.SaveProviderConfigParams{
+	cfg, err := s.configs.SaveProviderConfig(ctx, repo.SaveProviderConfigParams{
 		ID:             id,
 		Capability:     input.Capability,
 		ProviderType:   input.ProviderType,
@@ -131,6 +180,12 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 		TimeoutMS:      input.TimeoutMS,
 		MaxRetries:     input.MaxRetries,
 	})
+	if err != nil {
+		s.recordAudit(ctx, domain.ProviderAuditActionSave, input.Capability, input.ProviderType, input.Model, false, err.Error())
+		return cfg, err
+	}
+	s.recordAudit(ctx, domain.ProviderAuditActionSave, cfg.Capability, cfg.ResolvedProviderType(), cfg.Model, true, "")
+	return cfg, nil
 }
 
 type TestProviderResult struct {
@@ -172,6 +227,16 @@ func capabilityProbeURL(capability, providerType, baseURL string) (probeURL stri
 }
 
 func (s *ProviderService) TestProviderConfig(ctx context.Context, capability string) TestProviderResult {
+	result := s.testProviderConfigInner(ctx, capability)
+	msg := result.Error
+	if msg == "" && result.Probe != "" {
+		msg = "probe=" + result.Probe
+	}
+	s.recordAudit(ctx, domain.ProviderAuditActionTest, capability, result.ProviderType, result.Model, result.OK, msg)
+	return result
+}
+
+func (s *ProviderService) testProviderConfigInner(ctx context.Context, capability string) TestProviderResult {
 	cfg, err := s.configs.GetProviderConfig(ctx, capability)
 	if err != nil {
 		return TestProviderResult{Capability: capability, Error: "端点未配置"}

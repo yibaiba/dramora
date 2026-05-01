@@ -52,6 +52,7 @@ import {
 	testProviderConfig,
 	fetchWorkerMetrics,
 	fetchLLMTelemetry,
+	fetchProviderAuditEvents,
 	updateStoryboardShot,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
@@ -518,6 +519,15 @@ export function useLLMTelemetry(enabled = true) {
     queryFn: fetchLLMTelemetry,
     queryKey: ['admin', 'llm-telemetry'],
     refetchInterval: enabled ? 10000 : false,
+  })
+}
+
+export function useProviderAuditEvents(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: () => fetchProviderAuditEvents({ limit: 50 }),
+    queryKey: ['admin', 'provider-audit'],
+    refetchInterval: enabled ? 15000 : false,
   })
 }
 

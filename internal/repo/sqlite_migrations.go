@@ -427,4 +427,23 @@ var sqliteMigrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_invitation_events_org_created
 		ON organization_invitation_events (organization_id, created_at DESC)`,
+
+	// PR8: provider 审计事件 — 记录 admin 对 provider config 的 save/test 关键动作。
+	`CREATE TABLE IF NOT EXISTS provider_audit_events (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		actor_user_id TEXT,
+		actor_email TEXT,
+		capability TEXT NOT NULL,
+		provider_type TEXT NOT NULL,
+		model TEXT,
+		success INTEGER NOT NULL,
+		message TEXT,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_provider_audit_events_org_created
+		ON provider_audit_events (organization_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS idx_provider_audit_events_capability
+		ON provider_audit_events (organization_id, capability)`,
 }

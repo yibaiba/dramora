@@ -1565,6 +1565,88 @@ paths:
                         format: date-time
         "403":
           description: Forbidden — owner/admin role required
+  /api/v1/admin/provider-audit:
+    get:
+      summary: List provider config audit events (owner/admin)
+      description: |
+        Returns the provider config audit log for the current organization,
+        ordered by `created_at` descending. Each entry records a `save` or
+        `test` action, the actor, the capability/provider_type/model snapshot
+        at the time of the action, success/failure flag and an optional
+        message (probe URL on success, error reason on failure).
+      parameters:
+        - in: query
+          name: action
+          schema:
+            type: string
+          description: Comma-separated list of actions to include (save,test).
+        - in: query
+          name: capability
+          schema:
+            type: string
+          description: Comma-separated list of capabilities (chat,image,video,audio).
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: until
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        "200":
+          description: Provider audit page
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        organization_id:
+                          type: string
+                        action:
+                          type: string
+                          enum: [save, test]
+                        actor_user_id:
+                          type: string
+                        actor_email:
+                          type: string
+                        capability:
+                          type: string
+                        provider_type:
+                          type: string
+                        model:
+                          type: string
+                        success:
+                          type: boolean
+                        message:
+                          type: string
+                        created_at:
+                          type: string
+                          format: date-time
+                  has_more:
+                    type: boolean
+        "403":
+          description: Forbidden — owner/admin role required
 components:
   securitySchemes:
     bearerAuth:
