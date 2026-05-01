@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/repo"
@@ -52,6 +53,128 @@ func (s *ProductionService) LockAsset(ctx context.Context, assetID string) (doma
 		return domain.Asset{}, err
 	}
 	return s.production.LockAsset(ctx, assetID)
+}
+
+// AssetRecoveryEvent is a synthesized timeline entry derived from
+// asset.created_at / updated_at / status. We do not maintain an
+// asset audit log, so events are virtual rather than persisted.
+type AssetRecoveryEvent struct {
+	Status    domain.AssetStatus
+	Message   string
+	CreatedAt time.Time
+}
+
+type AssetRecoverySummary struct {
+	IsTerminal      bool
+	IsRecoverable   bool
+	IsLocked        bool
+	CurrentStatus   domain.AssetStatus
+	StatusEnteredAt time.Time
+	LastEventAt     time.Time
+	TotalEventCount int
+	NextHint        string
+}
+
+type AssetRecovery struct {
+	Asset   domain.Asset
+	Events  []AssetRecoveryEvent
+	Summary AssetRecoverySummary
+}
+
+// GetAssetRecovery returns a lightweight write-history view for an asset.
+// Events are synthesized from asset timestamps; no new audit table is required.
+func (s *ProductionService) GetAssetRecovery(ctx context.Context, assetID string) (AssetRecovery, error) {
+	if strings.TrimSpace(assetID) == "" {
+		return AssetRecovery{}, fmt.Errorf("%w: asset id is required", domain.ErrInvalidInput)
+	}
+	asset, err := s.production.GetAsset(ctx, assetID)
+	if err != nil {
+		return AssetRecovery{}, err
+	}
+	if err := s.authorizeScopedResource(ctx, asset.ProjectID, asset.EpisodeID); err != nil {
+		return AssetRecovery{}, err
+	}
+	events := buildAssetRecoveryEvents(asset)
+	return AssetRecovery{
+		Asset:   asset,
+		Events:  events,
+		Summary: buildAssetRecoverySummary(asset, events),
+	}, nil
+}
+
+func buildAssetRecoveryEvents(asset domain.Asset) []AssetRecoveryEvent {
+	events := []AssetRecoveryEvent{
+		{Status: domain.AssetStatusDraft, Message: "asset created", CreatedAt: asset.CreatedAt},
+	}
+	if asset.Status != domain.AssetStatusDraft && !asset.UpdatedAt.Equal(asset.CreatedAt) {
+		msg := "current status"
+		if asset.Status == domain.AssetStatusReady {
+			msg = "asset locked (status=ready)"
+		}
+		events = append(events, AssetRecoveryEvent{
+			Status:    asset.Status,
+			Message:   msg,
+			CreatedAt: asset.UpdatedAt,
+		})
+	}
+	return events
+}
+
+func buildAssetRecoverySummary(asset domain.Asset, events []AssetRecoveryEvent) AssetRecoverySummary {
+	summary := AssetRecoverySummary{
+		CurrentStatus:   asset.Status,
+		IsLocked:        asset.Status == domain.AssetStatusReady,
+		IsTerminal:      isTerminalAssetStatus(asset.Status),
+		IsRecoverable:   isRecoverableAssetStatus(asset.Status),
+		TotalEventCount: len(events),
+		StatusEnteredAt: asset.UpdatedAt,
+		LastEventAt:     asset.UpdatedAt,
+	}
+	if summary.StatusEnteredAt.IsZero() {
+		summary.StatusEnteredAt = asset.CreatedAt
+	}
+	if summary.LastEventAt.IsZero() {
+		summary.LastEventAt = asset.CreatedAt
+	}
+	for _, ev := range events {
+		if ev.CreatedAt.After(summary.LastEventAt) {
+			summary.LastEventAt = ev.CreatedAt
+		}
+	}
+	summary.NextHint = assetRecoveryNextHint(asset.Status)
+	return summary
+}
+
+func isTerminalAssetStatus(status domain.AssetStatus) bool {
+	switch status {
+	case domain.AssetStatusReady, domain.AssetStatusFailed, domain.AssetStatusArchived:
+		return true
+	}
+	return false
+}
+
+func isRecoverableAssetStatus(status domain.AssetStatus) bool {
+	switch status {
+	case domain.AssetStatusDraft, domain.AssetStatusGenerating, domain.AssetStatusFailed:
+		return true
+	}
+	return false
+}
+
+func assetRecoveryNextHint(status domain.AssetStatus) string {
+	switch status {
+	case domain.AssetStatusDraft:
+		return "asset is a draft candidate; lock to mark as the production reference"
+	case domain.AssetStatusGenerating:
+		return "asset generation is still in flight; check the underlying generation job"
+	case domain.AssetStatusReady:
+		return "asset is locked as the production reference"
+	case domain.AssetStatusFailed:
+		return "previous generation failed; retry generation or pick another candidate"
+	case domain.AssetStatusArchived:
+		return "asset is archived; restore via re-creation if needed"
+	}
+	return ""
 }
 
 func assetCandidateParams(episode domain.Episode, storyMap repo.StoryMap) ([]repo.CreateAssetParams, error) {

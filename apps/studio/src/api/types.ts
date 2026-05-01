@@ -486,6 +486,29 @@ export type ExportRecovery = {
   summary: ExportRecoverySummary
 }
 
+export type AssetRecoveryEvent = {
+  status: Asset['status']
+  message: string
+  created_at: string
+}
+
+export type AssetRecoverySummary = {
+  is_terminal: boolean
+  is_recoverable: boolean
+  is_locked: boolean
+  current_status: Asset['status']
+  status_entered_at: string
+  last_event_at: string
+  total_event_count: number
+  next_hint: string
+}
+
+export type AssetRecovery = {
+  asset: Asset
+  events: AssetRecoveryEvent[]
+  summary: AssetRecoverySummary
+}
+
 export type CreateProjectRequest = {
   name: string
   description?: string

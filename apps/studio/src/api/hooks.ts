@@ -10,6 +10,7 @@ import {
   generateShotPromptPack,
   getExport,
   getExportRecovery,
+  getAssetRecovery,
   getEpisodeTimeline,
   getShotPromptPack,
   getStoryAnalysis,
@@ -474,6 +475,16 @@ export function useExportRecovery(exportId?: string, options?: { enabled?: boole
     enabled,
     queryFn: () => getExportRecovery(exportId ?? ''),
     queryKey: ['export-recovery', exportId],
+    refetchInterval: 15_000,
+  })
+}
+
+export function useAssetRecovery(assetId?: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? Boolean(assetId)
+  return useQuery({
+    enabled,
+    queryFn: () => getAssetRecovery(assetId ?? ''),
+    queryKey: ['asset-recovery', assetId],
     refetchInterval: 15_000,
   })
 }

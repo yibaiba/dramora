@@ -1108,6 +1108,59 @@ paths:
                     $ref: "#/components/schemas/Asset"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/assets/{assetId}/recovery:
+    get:
+      summary: Get asset write recovery view (synthetic events + summary)
+      parameters:
+        - $ref: "#/components/parameters/AssetID"
+      responses:
+        "200":
+          description: Asset recovery snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  asset_recovery:
+                    type: object
+                    properties:
+                      asset:
+                        $ref: "#/components/schemas/Asset"
+                      events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                            message:
+                              type: string
+                            created_at:
+                              type: string
+                              format: date-time
+                      summary:
+                        type: object
+                        properties:
+                          is_terminal:
+                            type: boolean
+                          is_recoverable:
+                            type: boolean
+                          is_locked:
+                            type: boolean
+                          current_status:
+                            type: string
+                          status_entered_at:
+                            type: string
+                            format: date-time
+                          last_event_at:
+                            type: string
+                            format: date-time
+                          total_event_count:
+                            type: integer
+                          next_hint:
+                            type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/workflow-runs/{workflowRunId}:
     get:
       summary: Get workflow run

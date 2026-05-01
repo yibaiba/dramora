@@ -814,3 +814,51 @@ func exportRecoveryDTO(recovery service.ExportRecovery) exportRecoveryResponse {
 		},
 	}
 }
+
+type assetRecoveryEventResponse struct {
+	Status    domain.AssetStatus `json:"status"`
+	Message   string             `json:"message"`
+	CreatedAt time.Time          `json:"created_at"`
+}
+
+type assetRecoverySummaryResponse struct {
+	IsTerminal      bool               `json:"is_terminal"`
+	IsRecoverable   bool               `json:"is_recoverable"`
+	IsLocked        bool               `json:"is_locked"`
+	CurrentStatus   domain.AssetStatus `json:"current_status"`
+	StatusEnteredAt time.Time          `json:"status_entered_at"`
+	LastEventAt     time.Time          `json:"last_event_at"`
+	TotalEventCount int                `json:"total_event_count"`
+	NextHint        string             `json:"next_hint"`
+}
+
+type assetRecoveryResponse struct {
+	Asset   assetResponse                `json:"asset"`
+	Events  []assetRecoveryEventResponse `json:"events"`
+	Summary assetRecoverySummaryResponse `json:"summary"`
+}
+
+func assetRecoveryDTO(recovery service.AssetRecovery) assetRecoveryResponse {
+	events := make([]assetRecoveryEventResponse, 0, len(recovery.Events))
+	for _, ev := range recovery.Events {
+		events = append(events, assetRecoveryEventResponse{
+			Status:    ev.Status,
+			Message:   ev.Message,
+			CreatedAt: ev.CreatedAt,
+		})
+	}
+	return assetRecoveryResponse{
+		Asset:  assetDTO(recovery.Asset),
+		Events: events,
+		Summary: assetRecoverySummaryResponse{
+			IsTerminal:      recovery.Summary.IsTerminal,
+			IsRecoverable:   recovery.Summary.IsRecoverable,
+			IsLocked:        recovery.Summary.IsLocked,
+			CurrentStatus:   recovery.Summary.CurrentStatus,
+			StatusEnteredAt: recovery.Summary.StatusEnteredAt,
+			LastEventAt:     recovery.Summary.LastEventAt,
+			TotalEventCount: recovery.Summary.TotalEventCount,
+			NextHint:        recovery.Summary.NextHint,
+		},
+	}
+}

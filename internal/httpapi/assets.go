@@ -44,3 +44,12 @@ func (api *api) lockAsset(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, Envelope{"asset": assetDTO(asset)})
 }
+
+func (api *api) getAssetRecovery(w http.ResponseWriter, r *http.Request) {
+	recovery, err := api.productionService.GetAssetRecovery(r.Context(), chi.URLParam(r, "assetId"))
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"asset_recovery": assetRecoveryDTO(recovery)})
+}

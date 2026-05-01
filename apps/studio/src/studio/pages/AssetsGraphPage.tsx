@@ -9,6 +9,7 @@ import {
 import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
+  useAssetRecovery,
   useLockAsset,
   useSaveCharacterBible,
   useSeedEpisodeAssets,
@@ -23,6 +24,7 @@ import {
 } from '../agentOutput'
 import { ActionButton } from '../components/ActionButton'
 import { AssetsGraphInspector } from '../components/AssetsGraphInspector'
+import { RecoveryPanel } from '../components/RecoveryPanel'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import { StatePlaceholder } from '../components/StatePlaceholder'
 import {
@@ -133,6 +135,8 @@ export function AssetsGraphPage() {
       ),
     [selectedAssets],
   )
+  const focusedAsset = selectedAssets.length === 1 ? selectedAssets[0] : undefined
+  const focusedAssetRecovery = useAssetRecovery(focusedAsset?.id, { enabled: Boolean(focusedAsset) })
   const totalNodes = graphGroups.reduce((count, group) => count + group.items.length, 0)
   const selectedNode = resolvedSelectedNodeKey ? graphNodesByKey.get(resolvedSelectedNodeKey) : undefined
   const selectedNodeKind = resolvedSelectedNodeKey?.split(':')[0] as GraphNodeKind | undefined
@@ -756,6 +760,23 @@ export function AssetsGraphPage() {
             ))}
           </div>
         )}
+        {focusedAsset ? (
+          <RecoveryPanel
+            title={`资产写入恢复 · ${focusedAsset.purpose}`}
+            subtitle={`${focusedAsset.kind} · ${focusedAsset.purpose}`}
+            isLoading={focusedAssetRecovery.isLoading}
+            isError={focusedAssetRecovery.isError}
+            status={focusedAssetRecovery.data?.summary.current_status}
+            isTerminal={focusedAssetRecovery.data?.summary.is_terminal}
+            isRecoverable={focusedAssetRecovery.data?.summary.is_recoverable}
+            statusEnteredAt={focusedAssetRecovery.data?.summary.status_entered_at}
+            lastEventAt={focusedAssetRecovery.data?.summary.last_event_at}
+            totalEventCount={focusedAssetRecovery.data?.summary.total_event_count}
+            nextHint={focusedAssetRecovery.data?.summary.next_hint}
+            events={focusedAssetRecovery.data?.events}
+            emptyHint="这条资产暂无写入轨迹"
+          />
+        ) : null}
       </article>
     </section>
   )

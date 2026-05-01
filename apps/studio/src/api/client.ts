@@ -9,6 +9,7 @@ import type {
   ApprovalGateReviewRequest,
   SaveCharacterBibleRequest,
   Asset,
+  AssetRecovery,
   Export,
   ExportRecovery,
   GenerationJob,
@@ -464,6 +465,13 @@ export async function getExportRecovery(exportId: string): Promise<ExportRecover
     `/api/v1/exports/${exportId}/recovery`,
   )
   return payload.export_recovery
+}
+
+export async function getAssetRecovery(assetId: string): Promise<AssetRecovery> {
+  const payload = await fetchJSON<{ asset_recovery: AssetRecovery }>(
+    `/api/v1/assets/${assetId}/recovery`,
+  )
+  return payload.asset_recovery
 }
 
 // admin: provider configs
