@@ -4978,6 +4978,109 @@ p {
   color: rgb(148, 163, 184);
 }
 
+.invitation-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.invitation-filter-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.invitation-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.4);
+  color: rgb(203, 213, 225);
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.invitation-filter-chip:hover {
+  border-color: rgba(99, 102, 241, 0.45);
+  color: rgb(226, 232, 240);
+}
+
+.invitation-filter-chip.is-active {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.55);
+  color: rgb(226, 232, 240);
+}
+
+.invitation-filter-chip-count {
+  display: inline-flex;
+  min-width: 1.4rem;
+  justify-content: center;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.55);
+  font-size: 0.7rem;
+  color: rgb(148, 163, 184);
+}
+
+.invitation-filter-chip.is-active .invitation-filter-chip-count {
+  background: rgba(99, 102, 241, 0.32);
+  color: rgb(226, 232, 240);
+}
+
+.invitation-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.4);
+  color: rgb(148, 163, 184);
+}
+
+.invitation-search input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: rgb(226, 232, 240);
+  font-size: 0.82rem;
+  min-width: 14rem;
+}
+
+.invitation-status {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  margin-right: 0.35rem;
+  border: 1px solid transparent;
+}
+
+.invitation-status-pending {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.45);
+  color: rgb(199, 210, 254);
+}
+
+.invitation-status-accepted {
+  background: rgba(34, 197, 94, 0.18);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: rgb(187, 247, 208);
+}
+
+.invitation-status-expired {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.4);
+  color: rgb(254, 202, 202);
+}
+
 .worker-metrics-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

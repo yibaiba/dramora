@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Mail, Plus, ShieldCheck, Copy, Check } from 'lucide-react'
+import { Mail, Plus, ShieldCheck, Copy, Check, Search } from 'lucide-react'
 import { useCreateInvitation, useOrganizationInvitations } from '../../api/hooks'
 import { useAuthStore } from '../../state/authStore'
 import type { OrganizationInvitation } from '../../api/types'
@@ -15,6 +15,26 @@ const ROLE_OPTIONS: Array<{ value: NonNullable<OrganizationInvitation['role']>; 
   { value: 'owner', label: 'Owner · 全权所有者' },
 ]
 
+type StatusFilter = 'all' | 'pending' | 'accepted' | 'expired'
+
+const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'pending', label: '待接受' },
+  { value: 'accepted', label: '已接受' },
+  { value: 'expired', label: '已失效' },
+]
+
+function isExpired(invitation: OrganizationInvitation): boolean {
+  if (invitation.status !== 'pending') return false
+  const expiresAt = Date.parse(invitation.expires_at)
+  return Number.isFinite(expiresAt) && expiresAt < Date.now()
+}
+
+function buildInviteUrl(token: string): string {
+  if (typeof window === 'undefined') return token
+  return `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(token)}`
+}
+
 export function InvitationsPage() {
   const session = useAuthStore((state) => state.session)
   const isAdmin = Boolean(session && ADMIN_ROLES.has(session.role))
@@ -26,11 +46,36 @@ export function InvitationsPage() {
   const [role, setRole] = useState<OrganizationInvitation['role']>('editor')
   const [errorMessage, setErrorMessage] = useState('')
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [searchInput, setSearchInput] = useState('')
 
-  const invitations = useMemo(
+  const allInvitations = useMemo(
     () => (invitationsQuery.data ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [invitationsQuery.data],
   )
+
+  const counts = useMemo(() => {
+    const pending = allInvitations.filter((inv) => inv.status === 'pending' && !isExpired(inv)).length
+    const accepted = allInvitations.filter((inv) => inv.status === 'accepted').length
+    const expired = allInvitations.filter((inv) => isExpired(inv)).length
+    return { all: allInvitations.length, pending, accepted, expired }
+  }, [allInvitations])
+
+  const filteredInvitations = useMemo(() => {
+    const search = searchInput.trim().toLowerCase()
+    return allInvitations.filter((invitation) => {
+      const expired = isExpired(invitation)
+      const effectiveStatus: StatusFilter =
+        invitation.status === 'accepted' ? 'accepted' : expired ? 'expired' : 'pending'
+      if (statusFilter !== 'all' && effectiveStatus !== statusFilter) {
+        return false
+      }
+      if (search && !invitation.email.toLowerCase().includes(search)) {
+        return false
+      }
+      return true
+    })
+  }, [allInvitations, statusFilter, searchInput])
 
   if (!isAdmin) {
     return (
@@ -57,10 +102,7 @@ export function InvitationsPage() {
   }
 
   async function handleCopy(invitation: OrganizationInvitation) {
-    const url =
-      typeof window !== 'undefined'
-        ? `${window.location.origin}${window.location.pathname}?invite=${encodeURIComponent(invitation.token)}`
-        : invitation.token
+    const url = buildInviteUrl(invitation.token)
     try {
       await navigator.clipboard.writeText(url)
       setCopiedToken(invitation.id)
@@ -118,51 +160,96 @@ export function InvitationsPage() {
       <section className="provider-card" aria-label="邀请列表" style={{ marginTop: 16 }}>
         <div className="provider-card-header">
           <ShieldCheck size={18} aria-hidden="true" />
-          <h2>已发出邀请 · {invitations.length}</h2>
+          <h2>已发出邀请 · {filteredInvitations.length}/{counts.all}</h2>
         </div>
         <div className="provider-card-body">
+          <div className="invitation-toolbar">
+            <div className="invitation-filter-chips" role="tablist">
+              {STATUS_FILTERS.map((option) => {
+                const count = counts[option.value]
+                const isActive = statusFilter === option.value
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`invitation-filter-chip${isActive ? ' is-active' : ''}`}
+                    onClick={() => setStatusFilter(option.value)}
+                  >
+                    {option.label}
+                    <span className="invitation-filter-chip-count">{count}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <label className="invitation-search">
+              <Search size={14} aria-hidden="true" />
+              <input
+                type="search"
+                placeholder="按 Email 搜索"
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+              />
+            </label>
+          </div>
+
           {invitationsQuery.isLoading ? (
             <StatePlaceholder tone="loading" title="正在加载邀请列表" />
-          ) : invitations.length === 0 ? (
+          ) : filteredInvitations.length === 0 ? (
             <StatePlaceholder
               tone="empty"
-              title="暂无邀请记录"
-              description="生成第一条邀请链接邀请协作者加入吧。"
+              title={allInvitations.length === 0 ? '暂无邀请记录' : '当前筛选下没有邀请'}
+              description={
+                allInvitations.length === 0
+                  ? '生成第一条邀请链接邀请协作者加入吧。'
+                  : '尝试切换筛选条件或清空搜索框。'
+              }
             />
           ) : (
             <ul className="invitation-list">
-              {invitations.map((invitation) => (
-                <li key={invitation.id} className="invitation-row">
-                  <div>
-                    <strong>{invitation.email}</strong>
-                    <small>
-                      {invitation.role} · {invitation.status}
-                      {invitation.status === 'pending'
-                        ? ` · 失效于 ${new Date(invitation.expires_at).toLocaleString()}`
-                        : invitation.accepted_at
-                          ? ` · 已接受 ${new Date(invitation.accepted_at).toLocaleString()}`
-                          : ''}
-                    </small>
-                  </div>
-                  {invitation.status === 'pending' ? (
-                    <button
-                      type="button"
-                      className="action-btn secondary"
-                      onClick={() => handleCopy(invitation)}
-                    >
-                      {copiedToken === invitation.id ? (
-                        <>
-                          <Check size={14} aria-hidden="true" /> 已复制
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} aria-hidden="true" /> 复制邀请链接
-                        </>
-                      )}
-                    </button>
-                  ) : null}
-                </li>
-              ))}
+              {filteredInvitations.map((invitation) => {
+                const expired = isExpired(invitation)
+                const statusLabel =
+                  invitation.status === 'accepted' ? '已接受' : expired ? '已失效' : '待接受'
+                return (
+                  <li key={invitation.id} className="invitation-row">
+                    <div>
+                      <strong>{invitation.email}</strong>
+                      <small>
+                        <span className={`invitation-status invitation-status-${expired ? 'expired' : invitation.status}`}>
+                          {statusLabel}
+                        </span>
+                        · {invitation.role}
+                        {invitation.status === 'pending' && !expired
+                          ? ` · 失效于 ${new Date(invitation.expires_at).toLocaleString()}`
+                          : invitation.accepted_at
+                            ? ` · 已接受 ${new Date(invitation.accepted_at).toLocaleString()}`
+                            : expired
+                              ? ` · 失效于 ${new Date(invitation.expires_at).toLocaleString()}`
+                              : ''}
+                      </small>
+                    </div>
+                    {invitation.status === 'pending' && !expired ? (
+                      <button
+                        type="button"
+                        className="action-btn secondary"
+                        onClick={() => handleCopy(invitation)}
+                      >
+                        {copiedToken === invitation.id ? (
+                          <>
+                            <Check size={14} aria-hidden="true" /> 已复制
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={14} aria-hidden="true" /> 复制邀请链接
+                          </>
+                        )}
+                      </button>
+                    ) : null}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
