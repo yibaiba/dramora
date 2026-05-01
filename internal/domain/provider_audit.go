@@ -4,8 +4,9 @@ import "time"
 
 // ProviderAuditAction 枚举。
 const (
-	ProviderAuditActionSave = "save"
-	ProviderAuditActionTest = "test"
+	ProviderAuditActionSave  = "save"
+	ProviderAuditActionTest  = "test"
+	ProviderAuditActionSmoke = "smoke"
 )
 
 // ProviderAuditEvent 记录管理员对 provider 端点配置的关键动作。

@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2, Activity, Download } from 'lucide-react'
-import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useResetLLMTelemetry, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useResetLLMTelemetry, useSaveProviderConfig, useSmokeChatProvider, useTestProviderConfig } from '../../api/hooks'
 import { downloadProviderAuditCSV } from '../../api/client'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
@@ -9,6 +9,7 @@ import type {
   ProviderConfig,
   ProviderType,
   SaveProviderConfigRequest,
+  SmokeChatResult,
   TestProviderResult,
 } from '../../api/types'
 
@@ -747,6 +748,7 @@ function ProviderCard({
 }) {
   const saveMutation = useSaveProviderConfig()
   const testMutation = useTestProviderConfig()
+  const smokeMutation = useSmokeChatProvider()
   const [editing, setEditing] = useState(!config)
   const allowedTypes = CAPABILITY_PROVIDER_TYPES[capability]
   const defaultType = CAPABILITY_DEFAULT_PROVIDER_TYPE[capability]
@@ -759,6 +761,7 @@ function ProviderCard({
   const [model, setModel] = useState(config?.model ?? '')
   const [creditsPerUnit, setCreditsPerUnit] = useState(config?.credits_per_unit ?? 5)
   const [testResult, setTestResult] = useState<TestProviderResult | null>(null)
+  const [smokeResult, setSmokeResult] = useState<SmokeChatResult | null>(null)
 
   function handleSave(e: FormEvent) {
     e.preventDefault()
@@ -783,6 +786,21 @@ function ProviderCard({
     testMutation.mutate(capability, {
       onError: () => setTestResult({ error: '请求失败', latency_ms: 0, model: '', ok: false }),
       onSuccess: (r) => setTestResult(r),
+    })
+  }
+
+  function handleSmoke() {
+    setSmokeResult(null)
+    smokeMutation.mutate(undefined, {
+      onError: (err) =>
+        setSmokeResult({
+          capability: 'chat',
+          error: err instanceof Error ? err.message : '请求失败',
+          latency_ms: 0,
+          model: '',
+          ok: false,
+        }),
+      onSuccess: (r) => setSmokeResult(r),
     })
   }
 
@@ -817,12 +835,32 @@ function ProviderCard({
             <button type="button" className="action-btn secondary" onClick={handleTest} disabled={testMutation.isPending}>
               {testMutation.isPending ? '测试中...' : '测试连接'}
             </button>
+            {capability === 'chat' && (
+              <button
+                type="button"
+                className="action-btn secondary"
+                onClick={handleSmoke}
+                disabled={smokeMutation.isPending}
+                title="发起一次最小真实 chat 调用，验证 base_url + api_key + model 端到端可用"
+              >
+                {smokeMutation.isPending ? '实测中...' : '实测对话'}
+              </button>
+            )}
           </div>
           {testResult && (
             <div className={`test-result ${testResult.ok ? 'success' : 'failure'}`}>
               {testResult.ok
                 ? `连接成功 · ${testResult.capability ?? ''}${testResult.provider_type ? ' / ' + testResult.provider_type : ''} · ${testResult.model} · ${testResult.latency_ms}ms${testResult.probe ? ' · ' + testResult.probe : ''}`
                 : `失败: ${testResult.error}${testResult.probe ? '（probe: ' + testResult.probe + '）' : ''}`}
+            </div>
+          )}
+          {capability === 'chat' && smokeResult && (
+            <div className={`test-result ${smokeResult.ok ? 'success' : 'failure'}`}>
+              {smokeResult.ok
+                ? `实测对话成功 · ${smokeResult.provider_type ?? ''} · ${smokeResult.model} · ${smokeResult.latency_ms}ms${
+                    smokeResult.token_count ? ' · ' + smokeResult.token_count + ' tokens' : ''
+                  } · 回复：${smokeResult.content ?? ''}`
+                : `实测失败: ${smokeResult.error ?? ''}`}
             </div>
           )}
         </div>

@@ -1494,6 +1494,26 @@ paths:
                     $ref: "#/components/schemas/TestProviderResult"
         "400":
           $ref: "#/components/responses/BadRequest"
+  "/api/v1/admin/providers/chat:smoke":
+    post:
+      summary: End-to-end smoke test against the configured chat provider (owner-only)
+      description: |
+        Issues a single minimal `Complete` call against the configured chat
+        capability LLMProvider (openai / anthropic / mock) to verify the
+        end-to-end pipeline (base_url + api_key + model + adapter + parser)
+        is wired correctly. The response includes the actual reply text,
+        token count, and latency. Always returns HTTP 200 with `ok` flag in
+        the body; failures surface in `error`.
+      responses:
+        "200":
+          description: Smoke result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  smoke_result:
+                    $ref: "#/components/schemas/SmokeChatResult"
   /api/v1/admin/worker-metrics:
     get:
       summary: Snapshot of cross-process worker observability counters (owner/admin)
@@ -3028,6 +3048,26 @@ components:
           description: |
             Probe URL the health check actually issued, or `presence-only` for
             mock / seedance-style POST-only endpoints.
+        latency_ms:
+          type: integer
+        error:
+          type: string
+    SmokeChatResult:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        capability:
+          type: string
+        provider_type:
+          type: string
+        model:
+          type: string
+        content:
+          type: string
+          description: Provider reply text (truncated to 240 chars).
+        token_count:
+          type: integer
         latency_ms:
           type: integer
         error:

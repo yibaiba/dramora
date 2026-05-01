@@ -35,6 +35,7 @@ import type {
   StoryboardWorkspace,
   StoryboardShot,
   TestProviderResult,
+  SmokeChatResult,
   WorkerMetricsSnapshot,
   LLMTelemetrySnapshot,
   ProviderAuditPage,
@@ -494,6 +495,14 @@ export async function testProviderConfig(capability: string): Promise<TestProvid
     method: 'POST',
   })
   return payload.test_result
+}
+
+export async function smokeChatProvider(): Promise<SmokeChatResult> {
+  const payload = await fetchJSON<{ smoke_result: SmokeChatResult }>(
+    '/api/v1/admin/providers/chat:smoke',
+    { method: 'POST' },
+  )
+  return payload.smoke_result
 }
 
 export async function fetchWorkerMetrics(): Promise<WorkerMetricsSnapshot> {

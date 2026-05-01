@@ -113,6 +113,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				owner.Use(requireRole("owner"))
 				owner.Post("/admin/providers:save", api.saveProviderConfig)
 				owner.Post("/admin/providers/{capability}:test", api.testProviderConfig)
+				owner.Post("/admin/providers/chat:smoke", api.smokeChatProvider)
 			})
 		})
 	})

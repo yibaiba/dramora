@@ -102,3 +102,8 @@ func (a *api) testProviderConfig(w http.ResponseWriter, r *http.Request) {
 	result := a.providerService.TestProviderConfig(r.Context(), capability)
 	writeJSON(w, http.StatusOK, Envelope{"test_result": result})
 }
+
+func (a *api) smokeChatProvider(w http.ResponseWriter, r *http.Request) {
+	result := a.providerService.SmokeChatProvider(r.Context())
+	writeJSON(w, http.StatusOK, Envelope{"smoke_result": result})
+}

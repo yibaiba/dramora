@@ -598,6 +598,17 @@ export type TestProviderResult = {
   error?: string
 }
 
+export type SmokeChatResult = {
+  ok: boolean
+  capability: string
+  provider_type?: string
+  model: string
+  content?: string
+  token_count?: number
+  latency_ms: number
+  error?: string
+}
+
 export type WorkerMetricsSnapshot = {
   generation_org_unresolved_skips: number
   export_org_unresolved_skips: number
