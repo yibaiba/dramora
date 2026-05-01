@@ -578,7 +578,39 @@ function LLMTelemetryPanel() {
           ) : null}
           {data.recent_events && data.recent_events.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6, gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const payload = JSON.stringify(data, null, 2)
+                      const blob = new Blob([payload], { type: 'application/json;charset=utf-8' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = document.createElement('a')
+                      anchor.href = url
+                      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+                      anchor.download = `llm-telemetry-snapshot-${stamp}.json`
+                      document.body.appendChild(anchor)
+                      anchor.click()
+                      document.body.removeChild(anchor)
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                    } catch {
+                      /* swallow */
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    background: 'transparent',
+                    color: '#cbd5f5',
+                    cursor: 'pointer',
+                  }}
+                  title="导出当前 telemetry 完整快照（含 by_vendor / by_capability / window / events）为 JSON"
+                >
+                  导出快照 JSON
+                </button>
                 <button
                   type="button"
                   onClick={() => {
