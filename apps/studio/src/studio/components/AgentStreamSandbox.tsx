@@ -691,15 +691,61 @@ export function AgentStreamSandbox() {
           )}
           {diffEntries.length === 2 && (
             <div style={{ marginTop: 8 }}>
-              <div style={{ display: 'flex', gap: 8, fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11, opacity: 0.7, marginBottom: 4, alignItems: 'center' }}>
                 <span style={{ flex: 1 }}>
                   A · {new Date(diffEntries[0].timestamp).toLocaleTimeString()} ·{' '}
                   {ROLE_OPTIONS.find((o) => o.value === diffEntries[0].role)?.label ?? diffEntries[0].role}
                 </span>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => void navigator.clipboard?.writeText(diffEntries[0].output)}
+                  style={{ fontSize: 11 }}
+                  title="复制 A 原文"
+                >
+                  复制 A
+                </button>
                 <span style={{ flex: 1 }}>
                   B · {new Date(diffEntries[1].timestamp).toLocaleTimeString()} ·{' '}
                   {ROLE_OPTIONS.find((o) => o.value === diffEntries[1].role)?.label ?? diffEntries[1].role}
                 </span>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => void navigator.clipboard?.writeText(diffEntries[1].output)}
+                  style={{ fontSize: 11 }}
+                  title="复制 B 原文"
+                >
+                  复制 B
+                </button>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={() => {
+                    const lines = computeLineDiff(diffEntries[0].output, diffEntries[1].output)
+                    const unified = lines
+                      .map((l) => {
+                        if (l.kind === 'eq') return `  ${l.left ?? ''}`
+                        if (l.kind === 'del') return `- ${l.left ?? ''}`
+                        return `+ ${l.right ?? ''}`
+                      })
+                      .join('\n')
+                    const header = `--- A ${new Date(diffEntries[0].timestamp).toISOString()} (${diffEntries[0].role})\n+++ B ${new Date(diffEntries[1].timestamp).toISOString()} (${diffEntries[1].role})\n`
+                    const blob = new Blob([header + unified + '\n'], { type: 'text/plain;charset=utf-8' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `agent-stream-diff-${Date.now()}.diff`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    setTimeout(() => URL.revokeObjectURL(url), 1000)
+                  }}
+                  style={{ fontSize: 11 }}
+                  title="导出 unified diff"
+                >
+                  导出 diff
+                </button>
               </div>
               <div
                 style={{
