@@ -26,6 +26,7 @@ import {
   useSeedStoryboardShots,
   useSeedStoryMap,
   useShotPromptPack,
+  useShotPromptPackRecovery,
   useGenerationJobRecovery,
   useStartShotVideoGeneration,
   useStartStoryAnalysis,
@@ -889,6 +890,7 @@ function ShotInspector({
         requestChangesGate={requestChangesGate}
       />
       <GenerationRecoveryCard jobId={selectedShot.latestGenerationJobId} />
+      <PromptPackRecoveryCard shotId={selectedShot.id} />
       <InspectorActions
         activeEpisode={activeEpisode}
         disabled={!project || !selectedShot.id}
@@ -1748,6 +1750,34 @@ function GenerationRecoveryCard({ jobId }: { jobId?: string }) {
         message: event.message,
         created_at: event.created_at,
       }))}
+    />
+  )
+}
+
+function PromptPackRecoveryCard({ shotId }: { shotId?: string }) {
+  const { data, isLoading, isError } = useShotPromptPackRecovery(shotId, { enabled: Boolean(shotId) })
+  if (!shotId) return null
+  const summary = data?.summary
+  const events = data?.jobs.map((job) => ({
+    status: job.summary.current_status,
+    message: job.summary.next_hint,
+    created_at: job.summary.last_event_at,
+  }))
+  return (
+    <RecoveryPanel
+      title="提示词包恢复"
+      subtitle="prompt pack 触发的生成任务集合"
+      isLoading={isLoading}
+      isError={isError}
+      status={summary?.latest_status}
+      isTerminal={summary ? summary.in_flight_count === 0 && summary.recoverable_count === 0 : undefined}
+      isRecoverable={summary?.has_recoverable}
+      statusEnteredAt={summary?.latest_status_job_time}
+      lastEventAt={summary?.last_event_at}
+      totalEventCount={summary?.jobs_total}
+      sameStatusCount={summary?.in_flight_count}
+      nextHint={summary?.next_hint}
+      events={events}
     />
   )
 }
