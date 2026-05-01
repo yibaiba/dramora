@@ -194,6 +194,8 @@ export function HomePage() {
               storyboardPendingCount={reviewSnapshot.surfaceSummary.storyboard.needs_follow_up}
               assetsGraphPendingCount={reviewSnapshot.surfaceSummary.assetsGraph.needs_follow_up}
               totalReturnedCount={reviewSnapshot.returnedHistorySummary.total}
+              returnedStoryboardCount={reviewSnapshot.returnedHistorySummary.storyboard}
+              returnedAssetsGraphCount={reviewSnapshot.returnedHistorySummary.assetsGraph}
             />
           ) : null}
           <div className="review-relay-actions">

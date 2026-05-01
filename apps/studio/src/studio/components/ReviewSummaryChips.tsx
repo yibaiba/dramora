@@ -9,6 +9,8 @@ type ReviewSummaryChipsProps = {
   assetsGraphPendingCount: number
   totalReturnedCount: number
   storyAnalysisLinkState?: unknown
+  returnedStoryboardCount?: number
+  returnedAssetsGraphCount?: number
 }
 
 function chipClass(pending: number, isCurrent: boolean): string {
@@ -25,6 +27,8 @@ export function ReviewSummaryChips({
   assetsGraphPendingCount,
   totalReturnedCount,
   storyAnalysisLinkState,
+  returnedStoryboardCount,
+  returnedAssetsGraphCount,
 }: ReviewSummaryChipsProps) {
   const storyboardCurrent = currentSide === 'storyboard'
   const assetsGraphCurrent = currentSide === 'assetsGraph'
@@ -81,6 +85,16 @@ export function ReviewSummaryChips({
       >
         {canCloseRound ? '可收口本轮' : allCleared ? '尚无回传' : '协同处理中'}
       </span>
+      {typeof returnedStoryboardCount === 'number' &&
+      typeof returnedAssetsGraphCount === 'number' &&
+      returnedStoryboardCount + returnedAssetsGraphCount > 0 ? (
+        <span
+          className="blackboard-chip blackboard-chip-breakdown"
+          title="本轮回传按来源拆分"
+        >
+          回传明细 SB {returnedStoryboardCount} · AG {returnedAssetsGraphCount}
+        </span>
+      ) : null}
       {(() => {
         const totalPending = storyboardPendingCount + assetsGraphPendingCount
         const denom = totalPending + totalReturnedCount
