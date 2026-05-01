@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/csv"
 	"net/http"
 	"strconv"
 	"strings"
@@ -78,11 +79,34 @@ func (a *api) listProviderAuditEvents(w http.ResponseWriter, r *http.Request) {
 		writeServiceError(w, err)
 		return
 	}
+	if strings.EqualFold(q.Get("format"), "csv") {
+		writeProviderAuditCSV(w, page.Events)
+		return
+	}
 	out := make([]providerAuditEventDTO, len(page.Events))
 	for i, ev := range page.Events {
 		out[i] = providerAuditEventToDTO(ev)
 	}
 	writeJSON(w, http.StatusOK, Envelope{"events": out, "has_more": page.HasMore})
+}
+
+func writeProviderAuditCSV(w http.ResponseWriter, events []domain.ProviderAuditEvent) {
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="provider-audit.csv"`)
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+	_ = cw.Write([]string{
+		"id", "organization_id", "action", "actor_user_id", "actor_email",
+		"capability", "provider_type", "model", "success", "message", "created_at",
+	})
+	for _, ev := range events {
+		_ = cw.Write([]string{
+			ev.ID, ev.OrganizationID, ev.Action, ev.ActorUserID, ev.ActorEmail,
+			ev.Capability, ev.ProviderType, ev.Model,
+			strconv.FormatBool(ev.Success), ev.Message,
+			ev.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+		})
+	}
 }
 
 func splitCSV(s string) []string {

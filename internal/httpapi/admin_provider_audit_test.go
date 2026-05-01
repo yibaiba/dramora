@@ -83,6 +83,23 @@ func TestProviderAuditCapturesSaveAndTest(t *testing.T) {
 	if !actions["save"] || !actions["test"] {
 		t.Fatalf("expected both save and test events, got actions=%v", actions)
 	}
+
+	csvResp := httptest.NewRecorder()
+	csvReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/provider-audit?format=csv", nil)
+	router.ServeHTTP(csvResp, csvReq)
+	if csvResp.Code != http.StatusOK {
+		t.Fatalf("expected csv export 200, got %d: %s", csvResp.Code, csvResp.Body.String())
+	}
+	if ct := csvResp.Header().Get("Content-Type"); !bytes.Contains([]byte(ct), []byte("text/csv")) {
+		t.Fatalf("expected text/csv content type, got %q", ct)
+	}
+	body := csvResp.Body.String()
+	if !bytes.Contains([]byte(body), []byte("id,organization_id,action")) {
+		t.Fatalf("expected csv header in body, got %q", body)
+	}
+	if !bytes.Contains([]byte(body), []byte(",save,")) || !bytes.Contains([]byte(body), []byte(",test,")) {
+		t.Fatalf("expected save and test rows in csv, got %q", body)
+	}
 }
 
 func TestProviderAuditRejectsViewerRole(t *testing.T) {

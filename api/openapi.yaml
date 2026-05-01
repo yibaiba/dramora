@@ -1621,6 +1621,12 @@ paths:
           schema:
             type: integer
             minimum: 0
+        - in: query
+          name: format
+          schema:
+            type: string
+            enum: [csv]
+          description: When set to `csv`, returns a CSV download (text/csv) of the filtered events instead of JSON.
       responses:
         "200":
           description: Provider audit page

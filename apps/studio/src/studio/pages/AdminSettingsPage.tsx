@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Settings, Zap, Image, Video, Volume2, Activity } from 'lucide-react'
+import { Settings, Zap, Image, Video, Volume2, Activity, Download } from 'lucide-react'
 import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { downloadProviderAuditCSV } from '../../api/client'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
   ProviderCapability,
@@ -88,11 +89,34 @@ function ProviderAuditPanel() {
   )
 
   const { data, isLoading, isError, error } = useProviderAuditEvents(filter)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const [isExporting, setIsExporting] = useState(false)
 
   const onReset = () => {
     setActionFilter('all')
     setCapabilityFilter('all')
     setSinceMinutes('all')
+  }
+
+  const onExport = async () => {
+    setExportError(null)
+    setIsExporting(true)
+    try {
+      const blob = await downloadProviderAuditCSV(filter)
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const ts = new Date().toISOString().replace(/[:.]/g, '-')
+      a.download = `provider-audit-${ts}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      setTimeout(() => URL.revokeObjectURL(url), 1000)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : '导出失败')
+    } finally {
+      setIsExporting(false)
+    }
   }
 
   return (
@@ -148,7 +172,23 @@ function ProviderAuditPanel() {
         <button type="button" onClick={onReset} className="btn-ghost" style={{ fontSize: 12 }}>
           重置筛选
         </button>
+        <button
+          type="button"
+          onClick={onExport}
+          disabled={isExporting || !data || data.events.length === 0}
+          className="btn-ghost"
+          style={{ fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          title="按当前筛选导出 CSV"
+        >
+          <Download size={12} />
+          {isExporting ? '导出中…' : '导出 CSV'}
+        </button>
       </div>
+      {exportError && (
+        <p className="error" style={{ fontSize: 12, marginTop: 0 }}>
+          导出失败：{exportError}
+        </p>
+      )}
       {isLoading ? (
         <p className="muted">加载中…</p>
       ) : isError ? (

@@ -522,6 +522,34 @@ export async function fetchProviderAuditEvents(filter?: {
   return fetchJSON<ProviderAuditPage>(path)
 }
 
+export async function downloadProviderAuditCSV(filter?: {
+  action?: string
+  capability?: string
+  since?: string
+  until?: string
+  limit?: number
+  offset?: number
+}): Promise<Blob> {
+  const search = new URLSearchParams()
+  if (filter?.action) search.set('action', filter.action)
+  if (filter?.capability) search.set('capability', filter.capability)
+  if (filter?.since) search.set('since', filter.since)
+  if (filter?.until) search.set('until', filter.until)
+  if (filter?.limit) search.set('limit', String(filter.limit))
+  if (filter?.offset) search.set('offset', String(filter.offset))
+  search.set('format', 'csv')
+  const path = `/api/v1/admin/provider-audit?${search.toString()}`
+  const authHeader = readStoredAuthHeader()
+  const token = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: token ? { authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    throw new Error(`CSV export failed with status ${response.status}`)
+  }
+  return response.blob()
+}
+
 // org invitations (owner/admin only)
 
 export async function listOrganizationInvitations(): Promise<OrganizationInvitation[]> {
