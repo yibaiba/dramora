@@ -26,19 +26,34 @@ type LLMTelemetryEvent struct {
 	ErrorMessage string    `json:"error_message,omitempty"`
 }
 
+// LLMTelemetryWindowSnapshot 是某个滚动时间窗的轻量聚合视图。
+type LLMTelemetryWindowSnapshot struct {
+	Days                    int               `json:"days"`
+	SinceDayUTC             string            `json:"since_day_utc"`
+	TotalCalls              uint64            `json:"total_calls"`
+	ErrorCalls              uint64            `json:"error_calls"`
+	ByVendor                map[string]uint64 `json:"by_vendor"`
+	ByCapability            map[string]uint64 `json:"by_capability"`
+	ErrorsByVendor          map[string]uint64 `json:"errors_by_vendor"`
+	ErrorsByCapability      map[string]uint64 `json:"errors_by_capability"`
+	AvgDurationMSVendor     map[string]int64  `json:"avg_duration_ms_by_vendor"`
+	AvgDurationMSCapability map[string]int64  `json:"avg_duration_ms_by_capability"`
+}
+
 // LLMTelemetrySnapshot 暴露给 admin 面板的聚合视图。
 type LLMTelemetrySnapshot struct {
-	TotalCalls              uint64              `json:"total_calls"`
-	SuccessCalls            uint64              `json:"success_calls"`
-	ErrorCalls              uint64              `json:"error_calls"`
-	ByVendor                map[string]uint64   `json:"by_vendor"`
-	ByCapability            map[string]uint64   `json:"by_capability"`
-	AvgDurationMSVendor     map[string]int64    `json:"avg_duration_ms_by_vendor"`
-	AvgDurationMSCapability map[string]int64    `json:"avg_duration_ms_by_capability"`
-	ErrorsByVendor          map[string]uint64   `json:"errors_by_vendor"`
-	ErrorsByCapability      map[string]uint64   `json:"errors_by_capability"`
-	RecentEvents            []LLMTelemetryEvent `json:"recent_events"`
-	LastEventAt             time.Time           `json:"last_event_at,omitempty"`
+	TotalCalls              uint64                      `json:"total_calls"`
+	SuccessCalls            uint64                      `json:"success_calls"`
+	ErrorCalls              uint64                      `json:"error_calls"`
+	ByVendor                map[string]uint64           `json:"by_vendor"`
+	ByCapability            map[string]uint64           `json:"by_capability"`
+	AvgDurationMSVendor     map[string]int64            `json:"avg_duration_ms_by_vendor"`
+	AvgDurationMSCapability map[string]int64            `json:"avg_duration_ms_by_capability"`
+	ErrorsByVendor          map[string]uint64           `json:"errors_by_vendor"`
+	ErrorsByCapability      map[string]uint64           `json:"errors_by_capability"`
+	RecentEvents            []LLMTelemetryEvent         `json:"recent_events"`
+	LastEventAt             time.Time                   `json:"last_event_at,omitempty"`
+	Window                  *LLMTelemetryWindowSnapshot `json:"window,omitempty"`
 }
 
 const llmTelemetryRingCapacity = 200
@@ -188,6 +203,7 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 	if r != nil {
 		// Persist asynchronously to keep the hot path lock-free of disk IO.
 		// Failures are logged but never block telemetry recording.
+		dayUTC := ev.StartedAt.UTC().Format("2006-01-02")
 		go func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -197,8 +213,70 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 			if err := r.RecordCall(ctx, repo.LLMTelemetryAggregateScopeCapability, capability, durationMS, success); err != nil {
 				slog.WarnContext(ctx, "llm telemetry capability persist failed", "capability", capability, "error", err)
 			}
+			if err := r.RecordDaily(ctx, repo.LLMTelemetryAggregateScopeVendor, vendor, dayUTC, durationMS, success); err != nil {
+				slog.WarnContext(ctx, "llm telemetry vendor daily persist failed", "vendor", vendor, "day", dayUTC, "error", err)
+			}
+			if err := r.RecordDaily(ctx, repo.LLMTelemetryAggregateScopeCapability, capability, dayUTC, durationMS, success); err != nil {
+				slog.WarnContext(ctx, "llm telemetry capability daily persist failed", "capability", capability, "day", dayUTC, "error", err)
+			}
 		}()
 	}
+}
+
+// WindowSnapshot aggregates daily buckets across the most recent N days
+// (UTC). Returns nil if no repository is wired.
+func (t *llmTelemetry) WindowSnapshot(ctx context.Context, days int) (*LLMTelemetryWindowSnapshot, error) {
+	if days <= 0 {
+		days = 7
+	}
+	t.mu.Lock()
+	r := t.repository
+	t.mu.Unlock()
+	if r == nil {
+		return nil, nil
+	}
+	since := time.Now().UTC().AddDate(0, 0, -(days - 1)).Format("2006-01-02")
+	rows, err := r.LoadDailySince(ctx, since)
+	if err != nil {
+		return nil, err
+	}
+	snap := &LLMTelemetryWindowSnapshot{
+		Days:                    days,
+		SinceDayUTC:             since,
+		ByVendor:                map[string]uint64{},
+		ByCapability:            map[string]uint64{},
+		ErrorsByVendor:          map[string]uint64{},
+		ErrorsByCapability:      map[string]uint64{},
+		AvgDurationMSVendor:     map[string]int64{},
+		AvgDurationMSCapability: map[string]int64{},
+	}
+	vendorDur := map[string]int64{}
+	capDur := map[string]int64{}
+	for _, row := range rows {
+		switch row.Scope {
+		case repo.LLMTelemetryAggregateScopeVendor:
+			snap.ByVendor[row.Key] += row.Counter
+			snap.ErrorsByVendor[row.Key] += row.ErrorCounter
+			vendorDur[row.Key] += row.TotalDurationMS
+			snap.TotalCalls += row.Counter
+			snap.ErrorCalls += row.ErrorCounter
+		case repo.LLMTelemetryAggregateScopeCapability:
+			snap.ByCapability[row.Key] += row.Counter
+			snap.ErrorsByCapability[row.Key] += row.ErrorCounter
+			capDur[row.Key] += row.TotalDurationMS
+		}
+	}
+	for k, sum := range vendorDur {
+		if c := snap.ByVendor[k]; c > 0 {
+			snap.AvgDurationMSVendor[k] = sum / int64(c)
+		}
+	}
+	for k, sum := range capDur {
+		if c := snap.ByCapability[k]; c > 0 {
+			snap.AvgDurationMSCapability[k] = sum / int64(c)
+		}
+	}
+	return snap, nil
 }
 
 func (t *llmTelemetry) snapshot() LLMTelemetrySnapshot {

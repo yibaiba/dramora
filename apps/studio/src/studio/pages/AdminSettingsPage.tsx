@@ -397,6 +397,44 @@ function LLMTelemetryPanel() {
               ))}
             </div>
           ) : null}
+          {data.window ? (
+            <div
+              className="telemetry-window"
+              style={{
+                display: 'flex',
+                gap: 12,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+                padding: '8px 12px',
+                border: '1px solid rgba(255,255,255,0.06)',
+                borderRadius: 6,
+                background: 'rgba(255,255,255,0.02)',
+              }}
+            >
+              <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>
+                最近 {data.window.days} 天（自 {data.window.since_day_utc} UTC）：
+              </span>
+              <Stat label="窗口调用" value={data.window.total_calls} />
+              <Stat
+                label="窗口失败"
+                value={data.window.error_calls}
+                tone={data.window.error_calls > 0 ? 'warn' : undefined}
+              />
+              {Object.entries(data.window.by_vendor ?? {}).map(([vendor, count]) => (
+                <Stat
+                  key={`win-v-${vendor}`}
+                  label={`${vendor} · ${count}`}
+                  value={`${data.window?.avg_duration_ms_by_vendor?.[vendor] ?? 0}ms`}
+                  sub={
+                    data.window?.errors_by_vendor?.[vendor]
+                      ? `失败 ${data.window.errors_by_vendor[vendor]}`
+                      : undefined
+                  }
+                  tone={data.window?.errors_by_vendor?.[vendor] ? 'warn' : undefined}
+                />
+              ))}
+            </div>
+          ) : null}
           {data.recent_events && data.recent_events.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
               <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>

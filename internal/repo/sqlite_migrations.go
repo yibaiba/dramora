@@ -457,4 +457,17 @@ var sqliteMigrations = []string{
 		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 		PRIMARY KEY (scope, key)
 	)`,
+
+	// PR2 window: daily buckets for rolling N-day telemetry views.
+	`CREATE TABLE IF NOT EXISTS llm_telemetry_daily (
+		scope TEXT NOT NULL,
+		key TEXT NOT NULL,
+		day_utc TEXT NOT NULL,
+		counter INTEGER NOT NULL DEFAULT 0,
+		error_counter INTEGER NOT NULL DEFAULT 0,
+		total_duration_ms INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		PRIMARY KEY (scope, key, day_utc)
+	)`,
+	`CREATE INDEX IF NOT EXISTS llm_telemetry_daily_day_idx ON llm_telemetry_daily (day_utc)`,
 }

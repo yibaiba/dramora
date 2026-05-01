@@ -160,3 +160,40 @@ func TestLLMTelemetryPersistsAndHydrates(t *testing.T) {
 		t.Fatalf("capability=%v", snap.ByCapability)
 	}
 }
+
+func TestLLMTelemetryWindowSnapshotAggregatesRecentDays(t *testing.T) {
+	store := repo.NewMemoryLLMTelemetryRepository()
+	tel := newLLMTelemetry()
+	tel.SetRepository(store)
+
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", DurationMS: 100, Success: true, StartedAt: time.Now().UTC()})
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", DurationMS: 200, Success: false, StartedAt: time.Now().UTC()})
+	tel.record(LLMTelemetryEvent{Vendor: "anthropic", Capability: "image", DurationMS: 300, Success: true, StartedAt: time.Now().UTC()})
+	time.Sleep(50 * time.Millisecond)
+
+	window, err := tel.WindowSnapshot(context.Background(), 7)
+	if err != nil {
+		t.Fatalf("window: %v", err)
+	}
+	if window == nil {
+		t.Fatalf("expected non-nil window snapshot")
+	}
+	if window.Days != 7 {
+		t.Fatalf("days=%d want 7", window.Days)
+	}
+	if window.TotalCalls != 3 {
+		t.Fatalf("total=%d want 3", window.TotalCalls)
+	}
+	if window.ErrorCalls != 1 {
+		t.Fatalf("errors=%d want 1", window.ErrorCalls)
+	}
+	if window.ByVendor["openai"] != 2 || window.ByVendor["anthropic"] != 1 {
+		t.Fatalf("by_vendor=%v", window.ByVendor)
+	}
+	if window.ByCapability["chat"] != 2 || window.ByCapability["image"] != 1 {
+		t.Fatalf("by_capability=%v", window.ByCapability)
+	}
+	if window.AvgDurationMSVendor["openai"] != 150 {
+		t.Fatalf("openai avg=%d want 150", window.AvgDurationMSVendor["openai"])
+	}
+}

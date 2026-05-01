@@ -1489,6 +1489,21 @@ paths:
         50 events with metadata (vendor / model / role / mode / duration /
         token_count / success / error_message). Bodies (prompt / response)
         are intentionally omitted to avoid PII.
+
+        When a persistent telemetry repository is configured, the response
+        also includes a `window` aggregate covering the most recent
+        `window_days` days (default 7, max 90) sourced from the daily
+        bucket table.
+      parameters:
+        - in: query
+          name: window_days
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 7
+          description: Size of the rolling window aggregate (UTC days).
       responses:
         "200":
           description: LLM telemetry snapshot

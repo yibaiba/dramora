@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strconv"
 )
 
 func (a *api) getAdminLLMTelemetry(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +18,22 @@ func (a *api) getAdminLLMTelemetry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	snap := a.agentService.LLMTelemetry()
+	days := parseTelemetryWindowDays(r)
+	if window, err := a.agentService.LLMTelemetryWindow(r.Context(), days); err == nil && window != nil {
+		snap.Window = window
+	}
 	writeJSON(w, http.StatusOK, Envelope{"llm_telemetry": snap})
+}
+
+func parseTelemetryWindowDays(r *http.Request) int {
+	raw := r.URL.Query().Get("window_days")
+	if raw == "" {
+		return 7
+	}
+	if v, err := strconv.Atoi(raw); err == nil && v > 0 && v <= 90 {
+		return v
+	}
+	return 7
 }
 
 func (a *api) resetAdminLLMTelemetry(w http.ResponseWriter, r *http.Request) {

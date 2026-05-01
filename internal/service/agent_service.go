@@ -37,6 +37,15 @@ func (s *AgentService) LLMTelemetry() LLMTelemetrySnapshot {
 	return s.telemetry.snapshot()
 }
 
+// LLMTelemetryWindow returns a rolling N-day window aggregate. Returns nil
+// when no persistent repository is wired (in-memory only deployments).
+func (s *AgentService) LLMTelemetryWindow(ctx context.Context, days int) (*LLMTelemetryWindowSnapshot, error) {
+	if s == nil || s.telemetry == nil {
+		return nil, nil
+	}
+	return s.telemetry.WindowSnapshot(ctx, days)
+}
+
 // RecordTelemetry lets other services (e.g. ProductionService for image / audio /
 // video worker calls) feed events into the same in-process telemetry buffer.
 func (s *AgentService) RecordTelemetry(ev LLMTelemetryEvent) {
