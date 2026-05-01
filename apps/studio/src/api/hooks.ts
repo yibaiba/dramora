@@ -50,6 +50,7 @@ import {
 	startStoryAnalysis,
 	testProviderConfig,
 	fetchWorkerMetrics,
+	fetchLLMTelemetry,
 	updateStoryboardShot,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
@@ -497,6 +498,15 @@ export function useWorkerMetrics(enabled = true) {
     queryFn: fetchWorkerMetrics,
     queryKey: ['admin', 'worker-metrics'],
     refetchInterval: enabled ? 15000 : false,
+  })
+}
+
+export function useLLMTelemetry(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: fetchLLMTelemetry,
+    queryKey: ['admin', 'llm-telemetry'],
+    refetchInterval: enabled ? 10000 : false,
   })
 }
 

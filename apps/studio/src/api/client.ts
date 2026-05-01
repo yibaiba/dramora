@@ -34,6 +34,7 @@ import type {
   StoryboardShot,
   TestProviderResult,
   WorkerMetricsSnapshot,
+  LLMTelemetrySnapshot,
   WorkflowRun,
   UpdateStoryboardShotRequest,
   Timeline,
@@ -483,6 +484,13 @@ export async function fetchWorkerMetrics(): Promise<WorkerMetricsSnapshot> {
     '/api/v1/admin/worker-metrics',
   )
   return payload.worker_metrics
+}
+
+export async function fetchLLMTelemetry(): Promise<LLMTelemetrySnapshot> {
+  const payload = await fetchJSON<{ llm_telemetry: LLMTelemetrySnapshot }>(
+    '/api/v1/admin/llm-telemetry',
+  )
+  return payload.llm_telemetry
 }
 
 // org invitations (owner/admin only)

@@ -1434,6 +1434,78 @@ paths:
                         enum: [local, aggregated]
         "403":
           description: Forbidden — owner/admin role required
+  /api/v1/admin/llm-telemetry:
+    get:
+      summary: Snapshot of recent LLM provider calls (owner/admin)
+      description: |
+        Returns an in-process telemetry snapshot covering the last 200 LLM
+        provider calls (both `complete` and `stream` modes). The response
+        includes per-vendor counts and average duration plus the most recent
+        50 events with metadata (vendor / model / role / mode / duration /
+        token_count / success / error_message). Bodies (prompt / response)
+        are intentionally omitted to avoid PII.
+      responses:
+        "200":
+          description: LLM telemetry snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  llm_telemetry:
+                    type: object
+                    properties:
+                      total_calls:
+                        type: integer
+                        format: int64
+                      success_calls:
+                        type: integer
+                        format: int64
+                      error_calls:
+                        type: integer
+                        format: int64
+                      by_vendor:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
+                      avg_duration_ms_by_vendor:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
+                      recent_events:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            started_at:
+                              type: string
+                              format: date-time
+                            vendor:
+                              type: string
+                            model:
+                              type: string
+                            role:
+                              type: string
+                            mode:
+                              type: string
+                              enum: [complete, stream]
+                            duration_ms:
+                              type: integer
+                              format: int64
+                            token_count:
+                              type: integer
+                              format: int64
+                            success:
+                              type: boolean
+                            error_message:
+                              type: string
+                      last_event_at:
+                        type: string
+                        format: date-time
+        "403":
+          description: Forbidden — owner/admin role required
 components:
   securitySchemes:
     bearerAuth:

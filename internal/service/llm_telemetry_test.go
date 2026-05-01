@@ -1,0 +1,63 @@
+package service
+
+import (
+	"strings"
+	"testing"
+	"time"
+)
+
+func TestLLMTelemetryRecordsAndAggregates(t *testing.T) {
+	tel := newLLMTelemetry()
+	tel.record(LLMTelemetryEvent{
+		StartedAt: time.Now().UTC(),
+		Vendor:    "openai", Model: "gpt-4", Role: "screenwriter",
+		Mode: "stream", DurationMS: 800, TokenCount: 42, Success: true,
+	})
+	tel.record(LLMTelemetryEvent{
+		StartedAt: time.Now().UTC(),
+		Vendor:    "openai", Model: "gpt-4", Role: "director",
+		Mode: "stream", DurationMS: 1200, TokenCount: 30, Success: false, ErrorMessage: "timeout",
+	})
+	tel.record(LLMTelemetryEvent{
+		StartedAt: time.Now().UTC(),
+		Vendor:    "anthropic", Model: "claude", Role: "outline_planner",
+		Mode: "complete", DurationMS: 500, TokenCount: 10, Success: true,
+	})
+	snap := tel.snapshot()
+	if snap.TotalCalls != 3 {
+		t.Fatalf("total=%d want 3", snap.TotalCalls)
+	}
+	if snap.SuccessCalls != 2 || snap.ErrorCalls != 1 {
+		t.Fatalf("success/error=%d/%d want 2/1", snap.SuccessCalls, snap.ErrorCalls)
+	}
+	if snap.ByVendor["openai"] != 2 || snap.ByVendor["anthropic"] != 1 {
+		t.Fatalf("by_vendor=%v", snap.ByVendor)
+	}
+	if snap.AvgDurationMSVendor["openai"] != 1000 {
+		t.Fatalf("avg openai=%d want 1000", snap.AvgDurationMSVendor["openai"])
+	}
+	if len(snap.RecentEvents) != 3 {
+		t.Fatalf("recent=%d want 3", len(snap.RecentEvents))
+	}
+	// recent events ordered by reverse insertion time (newest first)
+	if snap.RecentEvents[0].Vendor != "anthropic" {
+		t.Fatalf("first recent vendor=%s want anthropic", snap.RecentEvents[0].Vendor)
+	}
+	if !strings.Contains(snap.RecentEvents[1].ErrorMessage, "timeout") {
+		t.Fatalf("expected error_message captured, got %+v", snap.RecentEvents[1])
+	}
+}
+
+func TestLLMTelemetryRingCaps(t *testing.T) {
+	tel := newLLMTelemetry()
+	for i := 0; i < llmTelemetryRingCapacity+25; i++ {
+		tel.record(LLMTelemetryEvent{Vendor: "openai", Model: "m", Role: "r", Mode: "stream", DurationMS: 1, Success: true})
+	}
+	snap := tel.snapshot()
+	if snap.TotalCalls != uint64(llmTelemetryRingCapacity+25) {
+		t.Fatalf("total=%d", snap.TotalCalls)
+	}
+	if len(snap.RecentEvents) != 50 {
+		t.Fatalf("recent=%d want 50 (cap)", len(snap.RecentEvents))
+	}
+}

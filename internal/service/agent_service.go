@@ -15,10 +15,28 @@ type AgentService struct {
 	providerSvc      *ProviderService
 	executorFactory  func(sourceText string) workflow.NodeExecutor
 	availabilityFunc func(ctx context.Context) bool
+	telemetry        *llmTelemetry
 }
 
 func NewAgentService(providerSvc *ProviderService) *AgentService {
-	return &AgentService{providerSvc: providerSvc}
+	return &AgentService{providerSvc: providerSvc, telemetry: newLLMTelemetry()}
+}
+
+// LLMTelemetry returns a snapshot of the in-process LLM call telemetry.
+// Safe to call from any goroutine; never returns nil even when the
+// service was constructed without a telemetry buffer (legacy paths).
+func (s *AgentService) LLMTelemetry() LLMTelemetrySnapshot {
+	if s == nil || s.telemetry == nil {
+		return LLMTelemetrySnapshot{ByVendor: map[string]uint64{}, AvgDurationMSVendor: map[string]int64{}}
+	}
+	return s.telemetry.snapshot()
+}
+
+func (s *AgentService) recordTelemetry(ev LLMTelemetryEvent) {
+	if s == nil || s.telemetry == nil {
+		return
+	}
+	s.telemetry.record(ev)
 }
 
 type AgentResult struct {
@@ -71,6 +89,24 @@ func (s *AgentService) callLLM(ctx context.Context, role string, prompt string) 
 		},
 	})
 	elapsed := time.Since(start).Milliseconds()
+	tokens := 0
+	if resp != nil {
+		tokens = resp.TotalTokens
+	}
+	ev := LLMTelemetryEvent{
+		StartedAt:  start.UTC(),
+		Vendor:     cfg.ResolvedProviderType(),
+		Model:      cfg.Model,
+		Role:       role,
+		Mode:       "complete",
+		DurationMS: elapsed,
+		TokenCount: tokens,
+		Success:    err == nil,
+	}
+	if err != nil {
+		ev.ErrorMessage = err.Error()
+	}
+	s.recordTelemetry(ev)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +169,24 @@ func (s *AgentService) RunSingleAgentStream(ctx context.Context, role string, so
 		return onDelta(chunk.Delta)
 	})
 	elapsed := time.Since(start).Milliseconds()
+	tokens := 0
+	if resp != nil {
+		tokens = resp.TotalTokens
+	}
+	ev := LLMTelemetryEvent{
+		StartedAt:  start.UTC(),
+		Vendor:     cfg.ResolvedProviderType(),
+		Model:      cfg.Model,
+		Role:       role,
+		Mode:       "stream",
+		DurationMS: elapsed,
+		TokenCount: tokens,
+		Success:    err == nil,
+	}
+	if err != nil {
+		ev.ErrorMessage = err.Error()
+	}
+	s.recordTelemetry(ev)
 	if err != nil {
 		return nil, err
 	}

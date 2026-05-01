@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
-import { Settings, Zap, Image, Video, Volume2 } from 'lucide-react'
-import { useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { Settings, Zap, Image, Video, Volume2, Activity } from 'lucide-react'
+import { useLLMTelemetry, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
   ProviderCapability,
@@ -66,6 +66,90 @@ export function AdminSettingsPage() {
         })}
       </div>
       <AgentStreamSandbox />
+      <LLMTelemetryPanel />
+    </div>
+  )
+}
+
+function LLMTelemetryPanel() {
+  const { data, isLoading, isError, error } = useLLMTelemetry()
+  return (
+    <section className="provider-card" style={{ marginTop: 24 }}>
+      <header className="provider-card-header">
+        <Activity size={18} aria-hidden="true" />
+        <h2>LLM 调用 Telemetry</h2>
+        <span className="provider-card-hint">每 10s 刷新 · 进程内最近 50 条</span>
+      </header>
+      {isLoading ? (
+        <p className="muted">加载中…</p>
+      ) : isError ? (
+        <p className="error">无法加载（需要 owner/admin 权限）：{(error as Error)?.message ?? 'unknown'}</p>
+      ) : !data ? (
+        <p className="muted">暂无数据</p>
+      ) : (
+        <>
+          <div className="telemetry-summary" style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12 }}>
+            <Stat label="总调用" value={data.total_calls} />
+            <Stat label="成功" value={data.success_calls} tone="ok" />
+            <Stat label="失败" value={data.error_calls} tone={data.error_calls > 0 ? 'warn' : undefined} />
+            {Object.entries(data.by_vendor ?? {}).map(([vendor, count]) => (
+              <Stat
+                key={vendor}
+                label={`${vendor} · 平均`}
+                value={`${data.avg_duration_ms_by_vendor?.[vendor] ?? 0}ms`}
+                sub={`${count} 次`}
+              />
+            ))}
+          </div>
+          {data.recent_events && data.recent_events.length > 0 ? (
+            <div style={{ overflowX: 'auto' }}>
+              <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left' }}>时间</th>
+                    <th style={{ textAlign: 'left' }}>Vendor</th>
+                    <th style={{ textAlign: 'left' }}>Model</th>
+                    <th style={{ textAlign: 'left' }}>Role</th>
+                    <th style={{ textAlign: 'left' }}>Mode</th>
+                    <th style={{ textAlign: 'right' }}>耗时</th>
+                    <th style={{ textAlign: 'right' }}>Tokens</th>
+                    <th style={{ textAlign: 'left' }}>状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recent_events.slice(0, 10).map((ev, idx) => (
+                    <tr key={`${ev.started_at}-${idx}`}>
+                      <td>{ev.started_at ? new Date(ev.started_at).toLocaleTimeString() : '-'}</td>
+                      <td>{ev.vendor}</td>
+                      <td>{ev.model || '-'}</td>
+                      <td>{ev.role || '-'}</td>
+                      <td>{ev.mode}</td>
+                      <td style={{ textAlign: 'right' }}>{ev.duration_ms}ms</td>
+                      <td style={{ textAlign: 'right' }}>{ev.token_count || '-'}</td>
+                      <td style={{ color: ev.success ? '#3ddc84' : '#ff6b6b' }}>
+                        {ev.success ? 'OK' : ev.error_message || 'ERR'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="muted">尚无 LLM 调用记录</p>
+          )}
+        </>
+      )}
+    </section>
+  )
+}
+
+function Stat({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: 'ok' | 'warn' }) {
+  const color = tone === 'ok' ? '#3ddc84' : tone === 'warn' ? '#ff8c42' : undefined
+  return (
+    <div style={{ minWidth: 120 }}>
+      <div style={{ fontSize: 11, opacity: 0.6 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, color }}>{value}</div>
+      {sub ? <div style={{ fontSize: 10, opacity: 0.5 }}>{sub}</div> : null}
     </div>
   )
 }

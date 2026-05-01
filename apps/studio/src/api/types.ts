@@ -556,3 +556,25 @@ export type WorkerMetricsSnapshot = {
   last_skip_at?: string
   source?: 'local' | 'aggregated'
 }
+
+export type LLMTelemetryEvent = {
+  started_at: string
+  vendor: string
+  model: string
+  role: string
+  mode: 'complete' | 'stream'
+  duration_ms: number
+  token_count: number
+  success: boolean
+  error_message?: string
+}
+
+export type LLMTelemetrySnapshot = {
+  total_calls: number
+  success_calls: number
+  error_calls: number
+  by_vendor: Record<string, number>
+  avg_duration_ms_by_vendor: Record<string, number>
+  recent_events: LLMTelemetryEvent[]
+  last_event_at?: string
+}
