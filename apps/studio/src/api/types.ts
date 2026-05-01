@@ -718,3 +718,23 @@ export type WalletMutationRequest = {
   ref_type?: string
   ref_id?: string
 }
+
+export type NotificationKind = 'wallet_credit' | 'wallet_debit' | 'invitation_created' | 'invitation_resent' | 'provider_config_save'
+
+export type Notification = {
+  id: string
+  organization_id: string
+  recipient_user_id?: string
+  kind: NotificationKind
+  title: string
+  body: string
+  metadata?: Record<string, any>
+  read_at?: string
+  created_at: string
+}
+
+export type NotificationsPage = {
+  notifications: Notification[]
+  has_more: boolean
+  unread_count: number
+}

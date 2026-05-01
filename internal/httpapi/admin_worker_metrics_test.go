@@ -19,7 +19,7 @@ func TestAdminWorkerMetricsRequiresAdminRole(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
 	const orgID = "00000000-0000-0000-0000-000000000001"
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
@@ -59,7 +59,7 @@ func TestAdminWorkerMetricsReturnsSnapshotForOwner(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
 	const orgID = "00000000-0000-0000-0000-000000000001"
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,

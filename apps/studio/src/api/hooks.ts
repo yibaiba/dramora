@@ -62,6 +62,9 @@ import {
 	fetchWalletTransactions,
 	creditWallet,
 	debitWallet,
+	fetchNotifications,
+	markNotificationAsRead,
+	markAllNotificationsAsRead,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -703,6 +706,38 @@ export function useDebitWallet() {
     mutationFn: (request: WalletMutationRequest) => debitWallet(request),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}
+
+export function useNotifications(
+  params: { limit?: number; offset?: number; unread_only?: boolean } = {},
+  enabled = true,
+) {
+  return useQuery({
+    enabled,
+    queryFn: () => fetchNotifications(params),
+    queryKey: ['notifications', params.limit ?? 50, params.offset ?? 0, params.unread_only ?? false],
+    refetchInterval: 15000,
+  })
+}
+
+export function useMarkNotificationAsRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (notificationId: string) => markNotificationAsRead(notificationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    },
+  })
+}
+
+export function useMarkAllNotificationsAsRead() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => markAllNotificationsAsRead(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

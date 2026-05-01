@@ -53,7 +53,7 @@ func TestPrometheusMetricsIsPublicAndUnauthenticated(t *testing.T) {
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,

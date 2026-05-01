@@ -18,9 +18,9 @@ func setupWalletRouter(t *testing.T) (*service.AuthService, *repo.MemoryIdentity
 	t.Helper()
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	walletRepo := repo.NewMemoryWalletRepository()
-	walletService := service.NewWalletService(walletRepo)
+	walletService := service.NewWalletService(walletRepo, nil)
 	router := NewRouter(RouterConfig{
 		Logger:        logger,
 		Version:       "test",

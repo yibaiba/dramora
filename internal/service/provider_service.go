@@ -13,8 +13,9 @@ import (
 )
 
 type ProviderService struct {
-	configs repo.ProviderConfigRepository
-	audit   repo.ProviderAuditRepository
+	configs         repo.ProviderConfigRepository
+	audit           repo.ProviderAuditRepository
+	notificationSvc *NotificationService
 }
 
 func NewProviderService(configs repo.ProviderConfigRepository) *ProviderService {
@@ -24,6 +25,11 @@ func NewProviderService(configs repo.ProviderConfigRepository) *ProviderService 
 // SetAuditRepository 注入 provider 审计写入器。可选；未注入时 save/test 不会落审计。
 func (s *ProviderService) SetAuditRepository(audit repo.ProviderAuditRepository) {
 	s.audit = audit
+}
+
+// SetNotificationService 注入通知服务。可选；未注入时 save 不会创建通知。
+func (s *ProviderService) SetNotificationService(notifSvc *NotificationService) {
+	s.notificationSvc = notifSvc
 }
 
 func (s *ProviderService) recordAudit(ctx context.Context, action, capability, providerType, model string, success bool, message string) {
@@ -185,6 +191,20 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 		return cfg, err
 	}
 	s.recordAudit(ctx, domain.ProviderAuditActionSave, cfg.Capability, cfg.ResolvedProviderType(), cfg.Model, true, "")
+	
+	// Create notification for provider config save
+	auth, authOK := RequestAuthFromContext(ctx)
+	if authOK && auth.OrganizationID != "" && s.notificationSvc != nil {
+		_, _ = s.notificationSvc.CreateNotification(ctx, auth.OrganizationID, domain.NotificationKindProviderConfigSave, fmt.Sprintf("配置提供商：%s", cfg.ResolvedProviderType()), fmt.Sprintf("能力：%s，模型：%s", cfg.Capability, cfg.Model), nil, map[string]interface{}{
+			"config_id":        cfg.ID,
+			"capability":       cfg.Capability,
+			"provider_type":    cfg.ResolvedProviderType(),
+			"model":            cfg.Model,
+			"credit_unit":      cfg.CreditUnit,
+			"credits_per_unit": cfg.CreditsPerUnit,
+		})
+	}
+	
 	return cfg, nil
 }
 

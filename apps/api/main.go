@@ -38,8 +38,9 @@ func main() {
 		ProjectService:    container.ProjectService,
 		ProductionService: container.ProductionService,
 		ProviderService:   container.ProviderService,
-		AgentService:      container.AgentService,
-		WalletService:     container.WalletService,
+		AgentService:        container.AgentService,
+		WalletService:       container.WalletService,
+		NotificationService: container.NotificationService,
 	})
 
 	server := &http.Server{

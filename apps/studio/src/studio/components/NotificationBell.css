@@ -1,0 +1,225 @@
+.notification-bell {
+  position: relative;
+  display: inline-block;
+}
+
+.notification-bell-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid hsl(var(--color-border));
+  border-radius: 6px;
+  background: hsl(var(--color-surface));
+  color: hsl(var(--color-text));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-bell-button:hover {
+  background: hsl(var(--color-surface-alt));
+  border-color: hsl(var(--color-border-active));
+}
+
+.notification-bell-button:active {
+  transform: scale(0.95);
+}
+
+.notification-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: hsl(0 84% 60%);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 8px;
+  width: 360px;
+  max-height: 500px;
+  border: 1px solid hsl(var(--color-border));
+  border-radius: 8px;
+  background: hsl(var(--color-background));
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+}
+
+.notification-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(var(--color-border));
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.notification-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: hsl(var(--color-text));
+}
+
+.notification-mark-all {
+  padding: 4px 10px;
+  font-size: 12px;
+  border: none;
+  border-radius: 4px;
+  background: hsl(var(--color-surface));
+  color: hsl(var(--color-text-secondary));
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.notification-mark-all:hover:not(:disabled) {
+  background: hsl(var(--color-surface-alt));
+  color: hsl(var(--color-text));
+}
+
+.notification-mark-all:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notification-list {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 100px;
+}
+
+.notification-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.notification-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notification-list::-webkit-scrollbar-thumb {
+  background: hsl(var(--color-border));
+  border-radius: 3px;
+}
+
+.notification-list::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--color-border-active));
+}
+
+.notification-loading,
+.notification-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: hsl(var(--color-text-secondary));
+  font-size: 13px;
+}
+
+.notification-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid hsl(var(--color-border-subtle));
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  transition: background 0.2s ease;
+}
+
+.notification-item:hover {
+  background: hsl(var(--color-surface));
+}
+
+.notification-item.unread {
+  background: hsl(var(--color-surface-light));
+}
+
+.notification-item.read {
+  opacity: 0.7;
+}
+
+.notification-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-item-title {
+  font-weight: 500;
+  font-size: 13px;
+  color: hsl(var(--color-text));
+  margin-bottom: 4px;
+}
+
+.notification-item-body {
+  font-size: 12px;
+  color: hsl(var(--color-text-secondary));
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-item-time {
+  font-size: 11px;
+  color: hsl(var(--color-text-tertiary));
+}
+
+.notification-mark-btn {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 4px;
+  background: hsl(var(--color-success));
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.notification-mark-btn:hover:not(:disabled) {
+  background: hsl(var(--color-success));
+  filter: brightness(1.1);
+}
+
+.notification-mark-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.notification-footer {
+  padding: 12px 16px;
+  border-top: 1px solid hsl(var(--color-border));
+  text-align: center;
+}
+
+.notification-view-all {
+  font-size: 12px;
+  color: hsl(var(--color-primary));
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.notification-view-all:hover {
+  color: hsl(var(--color-primary));
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  .notification-dropdown {
+    width: 320px;
+    max-height: 400px;
+  }
+}

@@ -17,11 +17,12 @@ var ErrInsufficientBalance = repo.ErrInsufficientBalance
 // WalletService 围绕 WalletRepository 实现按组织上下文的钱包能力。
 type WalletService struct {
 	repo repo.WalletRepository
+	notificationSvc *NotificationService
 }
 
 // NewWalletService 构造 WalletService；repo 为 nil 时所有方法均返回 ErrUnauthorized。
-func NewWalletService(r repo.WalletRepository) *WalletService {
-	return &WalletService{repo: r}
+func NewWalletService(r repo.WalletRepository, notifSvc *NotificationService) *WalletService {
+	return &WalletService{repo: r, notificationSvc: notifSvc}
 }
 
 // WalletSnapshot 是 GET /wallet 的统一读模型。
@@ -141,5 +142,29 @@ func (s *WalletService) apply(
 		TransactionID:  id,
 		CreatedAt:      time.Now().UTC(),
 	})
-	return tx, err
+	if err != nil {
+		return domain.WalletTransaction{}, err
+	}
+	
+	// Create notification for wallet events
+	if s.notificationSvc != nil {
+		notifKind := domain.NotificationKindWalletCredit
+		title := "钱包充值"
+		body := fmt.Sprintf("增加 %d 积分", p.Amount)
+		
+		if kind == domain.WalletKindDebit {
+			notifKind = domain.NotificationKindWalletDebit
+			title = "钱包扣费"
+			body = fmt.Sprintf("扣除 %d 积分", p.Amount)
+		}
+		
+		_, _ = s.notificationSvc.CreateNotification(ctx, auth.OrganizationID, notifKind, title, body, &auth.UserID, map[string]interface{}{
+			"amount":           p.Amount,
+			"reason":           p.Reason,
+			"transaction_id":   id,
+			"balance_after":    tx.BalanceAfter,
+		})
+	}
+	
+	return tx, nil
 }

@@ -47,6 +47,7 @@ import type {
   WalletSnapshot,
   WalletTransaction,
   WalletTransactionPage,
+  NotificationsPage,
 } from './types'
 
 
@@ -736,4 +737,31 @@ export async function debitWallet(request: WalletMutationRequest): Promise<Walle
     method: 'POST',
   })
   return payload.transaction
+}
+
+export async function fetchNotifications(params: {
+  limit?: number
+  offset?: number
+  unread_only?: boolean
+} = {}): Promise<NotificationsPage> {
+  const search = new URLSearchParams()
+  if (params.limit !== undefined) search.set('limit', String(params.limit))
+  if (params.offset !== undefined) search.set('offset', String(params.offset))
+  if (params.unread_only) search.set('unread_only', 'true')
+  const qs = search.toString()
+  return fetchJSON<NotificationsPage>(`/api/v1/notifications${qs ? `?${qs}` : ''}`)
+}
+
+export async function markNotificationAsRead(notificationId: string): Promise<{ status: string }> {
+  return fetchJSON(`/api/v1/notifications/${notificationId}:read`, {
+    body: JSON.stringify({}),
+    method: 'POST',
+  })
+}
+
+export async function markAllNotificationsAsRead(): Promise<{ status: string }> {
+  return fetchJSON(`/api/v1/notifications:read-all`, {
+    body: JSON.stringify({}),
+    method: 'POST',
+  })
 }

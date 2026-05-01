@@ -24,7 +24,8 @@ type RouterConfig struct {
 	ProductionService *service.ProductionService
 	ProviderService   *service.ProviderService
 	AgentService      *service.AgentService
-	WalletService     *service.WalletService
+	WalletService       *service.WalletService
+	NotificationService *service.NotificationService
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -95,6 +96,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/agents/stream", api.streamAgentRun)
 		r.Get("/wallet", api.getWallet)
 		r.Get("/wallet/transactions", api.listWalletTransactions)
+		r.Get("/notifications", api.listNotifications)
 
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
@@ -112,6 +114,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/organizations/invitations/{invitationId}:resend", api.resendInvitation)
 			admin.Post("/wallet:credit", api.creditWallet)
 			admin.Post("/wallet:debit", api.debitWallet)
+			admin.Post("/notifications/{id}:read", api.markNotificationAsRead)
+			admin.Post("/notifications:read-all", api.markAllNotificationsAsRead)
 
 			// owner-only mutations: provider config save / test 真实凭证写入
 			admin.Group(func(owner chi.Router) {
@@ -133,8 +137,9 @@ type api struct {
 	projectService    *service.ProjectService
 	productionService *service.ProductionService
 	providerService   *service.ProviderService
-	agentService      *service.AgentService
-	walletService     *service.WalletService
+	agentService        *service.AgentService
+	walletService       *service.WalletService
+	notificationService *service.NotificationService
 }
 
 func newAPI(cfg RouterConfig) *api {
@@ -146,5 +151,6 @@ func newAPI(cfg RouterConfig) *api {
 		providerService:   cfg.ProviderService,
 		agentService:      cfg.AgentService,
 		walletService:     cfg.WalletService,
+		notificationService: cfg.NotificationService,
 	}
 }

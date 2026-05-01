@@ -22,7 +22,7 @@ func TestProjectRoutesUseOrganizationFromJWTContext(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	projectRepo := repo.NewMemoryProjectRepository()
 	projectService := service.NewProjectService(projectRepo)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	router := NewRouter(RouterConfig{
 		Logger:         logger,
 		Version:        "test",
@@ -101,7 +101,7 @@ func TestProjectRoutesRequireAuthentication(t *testing.T) {
 	router := NewRouter(RouterConfig{
 		Logger:         logger,
 		Version:        "test",
-		AuthService:    service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret"),
+		AuthService:    service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil),
 		ProjectService: service.NewProjectService(repo.NewMemoryProjectRepository()),
 	})
 
@@ -124,7 +124,7 @@ func TestProductionRoutesRespectOrganizationContext(t *testing.T) {
 	projectService := service.NewProjectService(projectRepo)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",
@@ -220,7 +220,7 @@ func TestGlobalResourceWriteRoutesRespectOrganizationContext(t *testing.T) {
 	projectService := service.NewProjectService(projectRepo)
 	productionService := service.NewProductionService(repo.NewMemoryProductionRepository(), nil)
 	productionService.SetProjectService(projectService)
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	router := NewRouter(RouterConfig{
 		Logger:            logger,
 		Version:           "test",

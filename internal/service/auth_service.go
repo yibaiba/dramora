@@ -56,6 +56,7 @@ type AuthService struct {
 	jwtSecret    []byte
 	accessTTL    time.Duration
 	refreshTTL   time.Duration
+	notificationSvc *NotificationService
 }
 
 // NewAuthService 构建认证服务。
@@ -64,12 +65,13 @@ type AuthService struct {
 //
 // refreshRepo 为 nil 时退化为单 token 模式（仅签发短 access token，不发
 // refresh token）。生产路径应通过 SetRefreshTokenRepository 注入实现。
-func NewAuthService(identityRepo repo.IdentityRepository, jwtSecret string) *AuthService {
+func NewAuthService(identityRepo repo.IdentityRepository, jwtSecret string, notifSvc *NotificationService) *AuthService {
 	return &AuthService{
-		identityRepo: identityRepo,
-		jwtSecret:    []byte(jwtSecret),
-		accessTTL:    defaultAccessTokenTTL,
-		refreshTTL:   defaultRefreshTokenTTL,
+		identityRepo:    identityRepo,
+		jwtSecret:       []byte(jwtSecret),
+		accessTTL:       defaultAccessTokenTTL,
+		refreshTTL:      defaultRefreshTokenTTL,
+		notificationSvc: notifSvc,
 	}
 }
 
@@ -501,6 +503,17 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 	}); auditErr != nil {
 		return domain.OrganizationInvitation{}, fmt.Errorf("audit invitation created: %w", auditErr)
 	}
+	
+	// Create notification for invitation
+	if s.notificationSvc != nil {
+		_, _ = s.notificationSvc.CreateNotification(ctx, auth.OrganizationID, domain.NotificationKindInvitationCreated, fmt.Sprintf("新增邀请：%s", inv.Email), fmt.Sprintf("角色：%s，有效期 14 天", inv.Role), nil, map[string]interface{}{
+			"invitation_id":   inv.ID,
+			"email":           inv.Email,
+			"role":            inv.Role,
+			"invited_by_user": auth.UserID,
+		})
+	}
+	
 	return inv, nil
 }
 

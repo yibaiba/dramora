@@ -17,7 +17,7 @@ func TestSmokeChatProviderUsesMockAdapter(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
 	auditRepo := repo.NewMemoryProviderAuditRepository()
 	providerSvc := service.NewProviderService(providerCfgRepo)
@@ -92,7 +92,7 @@ func TestSmokeChatProviderReturnsErrorWhenChatNotConfigured(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
 	providerSvc := service.NewProviderService(providerCfgRepo)
 
@@ -128,7 +128,7 @@ func TestSmokeChatProviderStreamUsesMockAdapter(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
 	auditRepo := repo.NewMemoryProviderAuditRepository()
 	providerSvc := service.NewProviderService(providerCfgRepo)

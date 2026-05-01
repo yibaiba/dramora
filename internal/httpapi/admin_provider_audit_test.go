@@ -18,7 +18,7 @@ func TestProviderAuditCapturesSaveAndTest(t *testing.T) {
 	t.Parallel()
 
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
-	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
 	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
 	auditRepo := repo.NewMemoryProviderAuditRepository()
 	providerSvc := service.NewProviderService(providerCfgRepo)
@@ -108,7 +108,7 @@ func TestProviderAuditRejectsViewerRole(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
 	const orgID = "00000000-0000-0000-0000-000000000001"
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	providerSvc := service.NewProviderService(repo.NewMemoryProviderConfigRepository())
 	providerSvc.SetAuditRepository(repo.NewMemoryProviderAuditRepository())
 
@@ -150,7 +150,7 @@ func TestProviderSaveRequiresOwnerRole(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 	identityRepo := repo.NewMemoryIdentityRepository()
 	const orgID = "00000000-0000-0000-0000-000000000001"
-	authService := service.NewAuthService(identityRepo, "test-secret")
+	authService := service.NewAuthService(identityRepo, "test-secret", nil)
 	providerSvc := service.NewProviderService(repo.NewMemoryProviderConfigRepository())
 	providerSvc.SetAuditRepository(repo.NewMemoryProviderAuditRepository())
 

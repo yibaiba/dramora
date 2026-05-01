@@ -494,4 +494,19 @@ var sqliteMigrations = []string{
 		ON wallet_transactions (organization_id, created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS wallet_transactions_ref_idx
 		ON wallet_transactions (organization_id, ref_type, ref_id)`,
+	`CREATE TABLE IF NOT EXISTS notifications (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL,
+		recipient_user_id TEXT,
+		kind TEXT NOT NULL CHECK (kind IN ('wallet_credit', 'wallet_debit', 'invitation_created', 'invitation_resent', 'provider_config_save')),
+		title TEXT NOT NULL,
+		body TEXT NOT NULL,
+		metadata TEXT DEFAULT '{}',
+		read_at TEXT,
+		created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+	)`,
+	`CREATE INDEX IF NOT EXISTS notifications_org_recipient_idx
+		ON notifications (organization_id, recipient_user_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS notifications_org_unread_idx
+		ON notifications (organization_id, read_at) WHERE read_at IS NULL`,
 }

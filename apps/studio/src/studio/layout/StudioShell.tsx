@@ -16,7 +16,7 @@ import { useAuthStore } from '../../state/authStore'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { useThemeMode } from '../hooks/useThemeMode'
 import { studioNavItems, studioRoutePaths } from '../routes'
-
+import { NotificationBell } from '../components/NotificationBell'
 export function StudioShell() {
   const location = useLocation()
   const {
@@ -144,6 +144,7 @@ export function StudioShell() {
             <strong>{authSession?.user.display_name ?? 'Director'}</strong>
             <small>{authSession?.user.email ?? 'director@dramora.ai'}</small>
           </div>
+          <NotificationBell />
           <button
             aria-label={themeMode === 'dark' ? '切换为亮色主题' : '切换为暗色主题'}
             className="owner-logout"
