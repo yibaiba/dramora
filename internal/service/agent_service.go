@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/yibaiba/dramora/internal/provider"
+	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/workflow"
 )
 
@@ -43,6 +44,23 @@ func (s *AgentService) RecordTelemetry(ev LLMTelemetryEvent) {
 		return
 	}
 	s.telemetry.record(ev)
+}
+
+// SetTelemetryRepository wires a persistent backend so per-vendor / per-capability
+// telemetry counters survive restarts. Safe to call once at startup.
+func (s *AgentService) SetTelemetryRepository(r repo.LLMTelemetryRepository) {
+	if s == nil || s.telemetry == nil {
+		return
+	}
+	s.telemetry.SetRepository(r)
+}
+
+// HydrateTelemetry replays persisted aggregates into the in-memory counters.
+func (s *AgentService) HydrateTelemetry(ctx context.Context) error {
+	if s == nil || s.telemetry == nil {
+		return nil
+	}
+	return s.telemetry.Hydrate(ctx)
 }
 
 func (s *AgentService) recordTelemetry(ev LLMTelemetryEvent) {

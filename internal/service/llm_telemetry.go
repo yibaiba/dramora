@@ -1,10 +1,14 @@
 package service
 
 import (
+	"context"
+	"log/slog"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/yibaiba/dramora/internal/repo"
 )
 
 // LLMTelemetryEvent 描述单次 LLM / 媒体生成调用的可观测元信息。
@@ -57,6 +61,57 @@ type llmTelemetry struct {
 	capabilityDurations map[string]int64
 	vendorErrors        map[string]uint64
 	capabilityErrors    map[string]uint64
+
+	repository repo.LLMTelemetryRepository
+}
+
+// SetRepository wires a persistent backend so per-vendor / per-capability
+// counters survive process restarts. Safe to call once at startup.
+func (t *llmTelemetry) SetRepository(r repo.LLMTelemetryRepository) {
+	t.mu.Lock()
+	t.repository = r
+	t.mu.Unlock()
+}
+
+// Hydrate replays persisted aggregate rows into the in-memory counters.
+// Recent events are not restored (ring stays empty until new traffic arrives).
+func (t *llmTelemetry) Hydrate(ctx context.Context) error {
+	t.mu.Lock()
+	r := t.repository
+	t.mu.Unlock()
+	if r == nil {
+		return nil
+	}
+	rows, err := r.LoadAll(ctx)
+	if err != nil {
+		return err
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	var total, success, errors uint64
+	// Vendor scope is the source of truth for total/success/error counts so we
+	// don't double-count between vendor and capability scopes.
+	for _, row := range rows {
+		switch row.Scope {
+		case repo.LLMTelemetryAggregateScopeVendor:
+			t.vendorCounts[row.Key] += row.Counter
+			t.vendorDurations[row.Key] += row.TotalDurationMS
+			t.vendorErrors[row.Key] += row.ErrorCounter
+			total += row.Counter
+			errors += row.ErrorCounter
+			if row.Counter >= row.ErrorCounter {
+				success += row.Counter - row.ErrorCounter
+			}
+		case repo.LLMTelemetryAggregateScopeCapability:
+			t.capabilityCounts[row.Key] += row.Counter
+			t.capabilityDurations[row.Key] += row.TotalDurationMS
+			t.capabilityErrors[row.Key] += row.ErrorCounter
+		}
+	}
+	atomic.StoreUint64(&t.totalCalls, total)
+	atomic.StoreUint64(&t.successCalls, success)
+	atomic.StoreUint64(&t.errorCalls, errors)
+	return nil
 }
 
 func newLLMTelemetry() *llmTelemetry {
@@ -101,6 +156,25 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 	if !ev.Success {
 		t.vendorErrors[ev.Vendor]++
 		t.capabilityErrors[ev.Capability]++
+	}
+	r := t.repository
+	vendor := ev.Vendor
+	capability := ev.Capability
+	durationMS := ev.DurationMS
+	success := ev.Success
+	if r != nil {
+		// Persist asynchronously to keep the hot path lock-free of disk IO.
+		// Failures are logged but never block telemetry recording.
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := r.RecordCall(ctx, repo.LLMTelemetryAggregateScopeVendor, vendor, durationMS, success); err != nil {
+				slog.WarnContext(ctx, "llm telemetry vendor persist failed", "vendor", vendor, "error", err)
+			}
+			if err := r.RecordCall(ctx, repo.LLMTelemetryAggregateScopeCapability, capability, durationMS, success); err != nil {
+				slog.WarnContext(ctx, "llm telemetry capability persist failed", "capability", capability, "error", err)
+			}
+		}()
 	}
 }
 

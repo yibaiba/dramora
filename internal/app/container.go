@@ -37,6 +37,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	var providerService *service.ProviderService
 	var workerMetricsRepo repo.WorkerMetricsRepository
+	var llmTelemetryRepo repo.LLMTelemetryRepository
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -49,6 +50,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		identityRepo = repo.NewPostgresIdentityRepository(openedDB.Pool)
 		refreshRepo = repo.NewPostgresRefreshTokenRepository(openedDB.Pool)
 		workerMetricsRepo = repo.NewPostgresWorkerMetricsRepository(openedDB.Pool)
+		llmTelemetryRepo = repo.NewPostgresLLMTelemetryRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -63,6 +65,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		providerService = service.NewProviderService(repo.NewSQLiteProviderConfigRepository(openedDB.DB))
 		providerService.SetAuditRepository(repo.NewSQLiteProviderAuditRepository(openedDB.DB))
 		workerMetricsRepo = repo.NewSQLiteWorkerMetricsRepository(openedDB.DB)
+		llmTelemetryRepo = repo.NewSQLiteLLMTelemetryRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
 	}
 
@@ -72,6 +75,12 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		agentSvc = service.NewAgentService(providerService)
 		productionSvc.SetAgentService(agentSvc)
 		productionSvc.SetProviderService(providerService)
+		if llmTelemetryRepo != nil {
+			agentSvc.SetTelemetryRepository(llmTelemetryRepo)
+			if err := agentSvc.HydrateTelemetry(ctx); err != nil {
+				logger.Warn("load llm telemetry failed", "err", err)
+			}
+		}
 	}
 
 	projectSvc := service.NewProjectService(projectRepo)

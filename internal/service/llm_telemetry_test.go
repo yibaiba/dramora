@@ -1,9 +1,12 @@
 package service
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yibaiba/dramora/internal/repo"
 )
 
 func TestLLMTelemetryRecordsAndAggregates(t *testing.T) {
@@ -117,5 +120,43 @@ func TestLLMTelemetryTracksErrorsAndCapabilityAvg(t *testing.T) {
 	}
 	if snap.AvgDurationMSCapability["image"] != 400 {
 		t.Fatalf("avg_image=%d want 400", snap.AvgDurationMSCapability["image"])
+	}
+}
+
+func TestLLMTelemetryPersistsAndHydrates(t *testing.T) {
+	store := repo.NewMemoryLLMTelemetryRepository()
+	tel := newLLMTelemetry()
+	tel.SetRepository(store)
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", DurationMS: 100, Success: true})
+	tel.record(LLMTelemetryEvent{Vendor: "anthropic", Capability: "chat", DurationMS: 200, Success: false})
+	// Allow async persists to flush.
+	time.Sleep(50 * time.Millisecond)
+
+	hydrated := newLLMTelemetry()
+	hydrated.SetRepository(store)
+	if err := hydrated.Hydrate(context.Background()); err != nil {
+		t.Fatalf("hydrate: %v", err)
+	}
+	snap := hydrated.snapshot()
+	if snap.TotalCalls != 2 {
+		t.Fatalf("total=%d want 2", snap.TotalCalls)
+	}
+	if snap.ErrorCalls != 1 {
+		t.Fatalf("errors=%d want 1", snap.ErrorCalls)
+	}
+	if snap.SuccessCalls != 1 {
+		t.Fatalf("success=%d want 1", snap.SuccessCalls)
+	}
+	if snap.ByVendor["openai"] != 1 || snap.ByVendor["anthropic"] != 1 {
+		t.Fatalf("vendors=%v", snap.ByVendor)
+	}
+	if snap.AvgDurationMSVendor["openai"] != 100 || snap.AvgDurationMSVendor["anthropic"] != 200 {
+		t.Fatalf("avg=%v", snap.AvgDurationMSVendor)
+	}
+	if snap.ErrorsByVendor["anthropic"] != 1 {
+		t.Fatalf("vendor errors=%v", snap.ErrorsByVendor)
+	}
+	if snap.ByCapability["chat"] != 2 {
+		t.Fatalf("capability=%v", snap.ByCapability)
 	}
 }

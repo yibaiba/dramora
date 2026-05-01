@@ -446,4 +446,15 @@ var sqliteMigrations = []string{
 		ON provider_audit_events (organization_id, created_at DESC)`,
 	`CREATE INDEX IF NOT EXISTS idx_provider_audit_events_capability
 		ON provider_audit_events (organization_id, capability)`,
+
+	// PR2: llm_telemetry_aggregate — restart-survivable per-vendor / per-capability counters.
+	`CREATE TABLE IF NOT EXISTS llm_telemetry_aggregate (
+		scope TEXT NOT NULL,
+		key TEXT NOT NULL,
+		counter INTEGER NOT NULL DEFAULT 0,
+		error_counter INTEGER NOT NULL DEFAULT 0,
+		total_duration_ms INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		PRIMARY KEY (scope, key)
+	)`,
 }
