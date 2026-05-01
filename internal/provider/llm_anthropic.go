@@ -1,6 +1,7 @@
 package provider
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -144,6 +145,129 @@ func (p *anthropicLLM) Complete(ctx context.Context, req LLMRequest) (*LLMRespon
 		CompletionTokens: parsed.Usage.OutputTokens,
 		TotalTokens:      parsed.Usage.InputTokens + parsed.Usage.OutputTokens,
 		Raw:              string(rawBody),
+	}, nil
+}
+
+type anthropicStreamFrame struct {
+	Type  string `json:"type"`
+	Delta struct {
+		Type         string `json:"type"`
+		Text         string `json:"text"`
+		StopReason   string `json:"stop_reason,omitempty"`
+		OutputTokens int    `json:"output_tokens,omitempty"`
+	} `json:"delta"`
+	Message struct {
+		Usage anthropicUsage `json:"usage"`
+	} `json:"message"`
+	Usage anthropicUsage `json:"usage"`
+}
+
+func (p *anthropicLLM) CompleteStream(ctx context.Context, req LLMRequest, onChunk StreamHandler) (*LLMResponse, error) {
+	model := req.Model
+	if model == "" {
+		model = p.model
+	}
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = defaultAnthropicMaxTokens
+	}
+
+	system, messages := splitSystemPrompt(req.Messages)
+	if len(messages) == 0 {
+		return nil, fmt.Errorf("anthropic: at least one non-system message required")
+	}
+
+	body := map[string]any{
+		"model":      model,
+		"messages":   messages,
+		"max_tokens": maxTokens,
+		"stream":     true,
+	}
+	if system != "" {
+		body["system"] = system
+	}
+	if req.Temperature > 0 {
+		body["temperature"] = req.Temperature
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("marshal anthropic stream request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/v1/messages", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("build anthropic stream request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-api-key", p.apiKey)
+	httpReq.Header.Set("anthropic-version", p.apiVersion)
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	// Use a streaming-friendly client (no global timeout) so long
+	// generations can run to completion. Cancellation flows via ctx.
+	streamClient := &http.Client{}
+	resp, err := streamClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("anthropic stream request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("anthropic stream API returned %d: %s", resp.StatusCode, truncate(string(raw), 200))
+	}
+
+	var sb strings.Builder
+	var inputTokens, outputTokens int
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		var frame anthropicStreamFrame
+		if err := json.Unmarshal([]byte(data), &frame); err != nil {
+			continue
+		}
+		switch frame.Type {
+		case "message_start":
+			inputTokens = frame.Message.Usage.InputTokens
+		case "content_block_delta":
+			if frame.Delta.Type == "text_delta" && frame.Delta.Text != "" {
+				sb.WriteString(frame.Delta.Text)
+				if onChunk != nil {
+					if err := onChunk(StreamChunk{Delta: frame.Delta.Text}); err != nil {
+						return nil, err
+					}
+				}
+			}
+		case "message_delta":
+			if frame.Usage.OutputTokens > 0 {
+				outputTokens = frame.Usage.OutputTokens
+			}
+		case "message_stop":
+			// terminal marker; loop exits naturally on EOF
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan anthropic stream: %w", err)
+	}
+
+	if onChunk != nil {
+		if err := onChunk(StreamChunk{Done: true}); err != nil {
+			return nil, err
+		}
+	}
+
+	content := sb.String()
+	return &LLMResponse{
+		Content:          content,
+		PromptTokens:     inputTokens,
+		CompletionTokens: outputTokens,
+		TotalTokens:      inputTokens + outputTokens,
+		Raw:              content,
 	}, nil
 }
 

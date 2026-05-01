@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -176,5 +177,141 @@ func TestAnthropicRequiresNonSystemMessage(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "non-system message") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestMockLLMStream(t *testing.T) {
+	p, _ := NewLLMProvider(LLMConfig{ProviderType: "mock", Model: "fixture"})
+	var collected strings.Builder
+	doneSeen := false
+	resp, err := p.(LLMProvider).CompleteStream(context.Background(), LLMRequest{
+		Messages: []ChatMessage{{Role: "user", Content: "hello mock streaming"}},
+	}, func(c StreamChunk) error {
+		if c.Done {
+			doneSeen = true
+			return nil
+		}
+		collected.WriteString(c.Delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !doneSeen {
+		t.Fatal("expected Done chunk")
+	}
+	if collected.String() != resp.Content {
+		t.Fatalf("aggregated stream %q != response %q", collected.String(), resp.Content)
+	}
+}
+
+func TestOpenAILLMStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if !strings.Contains(string(body), `"stream":true`) {
+			t.Errorf("stream flag not set: %s", body)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		writeFrame := func(payload string) {
+			_, _ = w.Write([]byte("data: " + payload + "\n\n"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		writeFrame(`{"choices":[{"index":0,"delta":{"content":"Hel"}}]}`)
+		writeFrame(`{"choices":[{"index":0,"delta":{"content":"lo "}}]}`)
+		writeFrame(`{"choices":[{"index":0,"delta":{"content":"world"}}],"usage":{"prompt_tokens":2,"completion_tokens":3,"total_tokens":5}}`)
+		writeFrame(`[DONE]`)
+	}))
+	defer srv.Close()
+
+	p, _ := NewLLMProvider(LLMConfig{ProviderType: "openai", BaseURL: srv.URL, APIKey: "k", Model: "gpt-test"})
+	var collected strings.Builder
+	chunks := 0
+	resp, err := p.CompleteStream(context.Background(), LLMRequest{Messages: []ChatMessage{{Role: "user", Content: "ping"}}}, func(c StreamChunk) error {
+		if c.Done {
+			return nil
+		}
+		chunks++
+		collected.WriteString(c.Delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if collected.String() != "Hello world" {
+		t.Fatalf("aggregated=%q", collected.String())
+	}
+	if resp.Content != "Hello world" {
+		t.Fatalf("content=%q", resp.Content)
+	}
+	if chunks != 3 {
+		t.Fatalf("chunks=%d", chunks)
+	}
+	if resp.TotalTokens != 5 {
+		t.Fatalf("tokens=%d", resp.TotalTokens)
+	}
+}
+
+func TestAnthropicLLMStream(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var parsed map[string]any
+		if err := json.Unmarshal(body, &parsed); err != nil {
+			t.Fatalf("bad body: %v", err)
+		}
+		if parsed["stream"] != true {
+			t.Errorf("stream flag not set: %v", parsed["stream"])
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		flusher, _ := w.(http.Flusher)
+		writeFrame := func(payload string) {
+			_, _ = w.Write([]byte("data: " + payload + "\n\n"))
+			if flusher != nil {
+				flusher.Flush()
+			}
+		}
+		writeFrame(`{"type":"message_start","message":{"usage":{"input_tokens":7,"output_tokens":0}}}`)
+		writeFrame(`{"type":"content_block_delta","delta":{"type":"text_delta","text":"Hi "}}`)
+		writeFrame(`{"type":"content_block_delta","delta":{"type":"text_delta","text":"there"}}`)
+		writeFrame(`{"type":"message_delta","usage":{"input_tokens":0,"output_tokens":4}}`)
+		writeFrame(`{"type":"message_stop"}`)
+	}))
+	defer srv.Close()
+
+	p, _ := NewLLMProvider(LLMConfig{ProviderType: "anthropic", BaseURL: srv.URL, APIKey: "ak", Model: "claude-test"})
+	var collected strings.Builder
+	resp, err := p.CompleteStream(context.Background(), LLMRequest{
+		Messages: []ChatMessage{{Role: "system", Content: "sys"}, {Role: "user", Content: "ping"}},
+	}, func(c StreamChunk) error {
+		if c.Done {
+			return nil
+		}
+		collected.WriteString(c.Delta)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if collected.String() != "Hi there" {
+		t.Fatalf("aggregated=%q", collected.String())
+	}
+	if resp.PromptTokens != 7 || resp.CompletionTokens != 4 || resp.TotalTokens != 11 {
+		t.Fatalf("usage mismatch: %+v", resp)
+	}
+}
+
+func TestStreamHandlerErrorAborts(t *testing.T) {
+	p, _ := NewLLMProvider(LLMConfig{ProviderType: "mock", Model: "x"})
+	target := fmt.Errorf("boom")
+	_, err := p.CompleteStream(context.Background(), LLMRequest{Messages: []ChatMessage{{Role: "user", Content: "hello world"}}}, func(c StreamChunk) error {
+		if !c.Done {
+			return target
+		}
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("expected boom error, got %v", err)
 	}
 }
