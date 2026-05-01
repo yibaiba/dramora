@@ -16,6 +16,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   useApproveApprovalGate,
   useGenerateShotPromptPack,
+  useGenerationJobs,
   useResubmitApprovalGate,
   useRequestApprovalChanges,
   useSaveEpisodeTimeline,
@@ -30,8 +31,10 @@ import {
   useGenerationJobRecovery,
   useStartShotVideoGeneration,
   useStartStoryAnalysis,
+  useStoryAnalyses,
   useStoryboardWorkspace,
   useUpdateStoryboardShot,
+  useWorkflowRun,
 } from '../../api/hooks'
 import type {
   ApprovalGate,
@@ -54,6 +57,7 @@ import { studioRoutePaths } from '../routes'
 import { RecoveryPanel } from '../components/RecoveryPanel'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import { StatePlaceholder } from '../components/StatePlaceholder'
+import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import type { InspectorTab, ShotDraft, StudioShot, ViewMode } from '../types'
 import type {
   ApprovalGateOverview,
@@ -72,6 +76,7 @@ import {
   formatDuration,
   mapWorkspaceDisplayShots,
   productionHint,
+  resolveEpisodeWorkflowRunId,
   selectShotCharacterReferences,
   shotDraftValue,
   statusLabel,
@@ -101,6 +106,13 @@ export function StoryboardPage() {
   const { activeEpisode, selectedProject } = useStudioSelection()
   const location = useLocation()
   const { data: storyboardWorkspace } = useStoryboardWorkspace(activeEpisode?.id)
+  const { data: storyAnalyses } = useStoryAnalyses(activeEpisode?.id)
+  const { data: episodeJobsList } = useGenerationJobs()
+  const workflowRunId = useMemo(
+    () => resolveEpisodeWorkflowRunId(activeEpisode?.id, storyAnalyses ?? [], episodeJobsList ?? []),
+    [activeEpisode?.id, storyAnalyses, episodeJobsList],
+  )
+  const { data: workflowRun } = useWorkflowRun(workflowRunId)
   const analysesCount = storyboardWorkspace?.summary.analysis_count ?? 0
   const assets = storyboardWorkspace?.assets ?? []
   const canSeedStoryboard = analysesCount > 0 && (storyboardWorkspace?.summary.story_map_ready ?? false)
@@ -419,6 +431,8 @@ export function StoryboardPage() {
             selectedShotKey={selectedShot.key}
             viewMode={viewMode}
           />
+
+          <WorkflowRecoveryTimeline workflowRun={workflowRun} />
         </section>
 
         <ShotInspector
