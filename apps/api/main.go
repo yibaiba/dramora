@@ -34,10 +34,12 @@ func main() {
 		Logger:            container.Logger,
 		Version:           app.Version,
 		Readiness:         container,
+		AuthService:       container.AuthService,
 		ProjectService:    container.ProjectService,
 		ProductionService: container.ProductionService,
 		ProviderService:   container.ProviderService,
 		AgentService:      container.AgentService,
+		WalletService:     container.WalletService,
 	})
 
 	server := &http.Server{

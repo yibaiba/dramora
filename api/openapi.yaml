@@ -1801,6 +1801,97 @@ paths:
                     type: boolean
         "403":
           description: Forbidden — owner/admin role required
+  /api/v1/wallet:
+    get:
+      summary: Get wallet balance + recent transactions for current org
+      responses:
+        "200":
+          description: Wallet snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  wallet:
+                    $ref: "#/components/schemas/Wallet"
+                  recent_transactions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WalletTransaction"
+        "401":
+          description: Authentication required
+  /api/v1/wallet/transactions:
+    get:
+      summary: List wallet transactions for current org
+      parameters:
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0 }
+        - in: query
+          name: kind
+          description: Comma-separated kind filter (credit / debit / refund / adjust).
+          schema: { type: string }
+      responses:
+        "200":
+          description: Paginated transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transactions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/WalletTransaction"
+                  has_more:
+                    type: boolean
+  "/api/v1/wallet:credit":
+    post:
+      summary: Credit (top-up) the current org wallet (owner/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletMutationRequest"
+      responses:
+        "200":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    $ref: "#/components/schemas/WalletTransaction"
+        "403":
+          description: Forbidden
+  "/api/v1/wallet:debit":
+    post:
+      summary: Debit (consume) credits from the current org wallet (owner/admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WalletMutationRequest"
+      responses:
+        "200":
+          description: Created transaction
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  transaction:
+                    $ref: "#/components/schemas/WalletTransaction"
+        "403":
+          description: Forbidden
+        "422":
+          description: Insufficient balance
 components:
   securitySchemes:
     bearerAuth:
@@ -3098,3 +3189,38 @@ components:
           description: Number of non-terminal stream deltas observed (streamed variant only).
         error:
           type: string
+    Wallet:
+      type: object
+      properties:
+        organization_id:
+          type: string
+        balance:
+          type: integer
+          format: int64
+        updated_at:
+          type: string
+          format: date-time
+    WalletTransaction:
+      type: object
+      properties:
+        id: { type: string }
+        organization_id: { type: string }
+        kind:
+          type: string
+          enum: [credit, debit, refund, adjust]
+        direction: { type: integer, enum: [-1, 1] }
+        amount: { type: integer, format: int64 }
+        reason: { type: string }
+        ref_type: { type: string }
+        ref_id: { type: string }
+        balance_after: { type: integer, format: int64 }
+        actor_user_id: { type: string }
+        created_at: { type: string, format: date-time }
+    WalletMutationRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: integer, format: int64, minimum: 1 }
+        reason: { type: string }
+        ref_type: { type: string }
+        ref_id: { type: string }

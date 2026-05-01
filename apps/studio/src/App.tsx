@@ -13,6 +13,7 @@ import { SessionsPage } from './studio/pages/SessionsPage'
 import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
 import { TimelineExportPage } from './studio/pages/TimelineExportPage'
+import { WalletPage } from './studio/pages/WalletPage'
 import { WorkerMetricsPage } from './studio/pages/WorkerMetricsPage'
 
 function App() {
@@ -63,6 +64,7 @@ function App() {
         <Route path="storyboard" element={<StoryboardPage />} />
         <Route path="assets-graph" element={<AssetsGraphPage />} />
         <Route path="timeline-export" element={<TimelineExportPage />} />
+        <Route path="wallet" element={<WalletPage />} />
         <Route path="admin/settings" element={<AdminSettingsPage />} />
         <Route path="admin/invitations" element={<InvitationsPage />} />
         <Route path="admin/worker-metrics" element={<WorkerMetricsPage />} />

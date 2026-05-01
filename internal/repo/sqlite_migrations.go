@@ -470,4 +470,28 @@ var sqliteMigrations = []string{
 		PRIMARY KEY (scope, key, day_utc)
 	)`,
 	`CREATE INDEX IF NOT EXISTS llm_telemetry_daily_day_idx ON llm_telemetry_daily (day_utc)`,
+
+	// PR13 wallet/credits.
+	`CREATE TABLE IF NOT EXISTS wallets (
+		organization_id TEXT PRIMARY KEY,
+		balance INTEGER NOT NULL DEFAULT 0,
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE TABLE IF NOT EXISTS wallet_transactions (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL,
+		kind TEXT NOT NULL,
+		direction INTEGER NOT NULL DEFAULT 1,
+		amount INTEGER NOT NULL,
+		reason TEXT,
+		ref_type TEXT,
+		ref_id TEXT,
+		balance_after INTEGER NOT NULL,
+		actor_user_id TEXT,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS wallet_transactions_org_created_idx
+		ON wallet_transactions (organization_id, created_at DESC)`,
+	`CREATE INDEX IF NOT EXISTS wallet_transactions_ref_idx
+		ON wallet_transactions (organization_id, ref_type, ref_id)`,
 }

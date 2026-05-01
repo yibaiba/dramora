@@ -21,6 +21,7 @@ type Container struct {
 	ProductionService *service.ProductionService
 	ProviderService   *service.ProviderService
 	AgentService      *service.AgentService
+	WalletService     *service.WalletService
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -38,6 +39,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var providerService *service.ProviderService
 	var workerMetricsRepo repo.WorkerMetricsRepository
 	var llmTelemetryRepo repo.LLMTelemetryRepository
+	var walletRepo repo.WalletRepository = repo.NewMemoryWalletRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -51,6 +53,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		refreshRepo = repo.NewPostgresRefreshTokenRepository(openedDB.Pool)
 		workerMetricsRepo = repo.NewPostgresWorkerMetricsRepository(openedDB.Pool)
 		llmTelemetryRepo = repo.NewPostgresLLMTelemetryRepository(openedDB.Pool)
+		walletRepo = repo.NewPostgresWalletRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -66,6 +69,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		providerService.SetAuditRepository(repo.NewSQLiteProviderAuditRepository(openedDB.DB))
 		workerMetricsRepo = repo.NewSQLiteWorkerMetricsRepository(openedDB.DB)
 		llmTelemetryRepo = repo.NewSQLiteLLMTelemetryRepository(openedDB.DB)
+		walletRepo = repo.NewSQLiteWalletRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
 	}
 
@@ -108,6 +112,8 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	authService := service.NewAuthService(identityRepo, cfg.JWTSecret)
 	authService.SetRefreshTokenRepository(refreshRepo)
 
+	walletSvc := service.NewWalletService(walletRepo)
+
 	return &Container{
 		cfg:               cfg,
 		ctx:               ctx,
@@ -119,6 +125,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		ProductionService: productionSvc,
 		ProviderService:   providerService,
 		AgentService:      agentSvc,
+		WalletService:     walletSvc,
 	}, nil
 }
 

@@ -6073,3 +6073,96 @@ p {
     align-self: flex-end;
   }
 }
+
+/* Wallet page */
+.wallet-balance-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+.wallet-action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 20px 20px;
+}
+.wallet-action-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-text-muted, #b5becf);
+}
+.wallet-action-form input {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 8px 12px;
+  color: inherit;
+  font-size: 14px;
+}
+.wallet-action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+.wallet-action-success {
+  color: #6ee7b7;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+.wallet-table-wrapper {
+  overflow-x: auto;
+  padding: 0 8px 16px;
+}
+.wallet-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.wallet-table th,
+.wallet-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  white-space: nowrap;
+}
+.wallet-table th {
+  font-weight: 600;
+  color: var(--color-text-muted, #b5becf);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.wallet-table .wallet-reason {
+  white-space: normal;
+  color: var(--color-text-muted, #b5becf);
+}
+.wallet-amount.positive {
+  color: #6ee7b7;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-amount.negative {
+  color: #fca5a5;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-kind-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.wallet-kind-chip.kind-credit {
+  background: rgba(110, 231, 183, 0.12);
+  border-color: rgba(110, 231, 183, 0.4);
+  color: #6ee7b7;
+}
+.wallet-kind-chip.kind-debit {
+  background: rgba(252, 165, 165, 0.12);
+  border-color: rgba(252, 165, 165, 0.4);
+  color: #fca5a5;
+}

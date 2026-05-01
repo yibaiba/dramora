@@ -2,6 +2,7 @@ import {
   Activity,
   BookOpenText,
   Boxes,
+  Coins,
   Download,
   Home,
   KeyRound,
@@ -20,6 +21,7 @@ export const studioRoutePaths = {
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
+  wallet: '/wallet',
   workerMetrics: '/admin/worker-metrics',
 } as const
 
@@ -88,6 +90,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'mySessions',
     label: 'Sessions',
     path: studioRoutePaths.mySessions,
+  },
+  {
+    description: '查看积分余额、充值/扣费流水（owner / admin 可调整）。',
+    icon: Coins,
+    key: 'wallet',
+    label: 'Wallet',
+    path: studioRoutePaths.wallet,
   },
   {
     description: '查看 worker 组织上下文跳过指标（owner / admin）。',

@@ -58,6 +58,10 @@ import {
 	resetLLMTelemetry,
 	fetchProviderAuditEvents,
 	updateStoryboardShot,
+	fetchWalletSnapshot,
+	fetchWalletTransactions,
+	creditWallet,
+	debitWallet,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -73,6 +77,8 @@ import type {
   SaveShotPromptPackRequest,
   SaveTimelineRequest,
   UpdateStoryboardShotRequest,
+  WalletKind,
+  WalletMutationRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -658,5 +664,45 @@ export function useRevokeSession() {
   return useMutation({
     mutationFn: (sessionId: string) => revokeSession(sessionId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-sessions'] }),
+  })
+}
+
+export function useWallet(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: fetchWalletSnapshot,
+    queryKey: ['wallet'],
+  })
+}
+
+export function useWalletTransactions(
+  params: { limit?: number; offset?: number; kind?: WalletKind | WalletKind[] } = {},
+  enabled = true,
+) {
+  const kindKey = Array.isArray(params.kind) ? [...params.kind].sort().join(',') : params.kind ?? ''
+  return useQuery({
+    enabled,
+    queryFn: () => fetchWalletTransactions(params),
+    queryKey: ['wallet', 'transactions', params.limit ?? 50, params.offset ?? 0, kindKey],
+  })
+}
+
+export function useCreditWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: WalletMutationRequest) => creditWallet(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}
+
+export function useDebitWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: WalletMutationRequest) => debitWallet(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    },
   })
 }

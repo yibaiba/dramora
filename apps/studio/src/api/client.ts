@@ -42,7 +42,13 @@ import type {
   WorkflowRun,
   UpdateStoryboardShotRequest,
   Timeline,
+  WalletKind,
+  WalletMutationRequest,
+  WalletSnapshot,
+  WalletTransaction,
+  WalletTransactionPage,
 } from './types'
+
 
 const API_BASE_URL = import.meta.env.VITE_MANMU_API_BASE_URL ?? ''
 const AUTH_STORAGE_KEY = 'dramora-auth-session'
@@ -694,4 +700,40 @@ export async function downloadInvitationAuditExport(
   anchor.click()
   anchor.remove()
   setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export async function fetchWalletSnapshot(): Promise<WalletSnapshot> {
+  return fetchJSON<WalletSnapshot>('/api/v1/wallet')
+}
+
+export async function fetchWalletTransactions(params: {
+  limit?: number
+  offset?: number
+  kind?: WalletKind | WalletKind[]
+} = {}): Promise<WalletTransactionPage> {
+  const search = new URLSearchParams()
+  if (params.limit !== undefined) search.set('limit', String(params.limit))
+  if (params.offset !== undefined) search.set('offset', String(params.offset))
+  if (params.kind) {
+    const value = Array.isArray(params.kind) ? params.kind.join(',') : params.kind
+    if (value) search.set('kind', value)
+  }
+  const qs = search.toString()
+  return fetchJSON<WalletTransactionPage>(`/api/v1/wallet/transactions${qs ? `?${qs}` : ''}`)
+}
+
+export async function creditWallet(request: WalletMutationRequest): Promise<WalletTransaction> {
+  const payload = await fetchJSON<{ transaction: WalletTransaction }>('/api/v1/wallet:credit', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.transaction
+}
+
+export async function debitWallet(request: WalletMutationRequest): Promise<WalletTransaction> {
+  const payload = await fetchJSON<{ transaction: WalletTransaction }>('/api/v1/wallet:debit', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.transaction
 }

@@ -679,3 +679,42 @@ export type ProviderAuditPage = {
   events: ProviderAuditEvent[]
   has_more: boolean
 }
+
+export type WalletKind = 'credit' | 'debit' | 'refund' | 'adjust'
+
+export type Wallet = {
+  organization_id: string
+  balance: number
+  updated_at: string
+}
+
+export type WalletTransaction = {
+  id: string
+  organization_id: string
+  kind: WalletKind
+  direction: 1 | -1
+  amount: number
+  reason?: string
+  ref_type?: string
+  ref_id?: string
+  balance_after: number
+  actor_user_id?: string
+  created_at: string
+}
+
+export type WalletSnapshot = {
+  wallet: Wallet
+  recent_transactions: WalletTransaction[]
+}
+
+export type WalletTransactionPage = {
+  transactions: WalletTransaction[]
+  has_more: boolean
+}
+
+export type WalletMutationRequest = {
+  amount: number
+  reason?: string
+  ref_type?: string
+  ref_id?: string
+}
