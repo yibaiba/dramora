@@ -83,6 +83,8 @@ export function AgentFeedbackWorkspace({
   const [historyFeedbackFilter, setHistoryFeedbackFilter] = useState<ReturnHistoryFeedbackFilter>('all')
   const [historyPageSize, setHistoryPageSize] = useState(RETURN_HISTORY_INITIAL_PAGE_SIZE)
   const [historySearch, setHistorySearch] = useState('')
+  const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc')
+  const [historyRowCopyId, setHistoryRowCopyId] = useState<string | null>(null)
   const [historyCopyState, setHistoryCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [historyImportState, setHistoryImportState] = useState<
     | { kind: 'idle' }
@@ -108,22 +110,29 @@ export function AgentFeedbackWorkspace({
   const reviewProgress = counts.total === 0 ? 0 : Math.round((reviewedCount / counts.total) * 100)
   const canCloseReviewCycle =
     counts.total > 0 && counts.needs_follow_up === 0 && counts.unmarked === 0
-  const filteredReturnHistory = returnedFollowUpHistory.filter((entry) => {
-    const matchesSource = historyFilter === 'all' || entry.sourcePage === historyFilter
-    const matchesFeedback =
-      historyFeedbackFilter === 'all' || entry.feedback === historyFeedbackFilter
-    const trimmedSearch = historySearch.trim().toLowerCase()
-    const matchesSearch =
-      trimmedSearch.length === 0 ||
-      entry.agentLabel.toLowerCase().includes(trimmedSearch) ||
-      entry.sourcePage.toLowerCase().includes(trimmedSearch) ||
-      (entry.resultNote ?? '').toLowerCase().includes(trimmedSearch)
-    return matchesSource && matchesFeedback && matchesSearch
-  })
+  const filteredReturnHistory = returnedFollowUpHistory
+    .filter((entry) => {
+      const matchesSource = historyFilter === 'all' || entry.sourcePage === historyFilter
+      const matchesFeedback =
+        historyFeedbackFilter === 'all' || entry.feedback === historyFeedbackFilter
+      const trimmedSearch = historySearch.trim().toLowerCase()
+      const matchesSearch =
+        trimmedSearch.length === 0 ||
+        entry.agentLabel.toLowerCase().includes(trimmedSearch) ||
+        entry.sourcePage.toLowerCase().includes(trimmedSearch) ||
+        (entry.resultNote ?? '').toLowerCase().includes(trimmedSearch)
+      return matchesSource && matchesFeedback && matchesSearch
+    })
+    .slice()
+    .sort((left, right) => {
+      const leftTime = new Date(left.createdAt).getTime()
+      const rightTime = new Date(right.createdAt).getTime()
+      return historySortOrder === 'desc' ? rightTime - leftTime : leftTime - rightTime
+    })
   const visibleReturnHistory = filteredReturnHistory.slice(0, historyPageSize)
   const hiddenReturnHistoryCount = filteredReturnHistory.length - visibleReturnHistory.length
 
-  const historyFilterSignature = `${historyFilter}|${historyFeedbackFilter}|${historySearch}`
+  const historyFilterSignature = `${historyFilter}|${historyFeedbackFilter}|${historySearch}|${historySortOrder}`
   const [previousFilterSignature, setPreviousFilterSignature] = useState(historyFilterSignature)
   if (previousFilterSignature !== historyFilterSignature) {
     setPreviousFilterSignature(historyFilterSignature)
@@ -293,6 +302,14 @@ export function AgentFeedbackWorkspace({
               placeholder="搜索 agent / 来源 / 备注"
               aria-label="搜索回传历史"
             />
+            <button
+              type="button"
+              className="ghost-action"
+              onClick={() => setHistorySortOrder((prev) => (prev === 'desc' ? 'asc' : 'desc'))}
+              title={historySortOrder === 'desc' ? '当前：新→旧，点击切换为旧→新' : '当前：旧→新，点击切换为新→旧'}
+            >
+              排序：{historySortOrder === 'desc' ? '新→旧' : '旧→新'}
+            </button>
             {filteredReturnHistory.length > 0 && onRemoveHistoryEntries ? (
               <button
                 type="button"
@@ -513,6 +530,27 @@ export function AgentFeedbackWorkspace({
                             移除此条
                           </button>
                         ) : null}
+                        <button
+                          type="button"
+                          className="ghost-action"
+                          onClick={async () => {
+                            try {
+                              const payload = JSON.stringify(entry, null, 2)
+                              if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                await navigator.clipboard.writeText(payload)
+                                setHistoryRowCopyId(entry.id)
+                                window.setTimeout(() => {
+                                  setHistoryRowCopyId((current) => (current === entry.id ? null : current))
+                                }, 1500)
+                              }
+                            } catch {
+                              /* swallow */
+                            }
+                          }}
+                          title="复制此条记录的 JSON"
+                        >
+                          {historyRowCopyId === entry.id ? '已复制 ✓' : '复制此条'}
+                        </button>
                         <small>{new Date(entry.createdAt).toLocaleTimeString()}</small>
                       </div>
                     </div>
