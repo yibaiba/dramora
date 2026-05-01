@@ -427,14 +427,27 @@ func (a *api) exportInvitationAudit(w http.ResponseWriter, r *http.Request) {
 	for _, ev := range page.Events {
 		out = append(out, invitationAuditDTO(ev))
 	}
+	filterSummary := map[string]any{
+		"actions": filter.Actions,
+		"email":   filter.Email,
+	}
+	if filter.Since != nil {
+		filterSummary["since"] = filter.Since.UTC().Format(time.RFC3339)
+	}
+	if filter.Until != nil {
+		filterSummary["until"] = filter.Until.UTC().Format(time.RFC3339)
+	}
 	if format == "json" {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		w.Header().Set("Content-Disposition", `attachment; filename="invitation-audit-`+timestamp+`.json"`)
 		w.Header().Set("X-Has-More", strconv.FormatBool(page.HasMore))
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"events":   out,
-			"has_more": page.HasMore,
+			"events":         out,
+			"has_more":       page.HasMore,
+			"exported_at":    time.Now().UTC().Format(time.RFC3339),
+			"event_count":    len(out),
+			"filter_summary": filterSummary,
 		})
 		return
 	}

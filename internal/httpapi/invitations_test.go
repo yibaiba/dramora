@@ -487,14 +487,31 @@ func TestInvitationAuditExport(t *testing.T) {
 		t.Fatalf("json export: expected .json disposition, got %q", cd)
 	}
 	var payload struct {
-		Events  []invitationAuditEventResponse `json:"events"`
-		HasMore bool                           `json:"has_more"`
+		Events        []invitationAuditEventResponse `json:"events"`
+		HasMore       bool                           `json:"has_more"`
+		ExportedAt    string                         `json:"exported_at"`
+		EventCount    int                            `json:"event_count"`
+		FilterSummary struct {
+			Actions []string `json:"actions"`
+			Email   string   `json:"email"`
+			Since   string   `json:"since"`
+			Until   string   `json:"until"`
+		} `json:"filter_summary"`
 	}
 	if err := json.Unmarshal(jsonResp.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode json export: %v", err)
 	}
 	if len(payload.Events) < 2 {
 		t.Fatalf("expected ≥2 created events in json export, got %d", len(payload.Events))
+	}
+	if payload.EventCount != len(payload.Events) {
+		t.Fatalf("event_count mismatch: got %d vs events %d", payload.EventCount, len(payload.Events))
+	}
+	if payload.ExportedAt == "" {
+		t.Fatalf("exported_at should be populated")
+	}
+	if len(payload.FilterSummary.Actions) != 1 || payload.FilterSummary.Actions[0] != "created" {
+		t.Fatalf("filter_summary.actions: expected [created], got %+v", payload.FilterSummary.Actions)
 	}
 	for _, ev := range payload.Events {
 		if ev.Action != "created" {

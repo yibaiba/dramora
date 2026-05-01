@@ -415,6 +415,20 @@ paths:
                       $ref: "#/components/schemas/InvitationAuditEvent"
                   has_more:
                     type: boolean
+                  exported_at:
+                    type: string
+                    format: date-time
+                  event_count:
+                    type: integer
+                  filter_summary:
+                    type: object
+                    properties:
+                      actions:
+                        type: array
+                        items: { type: string }
+                      email: { type: string }
+                      since: { type: string, format: date-time }
+                      until: { type: string, format: date-time }
         "400":
           description: Invalid format or filter parameter
           content:
