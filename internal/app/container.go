@@ -69,6 +69,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	if providerService != nil {
 		agentSvc = service.NewAgentService(providerService)
 		productionSvc.SetAgentService(agentSvc)
+		productionSvc.SetProviderService(providerService)
 	}
 
 	projectSvc := service.NewProjectService(projectRepo)

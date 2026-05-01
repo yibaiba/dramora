@@ -191,7 +191,7 @@ func (s *ProductionService) submitSeedanceGenerationJob(ctx context.Context, gen
 	if err != nil {
 		return err
 	}
-	task, err := s.seedance.SubmitGeneration(ctx, seedanceRequestInput(generationJob))
+	task, err := s.resolveSeedance(ctx).SubmitGeneration(ctx, seedanceRequestInput(generationJob))
 	if err != nil {
 		_, _ = s.advanceGenerationJob(ctx, submitting, domain.GenerationJobStatusFailed, "", "seedance worker submit failed")
 		return err
@@ -253,7 +253,7 @@ func (s *ProductionService) pollSeedanceTask(
 	if strings.TrimSpace(generationJob.ProviderTaskID) == "" {
 		return provider.SeedanceGenerationTask{}, fmt.Errorf("%w: seedance provider task id is required", domain.ErrInvalidInput)
 	}
-	return s.seedance.PollGeneration(ctx, generationJob.ProviderTaskID)
+	return s.resolveSeedance(ctx).PollGeneration(ctx, generationJob.ProviderTaskID)
 }
 
 func (s *ProductionService) completeSeedanceGenerationJob(

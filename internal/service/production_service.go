@@ -14,12 +14,13 @@ import (
 )
 
 type ProductionService struct {
-	production repo.ProductionRepository
-	jobClient  jobs.Client
-	seedance   seedanceProvider
-	agentSvc   *AgentService
-	projectSvc *ProjectService
-	metrics    workerMetrics
+	production  repo.ProductionRepository
+	jobClient   jobs.Client
+	seedance    seedanceProvider
+	agentSvc    *AgentService
+	projectSvc  *ProjectService
+	providerSvc *ProviderService
+	metrics     workerMetrics
 }
 
 type StartStoryAnalysisResult struct {
