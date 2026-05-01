@@ -9,18 +9,20 @@ import (
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
 type ProductionService struct {
-	production  repo.ProductionRepository
-	jobClient   jobs.Client
-	seedance    seedanceProvider
-	agentSvc    *AgentService
-	projectSvc  *ProjectService
-	providerSvc *ProviderService
-	metrics     workerMetrics
+	production   repo.ProductionRepository
+	jobClient    jobs.Client
+	seedance     seedanceProvider
+	agentSvc     *AgentService
+	projectSvc   *ProjectService
+	providerSvc  *ProviderService
+	mediaStorage media.Storage
+	metrics      workerMetrics
 }
 
 type StartStoryAnalysisResult struct {
@@ -78,6 +80,13 @@ func (s *ProductionService) SetAgentService(agentSvc *AgentService) {
 
 func (s *ProductionService) SetProjectService(projectSvc *ProjectService) {
 	s.projectSvc = projectSvc
+}
+
+// SetMediaStorage 注入媒体二进制存储后端，audio worker 在收到非 URL（仅字节）
+// 结果时会把 bytes 落到该存储并使用返回的 URI 作为资产引用。未注入时回退
+// 到老的 inline placeholder（manmu://providers/audio/inline?bytes=...）。
+func (s *ProductionService) SetMediaStorage(storage media.Storage) {
+	s.mediaStorage = storage
 }
 
 func (s *ProductionService) StartStoryAnalysis(

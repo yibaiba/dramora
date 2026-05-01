@@ -2,10 +2,12 @@ package service
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/repo"
 )
@@ -124,5 +126,60 @@ func TestProductionServiceProcessesAudioGenerationJobViaMockCapability(t *testin
 	}
 	if len(assets) != 1 || assets[0].Kind != "audio" || assets[0].Status != domain.AssetStatusReady {
 		t.Fatalf("expected one ready audio asset, got %+v", assets)
+	}
+}
+
+func TestAudioResultURIPersistsBytesToMediaStorage(t *testing.T) {
+	t.Parallel()
+
+	storage := media.NewMemoryStorage()
+	svc := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	svc.SetMediaStorage(storage)
+
+	job := domain.GenerationJob{ID: "job-audio-bytes", Params: map[string]any{"format": "mp3"}}
+	uri, err := svc.audioResultURI(context.Background(), job, &provider.AudioResult{Bytes: []byte("RIFFfakeaudio")})
+	if err != nil {
+		t.Fatalf("audioResultURI returned error: %v", err)
+	}
+	if !strings.HasPrefix(uri, "mem://audio/") || !strings.HasSuffix(uri, ".mp3") {
+		t.Fatalf("expected mem://audio/<job>.mp3 URI, got %q", uri)
+	}
+	rc, err := storage.Get(context.Background(), uri)
+	if err != nil {
+		t.Fatalf("storage.Get(%q) returned error: %v", uri, err)
+	}
+	defer rc.Close()
+	buf := make([]byte, 64)
+	n, _ := rc.Read(buf)
+	if string(buf[:n]) != "RIFFfakeaudio" {
+		t.Fatalf("expected stored bytes to round-trip, got %q", string(buf[:n]))
+	}
+}
+
+func TestAudioResultURIFallsBackToInlineWhenStorageMissing(t *testing.T) {
+	t.Parallel()
+
+	svc := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	uri, err := svc.audioResultURI(context.Background(), domain.GenerationJob{ID: "job-audio-fallback"}, &provider.AudioResult{Bytes: []byte("abcd")})
+	if err != nil {
+		t.Fatalf("audioResultURI returned error: %v", err)
+	}
+	if uri != "manmu://providers/audio/inline?bytes=4" {
+		t.Fatalf("expected inline placeholder URI, got %q", uri)
+	}
+}
+
+func TestAudioResultURIPrefersProviderURL(t *testing.T) {
+	t.Parallel()
+
+	storage := media.NewMemoryStorage()
+	svc := NewProductionService(repo.NewMemoryProductionRepository(), nil)
+	svc.SetMediaStorage(storage)
+	uri, err := svc.audioResultURI(context.Background(), domain.GenerationJob{ID: "job-audio-url"}, &provider.AudioResult{URL: "https://cdn.example.com/a.mp3"})
+	if err != nil {
+		t.Fatalf("audioResultURI returned error: %v", err)
+	}
+	if uri != "https://cdn.example.com/a.mp3" {
+		t.Fatalf("expected provider URL preserved, got %q", uri)
 	}
 }

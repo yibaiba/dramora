@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
@@ -74,6 +75,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	projectSvc := service.NewProjectService(projectRepo)
 	productionSvc.SetProjectService(projectSvc)
+	productionSvc.SetMediaStorage(media.NewMemoryStorage())
 
 	if workerMetricsRepo != nil {
 		productionSvc.SetWorkerMetricsRepository(workerMetricsRepo, logger)

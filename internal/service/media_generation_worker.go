@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -151,7 +152,12 @@ func (s *ProductionService) processAudioGenerationJob(ctx context.Context, gener
 		_, _ = s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusFailed, "", "audio worker synthesize failed")
 		return err
 	}
-	resultURI := strings.TrimSpace(audioResultURI(result))
+	resultURI, uriErr := s.audioResultURI(ctx, current, result)
+	if uriErr != nil {
+		_, _ = s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusFailed, "", "audio worker failed to persist result bytes")
+		return uriErr
+	}
+	resultURI = strings.TrimSpace(resultURI)
 	if resultURI == "" {
 		_, _ = s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusFailed, "", "audio worker missing result uri")
 		return fmt.Errorf("%w: audio provider returned no usable result", domain.ErrInvalidInput)
@@ -169,19 +175,83 @@ func (s *ProductionService) processAudioGenerationJob(ctx context.Context, gener
 	return nil
 }
 
-func audioResultURI(result *provider.AudioResult) string {
+// audioResultURI 把 audio provider 的结果转换为可被资产层引用的 URI。
+//
+// 优先级：
+//  1. provider 返回 URL —— 直接复用。
+//  2. provider 返回 Bytes 且注入了 mediaStorage —— Put 到存储并使用返回 URI。
+//  3. provider 返回 Bytes 但没有 mediaStorage —— 回落到 inline placeholder
+//     （仅用于本地开发 / 老路径，不应在生产链路上长期保留）。
+func (s *ProductionService) audioResultURI(
+	ctx context.Context,
+	job domain.GenerationJob,
+	result *provider.AudioResult,
+) (string, error) {
 	if result == nil {
-		return ""
+		return "", nil
 	}
-	if strings.TrimSpace(result.URL) != "" {
-		return result.URL
+	if url := strings.TrimSpace(result.URL); url != "" {
+		return url, nil
 	}
-	if len(result.Bytes) > 0 {
-		// MVP 占位：真正的二进制结果应当落到对象存储，这里先用 in-memory marker
-		// 表明已成功生成、长度为 N 字节，后续 PR 替换为对象存储 URL。
-		return fmt.Sprintf("manmu://providers/audio/inline?bytes=%d", len(result.Bytes))
+	if len(result.Bytes) == 0 {
+		return "", nil
 	}
-	return ""
+	if s == nil || s.mediaStorage == nil {
+		return fmt.Sprintf("manmu://providers/audio/inline?bytes=%d", len(result.Bytes)), nil
+	}
+	ext := audioBytesExtension(stringParam(job.Params, "format"))
+	key := fmt.Sprintf("audio/%s%s", job.ID, ext)
+	obj, err := s.mediaStorage.Put(ctx, key, bytes.NewReader(result.Bytes), audioBytesContentType(ext))
+	if err != nil {
+		return "", fmt.Errorf("media storage put audio bytes: %w", err)
+	}
+	return obj.URI, nil
+}
+
+func audioBytesExtension(format string) string {
+	f := strings.ToLower(strings.TrimSpace(format))
+	switch f {
+	case "", "mp3":
+		return ".mp3"
+	case "wav":
+		return ".wav"
+	case "flac":
+		return ".flac"
+	case "ogg":
+		return ".ogg"
+	case "opus":
+		return ".opus"
+	case "aac":
+		return ".aac"
+	case "m4a":
+		return ".m4a"
+	default:
+		if strings.HasPrefix(f, ".") {
+			return f
+		}
+		return "." + f
+	}
+}
+
+func audioBytesContentType(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".mp3":
+		return "audio/mpeg"
+	case ".wav":
+		return "audio/wav"
+	case ".flac":
+		return "audio/flac"
+	case ".ogg":
+		return "audio/ogg"
+	case ".opus":
+		return "audio/opus"
+	case ".aac":
+		return "audio/aac"
+	case ".m4a":
+		return "audio/mp4"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 // completeMediaDownload 是 image / audio worker 共用的资产持久化路径，
