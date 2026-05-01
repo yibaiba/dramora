@@ -51,29 +51,38 @@ func (s *AgentService) callLLM(ctx context.Context, role string, prompt string) 
 		return nil, fmt.Errorf("chat 端点未配置: %w", err)
 	}
 
-	client := provider.NewChatClient(
-		cfg.BaseURL, cfg.APIKey, cfg.Model,
-		time.Duration(cfg.TimeoutMS)*time.Millisecond,
-	)
+	llm, err := provider.NewLLMProvider(provider.LLMConfig{
+		ProviderType: cfg.ResolvedProviderType(),
+		BaseURL:      cfg.BaseURL,
+		APIKey:       cfg.APIKey,
+		Model:        cfg.Model,
+		Timeout:      time.Duration(cfg.TimeoutMS) * time.Millisecond,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("初始化 LLM 适配器失败: %w", err)
+	}
 
 	start := time.Now()
-	resp, err := client.Complete(ctx, []provider.ChatMessage{
-		{Role: "system", Content: systemPromptForRole(role)},
-		{Role: "user", Content: prompt},
+	resp, err := llm.Complete(ctx, provider.LLMRequest{
+		Model: cfg.Model,
+		Messages: []provider.ChatMessage{
+			{Role: "system", Content: systemPromptForRole(role)},
+			{Role: "user", Content: prompt},
+		},
 	})
 	elapsed := time.Since(start).Milliseconds()
 	if err != nil {
 		return nil, err
 	}
 
-	content := resp.Content()
+	content := resp.Content
 	highlights := extractHighlights(role, content)
 
 	return &AgentResult{
 		Role:        role,
 		Output:      content,
 		Highlights:  highlights,
-		TokenCount:  resp.Usage.TotalTokens,
+		TokenCount:  resp.TotalTokens,
 		DurationMS:  elapsed,
 		RawResponse: content,
 	}, nil

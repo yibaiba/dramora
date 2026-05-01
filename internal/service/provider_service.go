@@ -28,6 +28,7 @@ func (s *ProviderService) GetProviderConfig(ctx context.Context, capability stri
 
 type SaveProviderConfigInput struct {
 	Capability     string
+	ProviderType   string
 	BaseURL        string
 	APIKey         string
 	Model          string
@@ -37,6 +38,15 @@ type SaveProviderConfigInput struct {
 	MaxRetries     int
 }
 
+// ValidProviderTypes lists provider adapter implementations recognised by the
+// AgentService / NewLLMProvider factory. New entries must be added in the
+// provider package as well.
+var ValidProviderTypes = map[string]bool{
+	"openai":    true,
+	"anthropic": true,
+	"mock":      true,
+}
+
 func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProviderConfigInput) (domain.ProviderConfig, error) {
 	if input.Capability == "" || input.BaseURL == "" || input.APIKey == "" || input.Model == "" {
 		return domain.ProviderConfig{}, fmt.Errorf("%w: capability, base_url, api_key, model required", domain.ErrInvalidInput)
@@ -44,6 +54,12 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 	validCaps := map[string]bool{"chat": true, "image": true, "video": true, "audio": true}
 	if !validCaps[input.Capability] {
 		return domain.ProviderConfig{}, fmt.Errorf("%w: capability must be chat|image|video|audio", domain.ErrInvalidInput)
+	}
+	if input.ProviderType == "" {
+		input.ProviderType = "openai"
+	}
+	if !ValidProviderTypes[input.ProviderType] {
+		return domain.ProviderConfig{}, fmt.Errorf("%w: provider_type must be openai|anthropic|mock", domain.ErrInvalidInput)
 	}
 	if input.CreditUnit == "" {
 		input.CreditUnit = "per_call"
@@ -63,6 +79,7 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 	return s.configs.SaveProviderConfig(ctx, repo.SaveProviderConfigParams{
 		ID:             id,
 		Capability:     input.Capability,
+		ProviderType:   input.ProviderType,
 		BaseURL:        input.BaseURL,
 		APIKey:         input.APIKey,
 		Model:          input.Model,
@@ -84,6 +101,12 @@ func (s *ProviderService) TestProviderConfig(ctx context.Context, capability str
 	cfg, err := s.configs.GetProviderConfig(ctx, capability)
 	if err != nil {
 		return TestProviderResult{Error: "端点未配置"}
+	}
+
+	// Mock adapters never hit the network; report OK immediately so the
+	// admin UI does not flag deterministic offline configs as broken.
+	if cfg.ResolvedProviderType() == "mock" {
+		return TestProviderResult{OK: true, Model: cfg.Model, LatencyMS: 0}
 	}
 
 	start := time.Now()

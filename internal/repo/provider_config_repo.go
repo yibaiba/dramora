@@ -10,6 +10,7 @@ import (
 type SaveProviderConfigParams struct {
 	ID             string
 	Capability     string
+	ProviderType   string
 	BaseURL        string
 	APIKey         string
 	Model          string
@@ -36,7 +37,8 @@ func NewSQLiteProviderConfigRepository(db *sql.DB) *SQLiteProviderConfigReposito
 
 func (r *SQLiteProviderConfigRepository) ListProviderConfigs(ctx context.Context) ([]domain.ProviderConfig, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT id, capability, base_url, api_key, model, credits_per_unit, credit_unit,
+		SELECT id, capability, COALESCE(provider_type, 'openai'),
+		       base_url, api_key, model, credits_per_unit, credit_unit,
 		       timeout_ms, max_retries, is_enabled,
 		       COALESCE(updated_at, '0001-01-01T00:00:00Z'), COALESCE(updated_by, '')
 		FROM provider_configs
@@ -59,7 +61,8 @@ func (r *SQLiteProviderConfigRepository) ListProviderConfigs(ctx context.Context
 
 func (r *SQLiteProviderConfigRepository) GetProviderConfig(ctx context.Context, capability string) (domain.ProviderConfig, error) {
 	row := r.db.QueryRowContext(ctx, `
-		SELECT id, capability, base_url, api_key, model, credits_per_unit, credit_unit,
+		SELECT id, capability, COALESCE(provider_type, 'openai'),
+		       base_url, api_key, model, credits_per_unit, credit_unit,
 		       timeout_ms, max_retries, is_enabled,
 		       COALESCE(updated_at, '0001-01-01T00:00:00Z'), COALESCE(updated_by, '')
 		FROM provider_configs
@@ -72,11 +75,16 @@ func (r *SQLiteProviderConfigRepository) GetProviderConfig(ctx context.Context, 
 }
 
 func (r *SQLiteProviderConfigRepository) SaveProviderConfig(ctx context.Context, params SaveProviderConfigParams) (domain.ProviderConfig, error) {
+	providerType := params.ProviderType
+	if providerType == "" {
+		providerType = "openai"
+	}
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO provider_configs (id, capability, base_url, api_key, model, credits_per_unit, credit_unit, timeout_ms, max_retries, is_enabled, updated_by)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+		INSERT INTO provider_configs (id, capability, provider_type, base_url, api_key, model, credits_per_unit, credit_unit, timeout_ms, max_retries, is_enabled, updated_by)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
 		ON CONFLICT (capability) DO UPDATE
-		SET base_url = excluded.base_url,
+		SET provider_type = excluded.provider_type,
+		    base_url = excluded.base_url,
 		    api_key = excluded.api_key,
 		    model = excluded.model,
 		    credits_per_unit = excluded.credits_per_unit,
@@ -86,7 +94,7 @@ func (r *SQLiteProviderConfigRepository) SaveProviderConfig(ctx context.Context,
 		    is_enabled = 1,
 		    updated_by = excluded.updated_by,
 		    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
-		params.ID, params.Capability, params.BaseURL, params.APIKey, params.Model,
+		params.ID, params.Capability, providerType, params.BaseURL, params.APIKey, params.Model,
 		params.CreditsPerUnit, params.CreditUnit, params.TimeoutMS, params.MaxRetries, params.UpdatedBy,
 	)
 	if err != nil {
@@ -98,9 +106,12 @@ func (r *SQLiteProviderConfigRepository) SaveProviderConfig(ctx context.Context,
 func scanProviderConfig(row rowScanner) (domain.ProviderConfig, error) {
 	var c domain.ProviderConfig
 	err := row.Scan(
-		&c.ID, &c.Capability, &c.BaseURL, &c.APIKey, &c.Model,
+		&c.ID, &c.Capability, &c.ProviderType, &c.BaseURL, &c.APIKey, &c.Model,
 		&c.CreditsPerUnit, &c.CreditUnit, &c.TimeoutMS, &c.MaxRetries,
 		&c.IsEnabled, &c.UpdatedAt, &c.UpdatedBy,
 	)
+	if err == nil && c.ProviderType == "" {
+		c.ProviderType = "openai"
+	}
 	return c, err
 }

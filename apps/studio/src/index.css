@@ -4421,6 +4421,28 @@ p {
   outline-offset: 1px;
 }
 
+.field-label select {
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.field-label select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.field-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  opacity: 0.85;
+  line-height: 1.4;
+  margin-top: 0.15rem;
+}
+
 .provider-actions {
   display: flex;
   gap: 0.5rem;

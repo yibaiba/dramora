@@ -13,6 +13,7 @@ import (
 type providerConfigDTO struct {
 	ID             string `json:"id"`
 	Capability     string `json:"capability"`
+	ProviderType   string `json:"provider_type"`
 	BaseURL        string `json:"base_url"`
 	APIKey         string `json:"api_key"`
 	Model          string `json:"model"`
@@ -29,6 +30,7 @@ func providerConfigToDTO(c domain.ProviderConfig) providerConfigDTO {
 	return providerConfigDTO{
 		ID:             c.ID,
 		Capability:     c.Capability,
+		ProviderType:   c.ResolvedProviderType(),
 		BaseURL:        c.BaseURL,
 		APIKey:         c.MaskedAPIKey(),
 		Model:          c.Model,
@@ -57,6 +59,7 @@ func (a *api) listProviderConfigs(w http.ResponseWriter, r *http.Request) {
 
 type saveProviderConfigRequest struct {
 	Capability     string `json:"capability"`
+	ProviderType   string `json:"provider_type"`
 	BaseURL        string `json:"base_url"`
 	APIKey         string `json:"api_key"`
 	Model          string `json:"model"`
@@ -74,6 +77,7 @@ func (a *api) saveProviderConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	cfg, err := a.providerService.SaveProviderConfig(r.Context(), service.SaveProviderConfigInput{
 		Capability:     req.Capability,
+		ProviderType:   req.ProviderType,
 		BaseURL:        req.BaseURL,
 		APIKey:         req.APIKey,
 		Model:          req.Model,

@@ -2585,6 +2585,10 @@ components:
         capability:
           type: string
           enum: [chat, image, video, audio]
+        provider_type:
+          type: string
+          enum: [openai, anthropic, mock]
+          description: LLM adapter implementation. Defaults to openai for legacy rows.
         base_url:
           type: string
         api_key:
@@ -2614,6 +2618,10 @@ components:
         capability:
           type: string
           enum: [chat, image, video, audio]
+        provider_type:
+          type: string
+          enum: [openai, anthropic, mock]
+          description: Which LLM adapter to use. Defaults to openai when omitted.
         base_url:
           type: string
           minLength: 1

@@ -511,9 +511,12 @@ export type ApprovalGateReviewRequest = {
 
 export type ProviderCapability = 'chat' | 'image' | 'video' | 'audio'
 
+export type ProviderType = 'openai' | 'anthropic' | 'mock'
+
 export type ProviderConfig = {
   id: string
   capability: ProviderCapability
+  provider_type: ProviderType
   base_url: string
   api_key: string
   model: string
@@ -528,6 +531,7 @@ export type ProviderConfig = {
 
 export type SaveProviderConfigRequest = {
   capability: ProviderCapability
+  provider_type: ProviderType
   base_url: string
   api_key: string
   model: string

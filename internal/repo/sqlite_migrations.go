@@ -350,6 +350,7 @@ var sqliteMigrations = []string{
 	`CREATE TABLE IF NOT EXISTS provider_configs (
 		id TEXT PRIMARY KEY,
 		capability TEXT NOT NULL UNIQUE,
+		provider_type TEXT NOT NULL DEFAULT 'openai',
 		base_url TEXT NOT NULL,
 		api_key TEXT NOT NULL,
 		model TEXT NOT NULL,
@@ -361,6 +362,7 @@ var sqliteMigrations = []string{
 		updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
 		updated_by TEXT
 	)`,
+	`ALTER TABLE provider_configs ADD COLUMN provider_type TEXT NOT NULL DEFAULT 'openai'`,
 
 	// Phase 2: organization_invitations
 	`CREATE TABLE IF NOT EXISTS organization_invitations (

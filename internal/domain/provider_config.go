@@ -5,6 +5,7 @@ import "time"
 type ProviderConfig struct {
 	ID             string
 	Capability     string
+	ProviderType   string
 	BaseURL        string
 	APIKey         string
 	Model          string
@@ -15,6 +16,15 @@ type ProviderConfig struct {
 	IsEnabled      bool
 	UpdatedAt      time.Time
 	UpdatedBy      string
+}
+
+// ResolvedProviderType returns the explicit provider_type when set,
+// otherwise falls back to "openai" so legacy rows keep working.
+func (c ProviderConfig) ResolvedProviderType() string {
+	if c.ProviderType == "" {
+		return "openai"
+	}
+	return c.ProviderType
 }
 
 func (c ProviderConfig) MaskedAPIKey() string {

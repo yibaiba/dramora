@@ -2,13 +2,25 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2 } from 'lucide-react'
 import { useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
-import type { ProviderCapability, ProviderConfig, SaveProviderConfigRequest, TestProviderResult } from '../../api/types'
+import type {
+  ProviderCapability,
+  ProviderConfig,
+  ProviderType,
+  SaveProviderConfigRequest,
+  TestProviderResult,
+} from '../../api/types'
 
 const CAPABILITIES: { key: ProviderCapability; label: string; icon: typeof Zap }[] = [
   { icon: Zap, key: 'chat', label: 'LLM 对话' },
   { icon: Image, key: 'image', label: '图像生成' },
   { icon: Video, key: 'video', label: '视频生成' },
   { icon: Volume2, key: 'audio', label: 'TTS 语音' },
+]
+
+const PROVIDER_TYPE_OPTIONS: { value: ProviderType; label: string; hint: string }[] = [
+  { hint: 'OpenAI 兼容 /chat/completions 网关（DeepSeek / Moonshot / vLLM 等）', label: 'OpenAI 兼容', value: 'openai' },
+  { hint: 'Anthropic /v1/messages，使用 x-api-key 与 system 顶层字段', label: 'Anthropic Claude', value: 'anthropic' },
+  { hint: '本地 mock 适配器：不发网络请求，输出可解析的占位 JSON', label: 'Mock（离线）', value: 'mock' },
 ]
 
 export function AdminSettingsPage() {
@@ -53,6 +65,7 @@ function ProviderCard({
   const saveMutation = useSaveProviderConfig()
   const testMutation = useTestProviderConfig()
   const [editing, setEditing] = useState(!config)
+  const [providerType, setProviderType] = useState<ProviderType>(config?.provider_type ?? 'openai')
   const [baseUrl, setBaseUrl] = useState(config?.base_url ?? '')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState(config?.model ?? '')
@@ -69,6 +82,7 @@ function ProviderCard({
       credits_per_unit: creditsPerUnit,
       max_retries: 3,
       model,
+      provider_type: providerType,
       timeout_ms: 120000,
     }
     saveMutation.mutate(request, {
@@ -97,6 +111,8 @@ function ProviderCard({
       {!editing && config ? (
         <div className="provider-card-body">
           <dl className="provider-fields">
+            <dt>适配器</dt>
+            <dd>{providerTypeLabel(config.provider_type)}</dd>
             <dt>Base URL</dt>
             <dd>{config.base_url}</dd>
             <dt>API Key</dt>
@@ -124,6 +140,22 @@ function ProviderCard({
         </div>
       ) : (
         <form className="provider-card-body" onSubmit={handleSave}>
+          <label className="field-label">
+            适配器
+            <select
+              value={providerType}
+              onChange={(e) => setProviderType(e.target.value as ProviderType)}
+            >
+              {PROVIDER_TYPE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <span className="field-hint">
+              {PROVIDER_TYPE_OPTIONS.find((opt) => opt.value === providerType)?.hint}
+            </span>
+          </label>
           <label className="field-label">
             Base URL
             <input type="url" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required placeholder="https://api.example.com/v1" />
@@ -157,4 +189,8 @@ function ProviderCard({
       )}
     </section>
   )
+}
+
+function providerTypeLabel(type: ProviderType): string {
+  return PROVIDER_TYPE_OPTIONS.find((opt) => opt.value === type)?.label ?? type
 }
