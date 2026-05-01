@@ -604,6 +604,9 @@ export type LLMTelemetrySnapshot = {
   by_vendor: Record<string, number>
   avg_duration_ms_by_vendor: Record<string, number>
   by_capability: Record<string, number>
+  avg_duration_ms_by_capability?: Record<string, number>
+  errors_by_vendor?: Record<string, number>
+  errors_by_capability?: Record<string, number>
   recent_events: LLMTelemetryEvent[]
   last_event_at?: string
 }

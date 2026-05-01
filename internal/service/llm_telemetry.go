@@ -24,14 +24,17 @@ type LLMTelemetryEvent struct {
 
 // LLMTelemetrySnapshot 暴露给 admin 面板的聚合视图。
 type LLMTelemetrySnapshot struct {
-	TotalCalls          uint64              `json:"total_calls"`
-	SuccessCalls        uint64              `json:"success_calls"`
-	ErrorCalls          uint64              `json:"error_calls"`
-	ByVendor            map[string]uint64   `json:"by_vendor"`
-	ByCapability        map[string]uint64   `json:"by_capability"`
-	AvgDurationMSVendor map[string]int64    `json:"avg_duration_ms_by_vendor"`
-	RecentEvents        []LLMTelemetryEvent `json:"recent_events"`
-	LastEventAt         time.Time           `json:"last_event_at,omitempty"`
+	TotalCalls              uint64              `json:"total_calls"`
+	SuccessCalls            uint64              `json:"success_calls"`
+	ErrorCalls              uint64              `json:"error_calls"`
+	ByVendor                map[string]uint64   `json:"by_vendor"`
+	ByCapability            map[string]uint64   `json:"by_capability"`
+	AvgDurationMSVendor     map[string]int64    `json:"avg_duration_ms_by_vendor"`
+	AvgDurationMSCapability map[string]int64    `json:"avg_duration_ms_by_capability"`
+	ErrorsByVendor          map[string]uint64   `json:"errors_by_vendor"`
+	ErrorsByCapability      map[string]uint64   `json:"errors_by_capability"`
+	RecentEvents            []LLMTelemetryEvent `json:"recent_events"`
+	LastEventAt             time.Time           `json:"last_event_at,omitempty"`
 }
 
 const llmTelemetryRingCapacity = 200
@@ -44,21 +47,27 @@ type llmTelemetry struct {
 	successCalls uint64
 	errorCalls   uint64
 
-	mu               sync.Mutex
-	ring             []LLMTelemetryEvent
-	cursor           int
-	full             bool
-	vendorCounts     map[string]uint64
-	vendorDurations  map[string]int64 // 累计 ms，配合 vendorCounts 计算均值
-	capabilityCounts map[string]uint64
+	mu                  sync.Mutex
+	ring                []LLMTelemetryEvent
+	cursor              int
+	full                bool
+	vendorCounts        map[string]uint64
+	vendorDurations     map[string]int64 // 累计 ms，配合 vendorCounts 计算均值
+	capabilityCounts    map[string]uint64
+	capabilityDurations map[string]int64
+	vendorErrors        map[string]uint64
+	capabilityErrors    map[string]uint64
 }
 
 func newLLMTelemetry() *llmTelemetry {
 	return &llmTelemetry{
-		ring:             make([]LLMTelemetryEvent, llmTelemetryRingCapacity),
-		vendorCounts:     map[string]uint64{},
-		vendorDurations:  map[string]int64{},
-		capabilityCounts: map[string]uint64{},
+		ring:                make([]LLMTelemetryEvent, llmTelemetryRingCapacity),
+		vendorCounts:        map[string]uint64{},
+		vendorDurations:     map[string]int64{},
+		capabilityCounts:    map[string]uint64{},
+		capabilityDurations: map[string]int64{},
+		vendorErrors:        map[string]uint64{},
+		capabilityErrors:    map[string]uint64{},
 	}
 }
 
@@ -88,16 +97,24 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 	t.vendorCounts[ev.Vendor]++
 	t.vendorDurations[ev.Vendor] += ev.DurationMS
 	t.capabilityCounts[ev.Capability]++
+	t.capabilityDurations[ev.Capability] += ev.DurationMS
+	if !ev.Success {
+		t.vendorErrors[ev.Vendor]++
+		t.capabilityErrors[ev.Capability]++
+	}
 }
 
 func (t *llmTelemetry) snapshot() LLMTelemetrySnapshot {
 	snap := LLMTelemetrySnapshot{
-		TotalCalls:          atomic.LoadUint64(&t.totalCalls),
-		SuccessCalls:        atomic.LoadUint64(&t.successCalls),
-		ErrorCalls:          atomic.LoadUint64(&t.errorCalls),
-		ByVendor:            map[string]uint64{},
-		ByCapability:        map[string]uint64{},
-		AvgDurationMSVendor: map[string]int64{},
+		TotalCalls:              atomic.LoadUint64(&t.totalCalls),
+		SuccessCalls:            atomic.LoadUint64(&t.successCalls),
+		ErrorCalls:              atomic.LoadUint64(&t.errorCalls),
+		ByVendor:                map[string]uint64{},
+		ByCapability:            map[string]uint64{},
+		AvgDurationMSVendor:     map[string]int64{},
+		AvgDurationMSCapability: map[string]int64{},
+		ErrorsByVendor:          map[string]uint64{},
+		ErrorsByCapability:      map[string]uint64{},
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -111,6 +128,17 @@ func (t *llmTelemetry) snapshot() LLMTelemetrySnapshot {
 		if t.vendorCounts[k] > 0 {
 			snap.AvgDurationMSVendor[k] = v / int64(t.vendorCounts[k])
 		}
+	}
+	for k, v := range t.capabilityDurations {
+		if t.capabilityCounts[k] > 0 {
+			snap.AvgDurationMSCapability[k] = v / int64(t.capabilityCounts[k])
+		}
+	}
+	for k, v := range t.vendorErrors {
+		snap.ErrorsByVendor[k] = v
+	}
+	for k, v := range t.capabilityErrors {
+		snap.ErrorsByCapability[k] = v
 	}
 	// recent events: 取最近最多 50 条，按时间倒序
 	const recentCap = 50

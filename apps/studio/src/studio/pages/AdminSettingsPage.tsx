@@ -219,7 +219,8 @@ function LLMTelemetryPanel() {
                 key={vendor}
                 label={`${vendor} · 平均`}
                 value={`${data.avg_duration_ms_by_vendor?.[vendor] ?? 0}ms`}
-                sub={`${count} 次`}
+                sub={`${count} 次${data.errors_by_vendor?.[vendor] ? ` · 失败 ${data.errors_by_vendor[vendor]}` : ''}`}
+                tone={data.errors_by_vendor?.[vendor] ? 'warn' : undefined}
               />
             ))}
           </div>
@@ -232,7 +233,15 @@ function LLMTelemetryPanel() {
                 按能力：
               </span>
               {Object.entries(data.by_capability).map(([cap, count]) => (
-                <Stat key={cap} label={cap} value={count} />
+                <Stat
+                  key={cap}
+                  label={cap}
+                  value={count}
+                  sub={`${data.avg_duration_ms_by_capability?.[cap] ?? 0}ms${
+                    data.errors_by_capability?.[cap] ? ` · 失败 ${data.errors_by_capability[cap]}` : ''
+                  }`}
+                  tone={data.errors_by_capability?.[cap] ? 'warn' : undefined}
+                />
               ))}
             </div>
           ) : null}

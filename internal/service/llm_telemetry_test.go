@@ -90,3 +90,32 @@ func TestLLMTelemetryDefaultsCapabilityWhenMissing(t *testing.T) {
 		t.Fatalf("missing capability should default to chat, got %v", snap.ByCapability)
 	}
 }
+
+func TestLLMTelemetryTracksErrorsAndCapabilityAvg(t *testing.T) {
+	tel := newLLMTelemetry()
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", Mode: "complete", DurationMS: 100, Success: true})
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", Mode: "complete", DurationMS: 200, Success: false, ErrorMessage: "x"})
+	tel.record(LLMTelemetryEvent{Vendor: "anthropic", Capability: "chat", Mode: "stream", DurationMS: 300, Success: false, ErrorMessage: "y"})
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "image", Mode: "generate", DurationMS: 400, Success: true})
+
+	snap := tel.snapshot()
+	if snap.ErrorsByVendor["openai"] != 1 {
+		t.Fatalf("errors_by_vendor[openai]=%d want 1; full=%v", snap.ErrorsByVendor["openai"], snap.ErrorsByVendor)
+	}
+	if snap.ErrorsByVendor["anthropic"] != 1 {
+		t.Fatalf("errors_by_vendor[anthropic]=%d want 1", snap.ErrorsByVendor["anthropic"])
+	}
+	if snap.ErrorsByCapability["chat"] != 2 {
+		t.Fatalf("errors_by_capability[chat]=%d want 2; full=%v", snap.ErrorsByCapability["chat"], snap.ErrorsByCapability)
+	}
+	if snap.ErrorsByCapability["image"] != 0 {
+		t.Fatalf("errors_by_capability[image]=%d want 0", snap.ErrorsByCapability["image"])
+	}
+	// chat avg = (100 + 200 + 300) / 3 = 200
+	if snap.AvgDurationMSCapability["chat"] != 200 {
+		t.Fatalf("avg_chat=%d want 200", snap.AvgDurationMSCapability["chat"])
+	}
+	if snap.AvgDurationMSCapability["image"] != 400 {
+		t.Fatalf("avg_image=%d want 400", snap.AvgDurationMSCapability["image"])
+	}
+}

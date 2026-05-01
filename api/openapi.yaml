@@ -1530,6 +1530,21 @@ paths:
                           adapter path while image/video/audio reflect provider
                           worker calls (image generate, video submit/poll,
                           audio synthesize).
+                      avg_duration_ms_by_capability:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
+                      errors_by_vendor:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
+                      errors_by_capability:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
                       recent_events:
                         type: array
                         items:
