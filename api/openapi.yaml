@@ -1580,6 +1580,26 @@ paths:
                         format: date-time
         "403":
           description: Forbidden — owner/admin role required
+  /api/v1/admin/llm-telemetry:reset:
+    post:
+      summary: Reset LLM telemetry counters and persisted aggregates (owner/admin)
+      description: |
+        Clears the in-process LLM telemetry buffer (per-vendor / per-capability
+        counters, recent events ring) and deletes the persisted aggregate rows.
+        Returns the (now-empty) snapshot. This is a destructive admin action;
+        Studio guards it behind a confirm dialog.
+      responses:
+        "200":
+          description: Telemetry counters cleared; returns the empty snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  llm_telemetry:
+                    type: object
+        "403":
+          description: Forbidden — owner/admin role required
   /api/v1/admin/provider-audit:
     get:
       summary: List provider config audit events (owner/admin)

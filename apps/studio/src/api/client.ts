@@ -502,6 +502,14 @@ export async function fetchLLMTelemetry(): Promise<LLMTelemetrySnapshot> {
   return payload.llm_telemetry
 }
 
+export async function resetLLMTelemetry(): Promise<LLMTelemetrySnapshot> {
+  const payload = await fetchJSON<{ llm_telemetry: LLMTelemetrySnapshot }>(
+    '/api/v1/admin/llm-telemetry:reset',
+    { method: 'POST' },
+  )
+  return payload.llm_telemetry
+}
+
 export async function fetchProviderAuditEvents(filter?: {
   action?: string
   capability?: string

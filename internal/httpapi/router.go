@@ -98,6 +98,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Get("/admin/providers", api.listProviderConfigs)
 			admin.Get("/admin/worker-metrics", api.getAdminWorkerMetrics)
 			admin.Get("/admin/llm-telemetry", api.getAdminLLMTelemetry)
+			admin.Post("/admin/llm-telemetry:reset", api.resetAdminLLMTelemetry)
 			admin.Get("/admin/provider-audit", api.listProviderAuditEvents)
 			admin.Post("/organizations/invitations", api.createInvitation)
 			admin.Get("/organizations/invitations", api.listInvitations)

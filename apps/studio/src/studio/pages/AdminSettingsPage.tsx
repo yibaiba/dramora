@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2, Activity, Download } from 'lucide-react'
-import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
+import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useResetLLMTelemetry, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
 import { downloadProviderAuditCSV } from '../../api/client'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
@@ -235,13 +235,95 @@ function ProviderAuditPanel() {
 
 function LLMTelemetryPanel() {
   const { data, isLoading, isError, error } = useLLMTelemetry()
+  const resetMutation = useResetLLMTelemetry()
+
+  const handleReset = useCallback(() => {
+    if (resetMutation.isPending) return
+    if (typeof window !== 'undefined' && !window.confirm('确定要重置 LLM Telemetry 计数吗？此操作会清空所有 vendor / capability 累计数据，且不可撤销。')) {
+      return
+    }
+    resetMutation.mutate()
+  }, [resetMutation])
+
+  const alerts = useMemo(() => {
+    if (!data) return [] as { tone: 'warn' | 'critical'; text: string }[]
+    const out: { tone: 'warn' | 'critical'; text: string }[] = []
+    const total = data.total_calls ?? 0
+    const errs = data.error_calls ?? 0
+    if (total >= 10 && errs > 0) {
+      const rate = (errs / total) * 100
+      if (rate >= 25) {
+        out.push({ tone: 'critical', text: `整体失败率 ${rate.toFixed(1)}%（${errs}/${total}），建议立即排查 provider 配置或额度。` })
+      } else if (rate >= 10) {
+        out.push({ tone: 'warn', text: `整体失败率 ${rate.toFixed(1)}%（${errs}/${total}），建议关注最近事件中的错误。` })
+      }
+    }
+    Object.entries(data.errors_by_vendor ?? {}).forEach(([vendor, n]) => {
+      if (n >= 5) {
+        out.push({ tone: 'critical', text: `${vendor} 已累计 ${n} 次失败，可能 vendor 异常。` })
+      } else if (n >= 3) {
+        out.push({ tone: 'warn', text: `${vendor} 已累计 ${n} 次失败，建议检查 API key / 网络。` })
+      }
+    })
+    Object.entries(data.errors_by_capability ?? {}).forEach(([cap, n]) => {
+      if (n >= 5) {
+        out.push({ tone: 'critical', text: `${cap} capability 累计 ${n} 次失败。` })
+      }
+    })
+    return out
+  }, [data])
+
   return (
     <section className="provider-card" style={{ marginTop: 24 }}>
       <header className="provider-card-header">
         <Activity size={18} aria-hidden="true" />
         <h2>LLM 调用 Telemetry</h2>
         <span className="provider-card-hint">每 10s 刷新 · 进程内最近 50 条</span>
+        <button
+          type="button"
+          onClick={handleReset}
+          disabled={resetMutation.isPending}
+          style={{
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            fontSize: 12,
+            borderRadius: 6,
+            border: '1px solid rgba(255,196,87,0.4)',
+            background: 'rgba(255,196,87,0.08)',
+            color: '#ffc457',
+            cursor: resetMutation.isPending ? 'wait' : 'pointer',
+          }}
+          title="清空所有 vendor / capability 累计计数与最近事件，并删除持久化聚合行"
+        >
+          {resetMutation.isPending ? '重置中…' : '重置统计'}
+        </button>
       </header>
+      {resetMutation.isError && (
+        <p className="error" style={{ marginTop: 4 }}>
+          重置失败：{(resetMutation.error as Error)?.message ?? 'unknown'}
+        </p>
+      )}
+      {alerts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {alerts.map((a, i) => (
+            <div
+              key={i}
+              role="alert"
+              style={{
+                padding: '8px 12px',
+                borderRadius: 6,
+                fontSize: 12,
+                background: a.tone === 'critical' ? 'rgba(255,107,107,0.12)' : 'rgba(255,196,87,0.12)',
+                border: `1px solid ${a.tone === 'critical' ? 'rgba(255,107,107,0.4)' : 'rgba(255,196,87,0.4)'}`,
+                color: a.tone === 'critical' ? '#ff6b6b' : '#ffc457',
+              }}
+            >
+              {a.tone === 'critical' ? '⚠ 严重：' : '⚠ 提示：'}
+              {a.text}
+            </div>
+          ))}
+        </div>
+      )}
       {isLoading ? (
         <p className="muted">加载中…</p>
       ) : isError ? (

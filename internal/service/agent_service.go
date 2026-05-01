@@ -63,6 +63,14 @@ func (s *AgentService) HydrateTelemetry(ctx context.Context) error {
 	return s.telemetry.Hydrate(ctx)
 }
 
+// ResetTelemetry clears in-memory counters/recent events and persisted aggregates.
+func (s *AgentService) ResetTelemetry(ctx context.Context) error {
+	if s == nil || s.telemetry == nil {
+		return nil
+	}
+	return s.telemetry.Reset(ctx)
+}
+
 func (s *AgentService) recordTelemetry(ev LLMTelemetryEvent) {
 	if s == nil || s.telemetry == nil {
 		return

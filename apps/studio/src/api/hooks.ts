@@ -52,6 +52,7 @@ import {
 	testProviderConfig,
 	fetchWorkerMetrics,
 	fetchLLMTelemetry,
+	resetLLMTelemetry,
 	fetchProviderAuditEvents,
 	updateStoryboardShot,
 } from './client'
@@ -519,6 +520,16 @@ export function useLLMTelemetry(enabled = true) {
     queryFn: fetchLLMTelemetry,
     queryKey: ['admin', 'llm-telemetry'],
     refetchInterval: enabled ? 10000 : false,
+  })
+}
+
+export function useResetLLMTelemetry() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: resetLLMTelemetry,
+    onSuccess: (snapshot) => {
+      queryClient.setQueryData(['admin', 'llm-telemetry'], snapshot)
+    },
   })
 }
 

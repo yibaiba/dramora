@@ -65,6 +65,29 @@ type llmTelemetry struct {
 	repository repo.LLMTelemetryRepository
 }
 
+// Reset clears in-memory counters, recent events, and persisted aggregates.
+func (t *llmTelemetry) Reset(ctx context.Context) error {
+	t.mu.Lock()
+	r := t.repository
+	t.vendorCounts = map[string]uint64{}
+	t.vendorDurations = map[string]int64{}
+	t.vendorErrors = map[string]uint64{}
+	t.capabilityCounts = map[string]uint64{}
+	t.capabilityDurations = map[string]int64{}
+	t.capabilityErrors = map[string]uint64{}
+	t.ring = t.ring[:0]
+	t.cursor = 0
+	t.full = false
+	t.mu.Unlock()
+	atomic.StoreUint64(&t.totalCalls, 0)
+	atomic.StoreUint64(&t.successCalls, 0)
+	atomic.StoreUint64(&t.errorCalls, 0)
+	if r != nil {
+		return r.Reset(ctx)
+	}
+	return nil
+}
+
 // SetRepository wires a persistent backend so per-vendor / per-capability
 // counters survive process restarts. Safe to call once at startup.
 func (t *llmTelemetry) SetRepository(r repo.LLMTelemetryRepository) {

@@ -32,6 +32,7 @@ type LLMTelemetryAggregateRow struct {
 type LLMTelemetryRepository interface {
 	LoadAll(ctx context.Context) ([]LLMTelemetryAggregateRow, error)
 	RecordCall(ctx context.Context, scope LLMTelemetryAggregateScope, key string, durationMS int64, success bool) error
+	Reset(ctx context.Context) error
 }
 
 // MemoryLLMTelemetryRepository provides an in-memory implementation, used by tests.
@@ -77,6 +78,13 @@ func (r *MemoryLLMTelemetryRepository) RecordCall(
 		row.ErrorCounter++
 	}
 	r.rows[k] = row
+	return nil
+}
+
+func (r *MemoryLLMTelemetryRepository) Reset(_ context.Context) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.rows = map[string]LLMTelemetryAggregateRow{}
 	return nil
 }
 
@@ -136,7 +144,11 @@ func (r *SQLiteLLMTelemetryRepository) RecordCall(
 	return err
 }
 
-// PostgresLLMTelemetryRepository persists aggregates in Postgres.
+func (r *SQLiteLLMTelemetryRepository) Reset(ctx context.Context) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM llm_telemetry_aggregate`)
+	return err
+}
+
 type PostgresLLMTelemetryRepository struct {
 	pool *pgxpool.Pool
 }
@@ -192,5 +204,10 @@ func (r *PostgresLLMTelemetryRepository) RecordCall(
 			total_duration_ms = llm_telemetry_aggregate.total_duration_ms + EXCLUDED.total_duration_ms,
 			updated_at = NOW()
 	`, string(scope), key, errInc, durationMS)
+	return err
+}
+
+func (r *PostgresLLMTelemetryRepository) Reset(ctx context.Context) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM llm_telemetry_aggregate`)
 	return err
 }
