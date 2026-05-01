@@ -9,6 +9,7 @@ import {
   useWorkflowRun,
 } from '../../api/hooks'
 import { TimelineWorkspace } from '../components/TimelineWorkspace'
+import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
 import {
@@ -123,6 +124,8 @@ export function TimelineExportPage() {
           ) : null}
         </article>
       </div>
+
+      <WorkflowRecoveryTimeline workflowRun={workflowRun} />
 
       <article className="surface-card">
         <div className="panel-title-row">
