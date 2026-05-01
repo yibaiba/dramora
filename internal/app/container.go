@@ -19,6 +19,7 @@ type Container struct {
 	ProjectService    *service.ProjectService
 	ProductionService *service.ProductionService
 	ProviderService   *service.ProviderService
+	AgentService      *service.AgentService
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -64,8 +65,10 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	}
 
 	productionSvc := service.NewProductionService(productionRepo, nil)
+	var agentSvc *service.AgentService
 	if providerService != nil {
-		productionSvc.SetAgentService(service.NewAgentService(providerService))
+		agentSvc = service.NewAgentService(providerService)
+		productionSvc.SetAgentService(agentSvc)
 	}
 
 	projectSvc := service.NewProjectService(projectRepo)
@@ -91,6 +94,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		ProjectService:    projectSvc,
 		ProductionService: productionSvc,
 		ProviderService:   providerService,
+		AgentService:      agentSvc,
 	}, nil
 }
 

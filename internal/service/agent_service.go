@@ -88,6 +88,68 @@ func (s *AgentService) callLLM(ctx context.Context, role string, prompt string) 
 	}, nil
 }
 
+// RunSingleAgentStream 执行一次单 Agent 调用并通过 onDelta 回调流式输出。
+// 与 callLLM 一致地复用 buildAgentPrompt + provider 抽象，但走 CompleteStream。
+// contextMap 允许调用方为依赖前序 Agent 的 role（如 outline_planner / screenwriter）
+// 注入已有产出，避免在 HTTP 层重新跑整个 workflow。
+func (s *AgentService) RunSingleAgentStream(ctx context.Context, role string, sourceText string, contextMap map[string]string, onDelta func(string) error) (*AgentResult, error) {
+	if role == "" {
+		return nil, fmt.Errorf("role required")
+	}
+
+	cfg, err := s.providerSvc.GetProviderConfig(ctx, "chat")
+	if err != nil {
+		return nil, fmt.Errorf("chat 端点未配置: %w", err)
+	}
+
+	llm, err := provider.NewLLMProvider(provider.LLMConfig{
+		ProviderType: cfg.ResolvedProviderType(),
+		BaseURL:      cfg.BaseURL,
+		APIKey:       cfg.APIKey,
+		Model:        cfg.Model,
+		Timeout:      time.Duration(cfg.TimeoutMS) * time.Millisecond,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("初始化 LLM 适配器失败: %w", err)
+	}
+
+	bb := workflow.NewBlackboard()
+	for k, v := range contextMap {
+		bb.Write(k, &AgentResult{Role: k, Output: v, RawResponse: v})
+	}
+	prompt := buildAgentPrompt(role, sourceText, bb)
+
+	start := time.Now()
+	resp, err := llm.CompleteStream(ctx, provider.LLMRequest{
+		Model: cfg.Model,
+		Messages: []provider.ChatMessage{
+			{Role: "system", Content: systemPromptForRole(role)},
+			{Role: "user", Content: prompt},
+		},
+	}, func(chunk provider.StreamChunk) error {
+		if onDelta == nil || chunk.Delta == "" {
+			return nil
+		}
+		return onDelta(chunk.Delta)
+	})
+	elapsed := time.Since(start).Milliseconds()
+	if err != nil {
+		return nil, err
+	}
+
+	content := resp.Content
+	highlights := extractHighlights(role, content)
+
+	return &AgentResult{
+		Role:        role,
+		Output:      content,
+		Highlights:  highlights,
+		TokenCount:  resp.TotalTokens,
+		DurationMS:  elapsed,
+		RawResponse: content,
+	}, nil
+}
+
 func (s *AgentService) IsAvailable(ctx context.Context) bool {
 	if s != nil && s.availabilityFunc != nil {
 		return s.availabilityFunc(ctx)

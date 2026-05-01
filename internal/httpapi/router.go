@@ -23,6 +23,7 @@ type RouterConfig struct {
 	ProjectService    *service.ProjectService
 	ProductionService *service.ProductionService
 	ProviderService   *service.ProviderService
+	AgentService      *service.AgentService
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -88,6 +89,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/generation-jobs/{jobId}/recovery", api.getGenerationJobRecovery)
 		r.Get("/episodes/{episodeId}/timeline", api.getEpisodeTimeline)
 		r.Get("/events/stream", streamEventsHandler)
+		r.Post("/agents/stream", api.streamAgentRun)
 
 		// admin routes (owner/admin role required)
 		r.Group(func(admin chi.Router) {
@@ -114,6 +116,7 @@ type api struct {
 	projectService    *service.ProjectService
 	productionService *service.ProductionService
 	providerService   *service.ProviderService
+	agentService      *service.AgentService
 }
 
 func newAPI(cfg RouterConfig) *api {
@@ -123,5 +126,6 @@ func newAPI(cfg RouterConfig) *api {
 		projectService:    cfg.ProjectService,
 		productionService: cfg.ProductionService,
 		providerService:   cfg.ProviderService,
+		agentService:      cfg.AgentService,
 	}
 }

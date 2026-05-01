@@ -1301,6 +1301,43 @@ paths:
       responses:
         "200":
           description: SSE stream
+  /api/v1/agents/stream:
+    post:
+      summary: Run a single LLM agent and stream the response as Server-Sent Events
+      description: |
+        Body must include `role` and `source_text`. Optional `context` map injects
+        prior agent outputs (keyed by role) so dependent agents (e.g. screenwriter)
+        can run without spinning up the full workflow. The response is an
+        `text/event-stream` with frames `event: delta` (incremental tokens),
+        `event: done` (final result), or `event: error`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role, source_text]
+              properties:
+                role:
+                  type: string
+                  example: story_analyst
+                source_text:
+                  type: string
+                context:
+                  type: object
+                  additionalProperties:
+                    type: string
+      responses:
+        "200":
+          description: SSE stream of agent tokens followed by a final done frame
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          description: Invalid request body
+        "503":
+          description: Agent service is not configured
   /api/v1/admin/providers:
     get:
       summary: List configured provider endpoints
