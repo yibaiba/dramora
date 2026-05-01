@@ -21,8 +21,25 @@ const CAPABILITIES: { key: ProviderCapability; label: string; icon: typeof Zap }
 const PROVIDER_TYPE_OPTIONS: { value: ProviderType; label: string; hint: string }[] = [
   { hint: 'OpenAI 兼容 /chat/completions 网关（DeepSeek / Moonshot / vLLM 等）', label: 'OpenAI 兼容', value: 'openai' },
   { hint: 'Anthropic /v1/messages，使用 x-api-key 与 system 顶层字段', label: 'Anthropic Claude', value: 'anthropic' },
+  { hint: 'Volces ARK Seedance 视频生成 (POST /contents/generations/tasks)', label: 'Seedance (ARK)', value: 'seedance' },
   { hint: '本地 mock 适配器：不发网络请求，输出可解析的占位 JSON', label: 'Mock（离线）', value: 'mock' },
 ]
+
+// Mirrors backend service.CapabilityProviderTypes; keep in sync when
+// new vendor adapters are added.
+const CAPABILITY_PROVIDER_TYPES: Record<ProviderCapability, ProviderType[]> = {
+  audio: ['openai', 'mock'],
+  chat: ['openai', 'anthropic', 'mock'],
+  image: ['openai', 'mock'],
+  video: ['seedance', 'mock'],
+}
+
+const CAPABILITY_DEFAULT_PROVIDER_TYPE: Record<ProviderCapability, ProviderType> = {
+  audio: 'openai',
+  chat: 'openai',
+  image: 'openai',
+  video: 'seedance',
+}
 
 export function AdminSettingsPage() {
   const { data: configs = [] } = useProviderConfigs()
@@ -67,7 +84,12 @@ function ProviderCard({
   const saveMutation = useSaveProviderConfig()
   const testMutation = useTestProviderConfig()
   const [editing, setEditing] = useState(!config)
-  const [providerType, setProviderType] = useState<ProviderType>(config?.provider_type ?? 'openai')
+  const allowedTypes = CAPABILITY_PROVIDER_TYPES[capability]
+  const defaultType = CAPABILITY_DEFAULT_PROVIDER_TYPE[capability]
+  const initialType: ProviderType = config?.provider_type && allowedTypes.includes(config.provider_type)
+    ? config.provider_type
+    : defaultType
+  const [providerType, setProviderType] = useState<ProviderType>(initialType)
   const [baseUrl, setBaseUrl] = useState(config?.base_url ?? '')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState(config?.model ?? '')
@@ -148,7 +170,7 @@ function ProviderCard({
               value={providerType}
               onChange={(e) => setProviderType(e.target.value as ProviderType)}
             >
-              {PROVIDER_TYPE_OPTIONS.map((opt) => (
+              {PROVIDER_TYPE_OPTIONS.filter((opt) => allowedTypes.includes(opt.value)).map((opt) => (
                 <option key={opt.value} value={opt.value}>
                   {opt.label}
                 </option>

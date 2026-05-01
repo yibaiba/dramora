@@ -704,6 +704,24 @@ return llm.CompleteStream(ctx, req, onChunk)
 
 The adapter selection, SSE framing, and vendor-specific HTTP details all stay inside `internal/provider`; service code only sees the `LLMProvider` interface.
 
+### 8. Per-capability provider_type whitelist
+
+`provider_type` is a global label, but not every label is meaningful for every capability. `service.CapabilityProviderTypes` is the source of truth for which combinations are accepted by `SaveProviderConfig` and rendered in the Studio admin UI:
+
+| capability | allowed `provider_type` values | default when omitted |
+|------------|-------------------------------|----------------------|
+| `chat`     | `openai`, `anthropic`, `mock` | `openai`            |
+| `image`    | `openai`, `mock`              | `openai`            |
+| `video`    | `seedance`, `mock`            | `seedance`          |
+| `audio`    | `openai`, `mock`              | `openai`            |
+
+Rules:
+
+- `SaveProviderConfig` rejects (`ErrInvalidInput`) any combination not listed above; the error message includes the allowed list for that capability so the admin UI can render it inline.
+- `TestProviderConfig` is capability/vendor-aware: `mock` short-circuits to `OK`; `anthropic` probes `${baseURL}/v1/models` with `x-api-key` + `anthropic-version: 2023-06-01`; `seedance` skips the network round-trip (its endpoint is POST-only) and treats `baseURL + apiKey` non-empty as the sanity check; `openai` probes `${baseURL}/models` with `Authorization: Bearer`.
+- Adding a new vendor adapter requires three coordinated edits: register it in `internal/provider/llm_factory.go` (or its own factory), append it to `service.ValidProviderTypes`, and add it to the relevant capability rows of `service.CapabilityProviderTypes` (and the OpenAPI `enum`).
+- Studio mirrors the matrix in `apps/studio/src/studio/pages/AdminSettingsPage.tsx` (`CAPABILITY_PROVIDER_TYPES` / `CAPABILITY_DEFAULT_PROVIDER_TYPE`); these constants must be updated in lock-step with the backend matrix.
+
 ---
 
 ## Scenario: SQLite default persistence with PostgreSQL fallback

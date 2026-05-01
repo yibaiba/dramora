@@ -2624,8 +2624,11 @@ components:
           enum: [chat, image, video, audio]
         provider_type:
           type: string
-          enum: [openai, anthropic, mock]
-          description: LLM adapter implementation. Defaults to openai for legacy rows.
+          enum: [openai, anthropic, mock, seedance]
+          description: |
+            Vendor adapter implementation. Allowed combinations per capability:
+            chat=openai|anthropic|mock; image=openai|mock; video=seedance|mock;
+            audio=openai|mock. Defaults to openai (chat/image/audio) or seedance (video).
         base_url:
           type: string
         api_key:
@@ -2657,8 +2660,11 @@ components:
           enum: [chat, image, video, audio]
         provider_type:
           type: string
-          enum: [openai, anthropic, mock]
-          description: Which LLM adapter to use. Defaults to openai when omitted.
+          enum: [openai, anthropic, mock, seedance]
+          description: |
+            Vendor adapter. Allowed per capability: chat=openai|anthropic|mock;
+            image=openai|mock; video=seedance|mock; audio=openai|mock. Omitting
+            defaults to openai for chat/image/audio and seedance for video.
         base_url:
           type: string
           minLength: 1
