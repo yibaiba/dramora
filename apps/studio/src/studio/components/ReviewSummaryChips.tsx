@@ -81,6 +81,27 @@ export function ReviewSummaryChips({
       >
         {canCloseRound ? '可收口本轮' : allCleared ? '尚无回传' : '协同处理中'}
       </span>
+      {(() => {
+        const totalPending = storyboardPendingCount + assetsGraphPendingCount
+        const denom = totalPending + totalReturnedCount
+        if (denom === 0) return null
+        const ratio = Math.round((totalReturnedCount / denom) * 100)
+        return (
+          <span
+            className="blackboard-chip blackboard-chip-progress"
+            title={`已回传 ${totalReturnedCount} / 待跟进+回传 ${denom}`}
+            aria-label={`本轮回传进度 ${ratio}%`}
+          >
+            <span className="blackboard-chip-progress-track" aria-hidden="true">
+              <span
+                className="blackboard-chip-progress-fill"
+                style={{ width: `${ratio}%` }}
+              />
+            </span>
+            <span className="blackboard-chip-progress-label">{ratio}%</span>
+          </span>
+        )
+      })()}
     </div>
   )
 }

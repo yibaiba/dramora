@@ -1784,6 +1784,36 @@ p {
   color: #dcfce7;
 }
 
+.blackboard-chip-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-right: 0.65rem;
+}
+
+.blackboard-chip-progress-track {
+  position: relative;
+  width: 60px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.25);
+  overflow: hidden;
+}
+
+.blackboard-chip-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(56, 189, 248, 0.85), rgba(74, 222, 128, 0.85));
+  transition: width 0.25s ease;
+}
+
+.blackboard-chip-progress-label {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+  color: rgba(226, 232, 240, 0.85);
+}
+
 .recovery-card {
   display: flex;
   flex-direction: column;
