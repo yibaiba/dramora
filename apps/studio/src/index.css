@@ -5109,6 +5109,52 @@ p {
   margin-top: 0.35rem;
 }
 
+.invitation-audit-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+  margin-bottom: 0.75rem;
+}
+
+.invitation-audit-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.invitation-audit-search {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.invitation-audit-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.invitation-audit-pager-info {
+  font-size: 0.78rem;
+  color: rgb(148, 163, 184);
+}
+
+.invitation-audit-pager-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
 .invitation-row-actions {
   display: inline-flex;
   gap: 0.5rem;

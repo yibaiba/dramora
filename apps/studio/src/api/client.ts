@@ -517,10 +517,38 @@ export async function resendOrganizationInvitation(invitationId: string): Promis
   return payload.invitation
 }
 
-export async function listInvitationAuditEvents(limit?: number): Promise<InvitationAuditEvent[]> {
-  const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : ''
-  const payload = await fetchJSON<{ events: InvitationAuditEvent[] }>(
+export type InvitationAuditFilter = {
+  limit?: number
+  offset?: number
+  actions?: string[]
+  email?: string
+  since?: string
+  until?: string
+}
+
+export type InvitationAuditPage = {
+  events: InvitationAuditEvent[]
+  has_more: boolean
+  limit: number
+  offset: number
+}
+
+export async function listInvitationAuditEvents(filter: InvitationAuditFilter = {}): Promise<InvitationAuditPage> {
+  const params = new URLSearchParams()
+  if (filter.limit && filter.limit > 0) params.set('limit', String(filter.limit))
+  if (filter.offset && filter.offset > 0) params.set('offset', String(filter.offset))
+  if (filter.actions && filter.actions.length > 0) params.set('action', filter.actions.join(','))
+  if (filter.email && filter.email.trim()) params.set('email', filter.email.trim())
+  if (filter.since) params.set('since', filter.since)
+  if (filter.until) params.set('until', filter.until)
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const payload = await fetchJSON<Partial<InvitationAuditPage>>(
     `/api/v1/organizations/invitations/audit${query}`,
   )
-  return payload.events ?? []
+  return {
+    events: payload.events ?? [],
+    has_more: Boolean(payload.has_more),
+    limit: payload.limit ?? filter.limit ?? 50,
+    offset: payload.offset ?? filter.offset ?? 0,
+  }
 }

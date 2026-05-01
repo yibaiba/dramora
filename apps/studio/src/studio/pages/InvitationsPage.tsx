@@ -44,7 +44,6 @@ export function InvitationsPage() {
   const createMutation = useCreateInvitation()
   const revokeMutation = useRevokeInvitation()
   const resendMutation = useResendInvitation()
-  const auditQuery = useInvitationAuditEvents(isAdmin, 50)
 
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<OrganizationInvitation['role']>('editor')
@@ -56,6 +55,19 @@ export function InvitationsPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [resendError, setResendError] = useState('')
   const [resendingId, setResendingId] = useState<string | null>(null)
+
+  // Audit log filter state
+  const AUDIT_PAGE_SIZE = 20
+  const [auditActions, setAuditActions] = useState<string[]>([])
+  const [auditEmail, setAuditEmail] = useState('')
+  const [auditEmailInput, setAuditEmailInput] = useState('')
+  const [auditOffset, setAuditOffset] = useState(0)
+  const auditQuery = useInvitationAuditEvents(isAdmin, {
+    limit: AUDIT_PAGE_SIZE,
+    offset: auditOffset,
+    actions: auditActions,
+    email: auditEmail,
+  })
 
   const allInvitations = useMemo(
     () => (invitationsQuery.data ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -356,6 +368,77 @@ export function InvitationsPage() {
           <p>记录最近的「创建 / 接受 / 吊销 / 重发」动作，便于回溯责任与跨组织审计。</p>
         </header>
         <div className="page-section-body">
+          <div className="invitation-audit-toolbar" role="group" aria-label="审计日志过滤器">
+            <div className="invitation-audit-actions">
+              {(['created', 'accepted', 'revoked', 'resent'] as const).map((action) => {
+                const active = auditActions.includes(action)
+                return (
+                  <button
+                    key={action}
+                    type="button"
+                    className={`chip${active ? ' is-active' : ''}`}
+                    onClick={() => {
+                      setAuditOffset(0)
+                      setAuditActions((prev) =>
+                        prev.includes(action) ? prev.filter((a) => a !== action) : [...prev, action],
+                      )
+                    }}
+                    aria-pressed={active}
+                  >
+                    {action === 'created' && '已创建'}
+                    {action === 'accepted' && '已接受'}
+                    {action === 'revoked' && '已吊销'}
+                    {action === 'resent' && '已重发'}
+                  </button>
+                )
+              })}
+              {auditActions.length > 0 ? (
+                <button
+                  type="button"
+                  className="chip"
+                  onClick={() => {
+                    setAuditActions([])
+                    setAuditOffset(0)
+                  }}
+                >
+                  清空类型筛选
+                </button>
+              ) : null}
+            </div>
+            <form
+              className="invitation-audit-search"
+              onSubmit={(e) => {
+                e.preventDefault()
+                setAuditEmail(auditEmailInput.trim())
+                setAuditOffset(0)
+              }}
+            >
+              <input
+                type="search"
+                className="search-input"
+                placeholder="按邀请邮箱过滤（子串匹配）"
+                value={auditEmailInput}
+                onChange={(e) => setAuditEmailInput(e.target.value)}
+              />
+              <button type="submit" className="action-btn">
+                <Search size={14} aria-hidden="true" />
+                筛选
+              </button>
+              {auditEmail ? (
+                <button
+                  type="button"
+                  className="action-btn"
+                  onClick={() => {
+                    setAuditEmail('')
+                    setAuditEmailInput('')
+                    setAuditOffset(0)
+                  }}
+                >
+                  清除
+                </button>
+              ) : null}
+            </form>
+          </div>
           {auditQuery.isLoading ? (
             <StatePlaceholder tone="loading" title="正在加载审计事件..." />
           ) : auditQuery.isError ? (
@@ -364,32 +447,75 @@ export function InvitationsPage() {
               title="加载审计日志失败"
               description={auditQuery.error instanceof Error ? auditQuery.error.message : ''}
             />
-          ) : !auditQuery.data || auditQuery.data.length === 0 ? (
-            <StatePlaceholder tone="empty" title="暂无审计事件" description="邀请相关动作发生后会出现在这里。" />
+          ) : !auditQuery.data || auditQuery.data.events.length === 0 ? (
+            <StatePlaceholder
+              tone="empty"
+              title="暂无审计事件"
+              description={
+                auditActions.length > 0 || auditEmail
+                  ? '当前筛选条件下没有匹配事件，可清空筛选重试。'
+                  : '邀请相关动作发生后会出现在这里。'
+              }
+            />
           ) : (
-            <ul className="invitation-list">
-              {auditQuery.data.map((event) => (
-                <li key={event.id} className="invitation-row">
-                  <div className="invitation-row-main">
-                    <span className={`invitation-status invitation-status-${event.action}`}>
-                      {event.action === 'created' && '已创建'}
-                      {event.action === 'accepted' && '已接受'}
-                      {event.action === 'revoked' && '已吊销'}
-                      {event.action === 'resent' && '已重发'}
-                    </span>
-                    <span className="invitation-email">{event.email}</span>
-                    <span className="invitation-role">{event.role}</span>
-                  </div>
-                  <div className="invitation-row-meta">
-                    {event.actor_email ? <span>操作者：{event.actor_email}</span> : null}
-                    {event.actor_user_id && !event.actor_email ? (
-                      <span>操作者 ID：{event.actor_user_id.slice(0, 8)}…</span>
-                    ) : null}
-                    <span title={event.created_at}>{new Date(event.created_at).toLocaleString()}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="invitation-list">
+                {auditQuery.data.events.map((event) => (
+                  <li key={event.id} className="invitation-row">
+                    <div className="invitation-row-main">
+                      <span className={`invitation-status invitation-status-${event.action}`}>
+                        {event.action === 'created' && '已创建'}
+                        {event.action === 'accepted' && '已接受'}
+                        {event.action === 'revoked' && '已吊销'}
+                        {event.action === 'resent' && '已重发'}
+                      </span>
+                      <span className="invitation-email">{event.email}</span>
+                      <span className="invitation-role">{event.role}</span>
+                    </div>
+                    <div className="invitation-row-meta">
+                      {event.actor_email ? <span>操作者：{event.actor_email}</span> : null}
+                      {event.actor_user_id && !event.actor_email ? (
+                        <span>操作者 ID：{event.actor_user_id.slice(0, 8)}…</span>
+                      ) : null}
+                      <span title={event.created_at}>{new Date(event.created_at).toLocaleString()}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className="invitation-audit-pager">
+                <span className="invitation-audit-pager-info">
+                  第 {auditOffset + 1}–{auditOffset + auditQuery.data.events.length} 条
+                  {auditQuery.data.has_more ? '（还有更多）' : ''}
+                </span>
+                <div className="invitation-audit-pager-actions">
+                  <button
+                    type="button"
+                    className="action-btn"
+                    disabled={auditOffset === 0}
+                    onClick={() => setAuditOffset(Math.max(0, auditOffset - AUDIT_PAGE_SIZE))}
+                  >
+                    上一页
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    disabled={!auditQuery.data.has_more}
+                    onClick={() => setAuditOffset(auditOffset + AUDIT_PAGE_SIZE)}
+                  >
+                    下一页
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => auditQuery.refetch()}
+                    aria-label="刷新审计日志"
+                  >
+                    <RefreshCw size={14} aria-hidden="true" />
+                    刷新
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </div>
       </section>

@@ -347,4 +347,86 @@ func TestInvitationAuditLogCapturesLifecycle(t *testing.T) {
 	if !sawAcceptedForResent {
 		t.Fatalf("expected accepted event to reference resent invitation %q, events=%+v", resent.Invitation.ID, listed.Events)
 	}
+
+	// 5. Filter by action=revoked -> only revoked events.
+	revResp := httptest.NewRecorder()
+	revReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit?action=revoked", nil)
+	router.ServeHTTP(revResp, revReq)
+	if revResp.Code != http.StatusOK {
+		t.Fatalf("filter by action: expected 200, got %d: %s", revResp.Code, revResp.Body.String())
+	}
+	var filtered struct {
+		Events  []invitationAuditEventResponse `json:"events"`
+		HasMore bool                           `json:"has_more"`
+		Limit   int                            `json:"limit"`
+	}
+	decodeBody(t, revResp, &filtered)
+	if len(filtered.Events) == 0 {
+		t.Fatalf("expected at least one revoked event after filter, got 0")
+	}
+	for _, ev := range filtered.Events {
+		if ev.Action != "revoked" {
+			t.Fatalf("expected only revoked events, got %q", ev.Action)
+		}
+	}
+	if filtered.Limit != 50 {
+		t.Fatalf("expected default limit 50, got %d", filtered.Limit)
+	}
+
+	// 6. Pagination: limit=1 should return 1 item with has_more=true.
+	pageResp := httptest.NewRecorder()
+	pageReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit?limit=1", nil)
+	router.ServeHTTP(pageResp, pageReq)
+	if pageResp.Code != http.StatusOK {
+		t.Fatalf("paginate: expected 200, got %d: %s", pageResp.Code, pageResp.Body.String())
+	}
+	var paged struct {
+		Events  []invitationAuditEventResponse `json:"events"`
+		HasMore bool                           `json:"has_more"`
+	}
+	decodeBody(t, pageResp, &paged)
+	if len(paged.Events) != 1 {
+		t.Fatalf("expected 1 event with limit=1, got %d", len(paged.Events))
+	}
+	if !paged.HasMore {
+		t.Fatalf("expected has_more=true with limit=1 and ≥2 audit events")
+	}
+
+	// 7. Email filter (case-insensitive substring) hits all events for this invitee.
+	emailResp := httptest.NewRecorder()
+	emailReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit?email=AUDIT-ME", nil)
+	router.ServeHTTP(emailResp, emailReq)
+	if emailResp.Code != http.StatusOK {
+		t.Fatalf("email filter: expected 200, got %d: %s", emailResp.Code, emailResp.Body.String())
+	}
+	var byEmail struct {
+		Events []invitationAuditEventResponse `json:"events"`
+	}
+	decodeBody(t, emailResp, &byEmail)
+	if len(byEmail.Events) < 4 {
+		t.Fatalf("expected ≥4 events for email filter (created+revoked+created+accepted), got %d", len(byEmail.Events))
+	}
+
+	// 8. Email filter that doesn't match -> empty.
+	missResp := httptest.NewRecorder()
+	missReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit?email=nobody-here", nil)
+	router.ServeHTTP(missResp, missReq)
+	if missResp.Code != http.StatusOK {
+		t.Fatalf("email miss: expected 200, got %d", missResp.Code)
+	}
+	var miss struct {
+		Events []invitationAuditEventResponse `json:"events"`
+	}
+	decodeBody(t, missResp, &miss)
+	if len(miss.Events) != 0 {
+		t.Fatalf("expected 0 events for non-matching email filter, got %d", len(miss.Events))
+	}
+
+	// 9. Invalid since -> 400.
+	badResp := httptest.NewRecorder()
+	badReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit?since=not-a-date", nil)
+	router.ServeHTTP(badResp, badReq)
+	if badResp.Code != http.StatusBadRequest {
+		t.Fatalf("invalid since: expected 400, got %d", badResp.Code)
+	}
 }

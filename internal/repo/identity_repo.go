@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -41,7 +42,27 @@ type IdentityRepository interface {
 	RevokeInvitation(ctx context.Context, invitationID, organizationID string, revokedAt time.Time) error
 
 	AppendInvitationAuditEvent(ctx context.Context, params AppendInvitationAuditParams) (domain.InvitationAuditEvent, error)
-	ListInvitationAuditEvents(ctx context.Context, organizationID string, limit int) ([]domain.InvitationAuditEvent, error)
+	ListInvitationAuditEvents(ctx context.Context, filter InvitationAuditFilter) (InvitationAuditPage, error)
+}
+
+// InvitationAuditFilter 描述邀请审计日志查询参数。
+// Actions 为空表示不过滤；Email 为空表示不过滤，比对时按小写子串匹配。
+// Since/Until 为闭区间过滤；Limit 上限由调用方裁剪，Offset 用于分页。
+type InvitationAuditFilter struct {
+	OrganizationID string
+	Actions        []string
+	Email          string
+	Since          *time.Time
+	Until          *time.Time
+	Limit          int
+	Offset         int
+}
+
+// InvitationAuditPage 是审计列表的分页结果。
+// Events 长度 ≤ Limit；HasMore 表示底层是否还有更多记录。
+type InvitationAuditPage struct {
+	Events  []domain.InvitationAuditEvent
+	HasMore bool
 }
 
 type CreateOrganizationParams struct {
@@ -286,15 +307,49 @@ func (r *PostgresIdentityRepository) AppendInvitationAuditEvent(
 
 func (r *PostgresIdentityRepository) ListInvitationAuditEvents(
 	ctx context.Context,
-	organizationID string,
-	limit int,
-) ([]domain.InvitationAuditEvent, error) {
+	filter InvitationAuditFilter,
+) (InvitationAuditPage, error) {
+	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := r.pool.Query(ctx, listInvitationAuditEventsSQL, organizationID, limit)
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	args := []any{filter.OrganizationID}
+	clauses := []string{"organization_id = $1::uuid"}
+	if len(filter.Actions) > 0 {
+		args = append(args, filter.Actions)
+		clauses = append(clauses, fmt.Sprintf("action = ANY($%d::text[])", len(args)))
+	}
+	if email := strings.ToLower(strings.TrimSpace(filter.Email)); email != "" {
+		args = append(args, "%"+email+"%")
+		clauses = append(clauses, fmt.Sprintf("lower(email) LIKE $%d", len(args)))
+	}
+	if filter.Since != nil {
+		args = append(args, filter.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("created_at >= $%d", len(args)))
+	}
+	if filter.Until != nil {
+		args = append(args, filter.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("created_at <= $%d", len(args)))
+	}
+	args = append(args, limit+1, offset)
+	query := fmt.Sprintf(
+		`SELECT id, organization_id, invitation_id, action,
+            actor_user_id, actor_email, email, role, note, created_at
+         FROM organization_invitation_events
+         WHERE %s
+         ORDER BY created_at DESC
+         LIMIT $%d OFFSET $%d`,
+		strings.Join(clauses, " AND "),
+		len(args)-1,
+		len(args),
+	)
+	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list invitation audit: %w", err)
+		return InvitationAuditPage{}, fmt.Errorf("list invitation audit: %w", err)
 	}
 	defer rows.Close()
 	var out []domain.InvitationAuditEvent
@@ -313,7 +368,7 @@ func (r *PostgresIdentityRepository) ListInvitationAuditEvents(
 			&note,
 			&ev.CreatedAt,
 		); scanErr != nil {
-			return nil, fmt.Errorf("scan invitation audit: %w", scanErr)
+			return InvitationAuditPage{}, fmt.Errorf("scan invitation audit: %w", scanErr)
 		}
 		if actorUser != nil {
 			ev.ActorUserID = *actorUser
@@ -327,7 +382,15 @@ func (r *PostgresIdentityRepository) ListInvitationAuditEvents(
 		ev.CreatedAt = ev.CreatedAt.UTC()
 		out = append(out, ev)
 	}
-	return out, rows.Err()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return InvitationAuditPage{}, rowsErr
+	}
+	hasMore := false
+	if len(out) > limit {
+		out = out[:limit]
+		hasMore = true
+	}
+	return InvitationAuditPage{Events: out, HasMore: hasMore}, nil
 }
 
 func scanInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {

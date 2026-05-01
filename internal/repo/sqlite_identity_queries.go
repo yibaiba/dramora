@@ -94,12 +94,3 @@ INSERT INTO organization_invitation_events (
     actor_user_id, actor_email, email, role, note, created_at
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
-
-const sqliteListInvitationAuditEventsSQL = `
-SELECT id, organization_id, invitation_id, action,
-       actor_user_id, actor_email, email, role, note, created_at
-FROM organization_invitation_events
-WHERE organization_id = ?
-ORDER BY created_at DESC
-LIMIT ?
-`

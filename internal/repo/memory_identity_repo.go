@@ -192,20 +192,54 @@ func (r *MemoryIdentityRepository) AppendInvitationAuditEvent(
 
 func (r *MemoryIdentityRepository) ListInvitationAuditEvents(
 	_ context.Context,
-	organizationID string,
-	limit int,
-) ([]domain.InvitationAuditEvent, error) {
+	filter InvitationAuditFilter,
+) (InvitationAuditPage, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	var out []domain.InvitationAuditEvent
-	for i := len(r.auditEvents) - 1; i >= 0 && len(out) < limit; i-- {
-		ev := r.auditEvents[i]
-		if ev.OrganizationID == organizationID {
-			out = append(out, ev)
-		}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
 	}
-	return out, nil
+	actionSet := map[string]struct{}{}
+	for _, a := range filter.Actions {
+		actionSet[a] = struct{}{}
+	}
+	emailNeedle := strings.ToLower(strings.TrimSpace(filter.Email))
+	matched := make([]domain.InvitationAuditEvent, 0)
+	for i := len(r.auditEvents) - 1; i >= 0; i-- {
+		ev := r.auditEvents[i]
+		if ev.OrganizationID != filter.OrganizationID {
+			continue
+		}
+		if len(actionSet) > 0 {
+			if _, ok := actionSet[ev.Action]; !ok {
+				continue
+			}
+		}
+		if emailNeedle != "" && !strings.Contains(strings.ToLower(ev.Email), emailNeedle) {
+			continue
+		}
+		if filter.Since != nil && ev.CreatedAt.Before(*filter.Since) {
+			continue
+		}
+		if filter.Until != nil && ev.CreatedAt.After(*filter.Until) {
+			continue
+		}
+		matched = append(matched, ev)
+	}
+	if offset >= len(matched) {
+		return InvitationAuditPage{Events: []domain.InvitationAuditEvent{}, HasMore: false}, nil
+	}
+	end := offset + limit
+	hasMore := false
+	if end < len(matched) {
+		hasMore = true
+	} else {
+		end = len(matched)
+	}
+	return InvitationAuditPage{Events: append([]domain.InvitationAuditEvent(nil), matched[offset:end]...), HasMore: hasMore}, nil
 }

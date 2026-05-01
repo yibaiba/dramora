@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
@@ -213,15 +214,51 @@ func (r *SQLiteIdentityRepository) AppendInvitationAuditEvent(
 
 func (r *SQLiteIdentityRepository) ListInvitationAuditEvents(
 	ctx context.Context,
-	organizationID string,
-	limit int,
-) ([]domain.InvitationAuditEvent, error) {
+	filter InvitationAuditFilter,
+) (InvitationAuditPage, error) {
+	limit := filter.Limit
 	if limit <= 0 {
 		limit = 100
 	}
-	rows, err := r.db.QueryContext(ctx, sqliteListInvitationAuditEventsSQL, organizationID, limit)
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	args := []any{filter.OrganizationID}
+	clauses := []string{"organization_id = ?"}
+	if len(filter.Actions) > 0 {
+		placeholders := make([]string, len(filter.Actions))
+		for i, action := range filter.Actions {
+			placeholders[i] = "?"
+			args = append(args, action)
+		}
+		clauses = append(clauses, "action IN ("+strings.Join(placeholders, ",")+")")
+	}
+	if email := strings.ToLower(strings.TrimSpace(filter.Email)); email != "" {
+		args = append(args, "%"+email+"%")
+		clauses = append(clauses, "lower(email) LIKE ?")
+	}
+	if filter.Since != nil {
+		args = append(args, filter.Since.UTC().Format("2006-01-02T15:04:05.000Z"))
+		clauses = append(clauses, "created_at >= ?")
+	}
+	if filter.Until != nil {
+		args = append(args, filter.Until.UTC().Format("2006-01-02T15:04:05.000Z"))
+		clauses = append(clauses, "created_at <= ?")
+	}
+	args = append(args, limit+1, offset)
+	query := fmt.Sprintf(
+		`SELECT id, organization_id, invitation_id, action,
+            actor_user_id, actor_email, email, role, note, created_at
+         FROM organization_invitation_events
+         WHERE %s
+         ORDER BY created_at DESC
+         LIMIT ? OFFSET ?`,
+		strings.Join(clauses, " AND "),
+	)
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("list invitation audit: %w", err)
+		return InvitationAuditPage{}, fmt.Errorf("list invitation audit: %w", err)
 	}
 	defer rows.Close()
 	var out []domain.InvitationAuditEvent
@@ -241,7 +278,7 @@ func (r *SQLiteIdentityRepository) ListInvitationAuditEvents(
 			&note,
 			&createdAt,
 		); scanErr != nil {
-			return nil, fmt.Errorf("scan invitation audit: %w", scanErr)
+			return InvitationAuditPage{}, fmt.Errorf("scan invitation audit: %w", scanErr)
 		}
 		if actorUser.Valid {
 			ev.ActorUserID = actorUser.String
@@ -255,7 +292,15 @@ func (r *SQLiteIdentityRepository) ListInvitationAuditEvents(
 		ev.CreatedAt = createdAt.UTC()
 		out = append(out, ev)
 	}
-	return out, rows.Err()
+	if rowsErr := rows.Err(); rowsErr != nil {
+		return InvitationAuditPage{}, rowsErr
+	}
+	hasMore := false
+	if len(out) > limit {
+		out = out[:limit]
+		hasMore = true
+	}
+	return InvitationAuditPage{Events: out, HasMore: hasMore}, nil
 }
 
 func scanSQLiteInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {

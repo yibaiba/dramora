@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
 
@@ -316,22 +317,73 @@ func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
 		return
 	}
-	limit := 0
-	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+	q := r.URL.Query()
+	filter := repo.InvitationAuditFilter{
+		Email: strings.TrimSpace(q.Get("email")),
+	}
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			limit = parsed
+			if parsed > 200 {
+				parsed = 200
+			}
+			filter.Limit = parsed
 		}
 	}
-	events, err := a.authService.ListInvitationAuditEvents(r.Context(), limit)
+	if filter.Limit == 0 {
+		filter.Limit = 50
+	}
+	if raw := strings.TrimSpace(q.Get("offset")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			filter.Offset = parsed
+		}
+	}
+	if raw := strings.TrimSpace(q.Get("action")); raw != "" {
+		actions := make([]string, 0, 4)
+		seen := map[string]struct{}{}
+		for _, part := range strings.Split(raw, ",") {
+			a := strings.TrimSpace(part)
+			if a == "" {
+				continue
+			}
+			if _, ok := seen[a]; ok {
+				continue
+			}
+			seen[a] = struct{}{}
+			actions = append(actions, a)
+		}
+		filter.Actions = actions
+	}
+	if raw := strings.TrimSpace(q.Get("since")); raw != "" {
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			filter.Since = &t
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_since", "since must be RFC3339")
+			return
+		}
+	}
+	if raw := strings.TrimSpace(q.Get("until")); raw != "" {
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			filter.Until = &t
+		} else {
+			writeError(w, http.StatusBadRequest, "invalid_until", "until must be RFC3339")
+			return
+		}
+	}
+	page, err := a.authService.ListInvitationAuditEvents(r.Context(), filter)
 	if err != nil {
 		writeAuthError(w, err)
 		return
 	}
-	out := make([]invitationAuditEventResponse, 0, len(events))
-	for _, ev := range events {
+	out := make([]invitationAuditEventResponse, 0, len(page.Events))
+	for _, ev := range page.Events {
 		out = append(out, invitationAuditDTO(ev))
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": out})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events":   out,
+		"has_more": page.HasMore,
+		"limit":    filter.Limit,
+		"offset":   filter.Offset,
+	})
 }
 
 type sessionResponse struct {

@@ -512,14 +512,15 @@ func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.Organizatio
 	return s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
 }
 
-// ListInvitationAuditEvents 返回当前组织最近的邀请审计事件，按 created_at 倒序。
-// limit<=0 时取仓库默认（100）；与 ListInvitations 共用 RequestAuth 校验。
-func (s *AuthService) ListInvitationAuditEvents(ctx context.Context, limit int) ([]domain.InvitationAuditEvent, error) {
+// ListInvitationAuditEvents 返回当前组织邀请审计事件，按 created_at 倒序。
+// 接受 actions / email / since / until / limit / offset 过滤，由 RequestAuth 强制 organization_id。
+func (s *AuthService) ListInvitationAuditEvents(ctx context.Context, filter repo.InvitationAuditFilter) (repo.InvitationAuditPage, error) {
 	auth, ok := RequestAuthFromContext(ctx)
 	if !ok || auth.OrganizationID == "" {
-		return nil, ErrUnauthorized
+		return repo.InvitationAuditPage{}, ErrUnauthorized
 	}
-	return s.identityRepo.ListInvitationAuditEvents(ctx, auth.OrganizationID, limit)
+	filter.OrganizationID = auth.OrganizationID
+	return s.identityRepo.ListInvitationAuditEvents(ctx, filter)
 }
 
 // RevokeInvitation 把 pending 状态的邀请置为 revoked。仅当前组织且 pending 才能命中；

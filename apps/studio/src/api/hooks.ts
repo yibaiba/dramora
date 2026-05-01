@@ -52,6 +52,7 @@ import {
 	fetchWorkerMetrics,
 	updateStoryboardShot,
 } from './client'
+import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
   LoginRequest,
   RegisterRequest,
@@ -540,11 +541,19 @@ export function useResendInvitation() {
   })
 }
 
-export function useInvitationAuditEvents(enabled = true, limit?: number) {
-  return useQuery({
+export function useInvitationAuditEvents(enabled = true, filter: InvitationAuditFilter = {}) {
+  return useQuery<InvitationAuditPage>({
     enabled,
-    queryFn: () => listInvitationAuditEvents(limit),
-    queryKey: ['invitation-audit', limit ?? 'default'],
+    queryFn: () => listInvitationAuditEvents(filter),
+    queryKey: [
+      'invitation-audit',
+      filter.limit ?? 50,
+      filter.offset ?? 0,
+      (filter.actions ?? []).slice().sort().join(','),
+      filter.email ?? '',
+      filter.since ?? '',
+      filter.until ?? '',
+    ],
   })
 }
 

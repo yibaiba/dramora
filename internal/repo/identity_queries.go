@@ -109,12 +109,3 @@ INSERT INTO organization_invitation_events (
     NULLIF($5, '')::uuid, NULLIF($6, ''), $7, $8, NULLIF($9, ''), $10
 )
 `
-
-const listInvitationAuditEventsSQL = `
-SELECT id, organization_id, invitation_id, action,
-       actor_user_id, actor_email, email, role, note, created_at
-FROM organization_invitation_events
-WHERE organization_id = $1::uuid
-ORDER BY created_at DESC
-LIMIT $2
-`
