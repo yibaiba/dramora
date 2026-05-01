@@ -19,6 +19,47 @@ const CAPABILITIES: { key: ProviderCapability; label: string; icon: typeof Zap }
   { icon: Volume2, key: 'audio', label: 'TTS 语音' },
 ]
 
+type TelemetryAlertThresholds = {
+  minTotal: number
+  errorRateWarn: number
+  errorRateCritical: number
+  vendorErrorsWarn: number
+  vendorErrorsCritical: number
+  capabilityErrorsCritical: number
+}
+
+const DEFAULT_ALERT_THRESHOLDS: TelemetryAlertThresholds = {
+  capabilityErrorsCritical: 5,
+  errorRateCritical: 25,
+  errorRateWarn: 10,
+  minTotal: 10,
+  vendorErrorsCritical: 5,
+  vendorErrorsWarn: 3,
+}
+
+const ALERT_THRESHOLDS_STORAGE_KEY = 'dramora-llm-telemetry-alert-thresholds'
+
+function loadAlertThresholds(): TelemetryAlertThresholds {
+  if (typeof window === 'undefined') return DEFAULT_ALERT_THRESHOLDS
+  try {
+    const raw = window.localStorage.getItem(ALERT_THRESHOLDS_STORAGE_KEY)
+    if (!raw) return DEFAULT_ALERT_THRESHOLDS
+    const parsed = JSON.parse(raw) as Partial<TelemetryAlertThresholds>
+    return { ...DEFAULT_ALERT_THRESHOLDS, ...parsed }
+  } catch {
+    return DEFAULT_ALERT_THRESHOLDS
+  }
+}
+
+function saveAlertThresholds(value: TelemetryAlertThresholds) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(ALERT_THRESHOLDS_STORAGE_KEY, JSON.stringify(value))
+  } catch {
+    /* swallow */
+  }
+}
+
 const PROVIDER_TYPE_OPTIONS: { value: ProviderType; label: string; hint: string }[] = [
   { hint: 'OpenAI 兼容 /chat/completions 网关（DeepSeek / Moonshot / vLLM 等）', label: 'OpenAI 兼容', value: 'openai' },
   { hint: 'Anthropic /v1/messages，使用 x-api-key 与 system 顶层字段', label: 'Anthropic Claude', value: 'anthropic' },
@@ -275,33 +316,54 @@ function LLMTelemetryPanel() {
     resetMutation.mutate()
   }, [resetMutation])
 
+  const [thresholds, setThresholds] = useState<TelemetryAlertThresholds>(() =>
+    loadAlertThresholds(),
+  )
+  const updateThreshold = useCallback(
+    (key: keyof TelemetryAlertThresholds, raw: string) => {
+      const next = Number.parseFloat(raw)
+      if (!Number.isFinite(next) || next < 0) return
+      setThresholds((prev) => {
+        const updated = { ...prev, [key]: next }
+        saveAlertThresholds(updated)
+        return updated
+      })
+    },
+    [],
+  )
+  const resetThresholds = useCallback(() => {
+    setThresholds(DEFAULT_ALERT_THRESHOLDS)
+    saveAlertThresholds(DEFAULT_ALERT_THRESHOLDS)
+  }, [])
+  const [thresholdsOpen, setThresholdsOpen] = useState(false)
+
   const alerts = useMemo(() => {
     if (!data) return [] as { tone: 'warn' | 'critical'; text: string }[]
     const out: { tone: 'warn' | 'critical'; text: string }[] = []
     const total = data.total_calls ?? 0
     const errs = data.error_calls ?? 0
-    if (total >= 10 && errs > 0) {
+    if (total >= thresholds.minTotal && errs > 0) {
       const rate = (errs / total) * 100
-      if (rate >= 25) {
+      if (rate >= thresholds.errorRateCritical) {
         out.push({ tone: 'critical', text: `整体失败率 ${rate.toFixed(1)}%（${errs}/${total}），建议立即排查 provider 配置或额度。` })
-      } else if (rate >= 10) {
+      } else if (rate >= thresholds.errorRateWarn) {
         out.push({ tone: 'warn', text: `整体失败率 ${rate.toFixed(1)}%（${errs}/${total}），建议关注最近事件中的错误。` })
       }
     }
     Object.entries(data.errors_by_vendor ?? {}).forEach(([vendor, n]) => {
-      if (n >= 5) {
+      if (n >= thresholds.vendorErrorsCritical) {
         out.push({ tone: 'critical', text: `${vendor} 已累计 ${n} 次失败，可能 vendor 异常。` })
-      } else if (n >= 3) {
+      } else if (n >= thresholds.vendorErrorsWarn) {
         out.push({ tone: 'warn', text: `${vendor} 已累计 ${n} 次失败，建议检查 API key / 网络。` })
       }
     })
     Object.entries(data.errors_by_capability ?? {}).forEach(([cap, n]) => {
-      if (n >= 5) {
+      if (n >= thresholds.capabilityErrorsCritical) {
         out.push({ tone: 'critical', text: `${cap} capability 累计 ${n} 次失败。` })
       }
     })
     return out
-  }, [data])
+  }, [data, thresholds])
 
   return (
     <section className="provider-card" style={{ marginTop: 24 }}>
@@ -333,6 +395,85 @@ function LLMTelemetryPanel() {
           重置失败：{(resetMutation.error as Error)?.message ?? 'unknown'}
         </p>
       )}
+      <div style={{ marginBottom: 8 }}>
+        <button
+          type="button"
+          onClick={() => setThresholdsOpen((prev) => !prev)}
+          style={{
+            padding: '4px 10px',
+            fontSize: 12,
+            borderRadius: 6,
+            border: '1px solid rgba(255,255,255,0.18)',
+            background: 'rgba(255,255,255,0.04)',
+            color: '#cbd5f5',
+            cursor: 'pointer',
+          }}
+          title="编辑触发告警的阈值（仅本浏览器持久化）"
+        >
+          {thresholdsOpen ? '收起阈值设置' : '调整告警阈值'}
+        </button>
+        {thresholdsOpen && (
+          <div
+            style={{
+              marginTop: 8,
+              padding: 10,
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.08)',
+              background: 'rgba(255,255,255,0.02)',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 8,
+              fontSize: 12,
+            }}
+          >
+            {(
+              [
+                ['minTotal', '失败率最小样本数'],
+                ['errorRateWarn', '失败率 warn (%)'],
+                ['errorRateCritical', '失败率 critical (%)'],
+                ['vendorErrorsWarn', '单 vendor 失败 warn'],
+                ['vendorErrorsCritical', '单 vendor 失败 critical'],
+                ['capabilityErrorsCritical', '单 capability 失败 critical'],
+              ] as [keyof TelemetryAlertThresholds, string][]
+            ).map(([key, label]) => (
+              <label key={key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <span className="muted" style={{ fontSize: 11 }}>{label}</span>
+                <input
+                  type="number"
+                  min={0}
+                  step={key.startsWith('errorRate') ? 0.5 : 1}
+                  value={thresholds[key]}
+                  onChange={(event) => updateThreshold(key, event.target.value)}
+                  style={{
+                    padding: '4px 6px',
+                    borderRadius: 4,
+                    border: '1px solid rgba(255,255,255,0.12)',
+                    background: 'rgba(0,0,0,0.25)',
+                    color: '#e6edf3',
+                  }}
+                />
+              </label>
+            ))}
+            <button
+              type="button"
+              onClick={resetThresholds}
+              style={{
+                alignSelf: 'flex-end',
+                padding: '4px 10px',
+                fontSize: 12,
+                borderRadius: 6,
+                border: '1px solid rgba(255,255,255,0.18)',
+                background: 'transparent',
+                color: '#cbd5f5',
+                cursor: 'pointer',
+              }}
+              title="恢复默认阈值"
+            >
+              恢复默认
+            </button>
+          </div>
+        )}
+      </div>
       {alerts.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
           {alerts.map((a, i) => (
