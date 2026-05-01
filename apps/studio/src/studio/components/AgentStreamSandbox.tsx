@@ -35,8 +35,70 @@ const CONTEXT_PRESETS: { label: string; entries: ContextEntry[] }[] = [
 ]
 
 const SAVED_PRESETS_KEY = 'dramora-sandbox-context-presets'
+const SAVED_HISTORY_KEY = 'dramora-sandbox-run-history'
+const MAX_HISTORY_ENTRIES = 10
 
 type SavedPreset = { id: string; label: string; entries: ContextEntry[] }
+
+type RunHistoryEntry = {
+  id: string
+  role: string
+  sourceText: string
+  contextEntries: ContextEntry[]
+  output: string
+  durationMs?: number
+  tokenCount?: number
+  timestamp: string
+}
+
+function loadRunHistory(): RunHistoryEntry[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SAVED_HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((entry): entry is RunHistoryEntry => {
+        if (!entry || typeof entry !== 'object') return false
+        const obj = entry as Record<string, unknown>
+        return (
+          typeof obj.id === 'string' &&
+          typeof obj.role === 'string' &&
+          typeof obj.sourceText === 'string' &&
+          Array.isArray(obj.contextEntries) &&
+          typeof obj.output === 'string' &&
+          typeof obj.timestamp === 'string'
+        )
+      })
+      .map((entry) => ({
+        id: entry.id,
+        role: entry.role,
+        sourceText: entry.sourceText,
+        contextEntries: entry.contextEntries
+          .filter((e): e is ContextEntry =>
+            !!e && typeof e === 'object' && typeof (e as ContextEntry).key === 'string',
+          )
+          .map((e) => ({ key: String(e.key), value: String(e.value ?? '') })),
+        output: entry.output,
+        durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : undefined,
+        tokenCount: typeof entry.tokenCount === 'number' ? entry.tokenCount : undefined,
+        timestamp: entry.timestamp,
+      }))
+      .slice(0, MAX_HISTORY_ENTRIES)
+  } catch {
+    return []
+  }
+}
+
+function persistRunHistory(history: RunHistoryEntry[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SAVED_HISTORY_KEY, JSON.stringify(history))
+  } catch {
+    /* quota exceeded — ignore */
+  }
+}
 
 function loadSavedPresets(): SavedPreset[] {
   if (typeof window === 'undefined') return []
@@ -89,11 +151,17 @@ export function AgentStreamSandbox() {
   const [savedPresets, setSavedPresets] = useState<SavedPreset[]>(() => loadSavedPresets())
   const [isSavingPreset, setIsSavingPreset] = useState(false)
   const [newPresetLabel, setNewPresetLabel] = useState('')
+  const [history, setHistory] = useState<RunHistoryEntry[]>(() => loadRunHistory())
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const abortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     persistSavedPresets(savedPresets)
   }, [savedPresets])
+
+  useEffect(() => {
+    persistRunHistory(history)
+  }, [history])
 
   const saveCurrentAsPreset = () => {
     const label = newPresetLabel.trim()
@@ -140,12 +208,34 @@ export function AgentStreamSandbox() {
     setDoneFrame(null)
     setErrorMessage(null)
     setIsStreaming(true)
+    let accumulated = ''
+    const snapshotRole = role
+    const snapshotSourceText = sourceText
+    const snapshotEntries = contextEntries.map((e) => ({ key: e.key, value: e.value }))
     try {
       await streamAgentRun(
         { role, source_text: sourceText, context: buildContextMap() },
         {
-          onDelta: (chunk) => setStreamedText((prev) => prev + chunk),
-          onDone: (frame) => setDoneFrame(frame),
+          onDelta: (chunk) => {
+            accumulated += chunk
+            setStreamedText((prev) => prev + chunk)
+          },
+          onDone: (frame) => {
+            setDoneFrame(frame)
+            setHistory((prev) => {
+              const next: RunHistoryEntry = {
+                id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                role: snapshotRole,
+                sourceText: snapshotSourceText,
+                contextEntries: snapshotEntries,
+                output: accumulated,
+                durationMs: frame.duration_ms,
+                tokenCount: frame.token_count,
+                timestamp: new Date().toISOString(),
+              }
+              return [next, ...prev].slice(0, MAX_HISTORY_ENTRIES)
+            })
+          },
           onError: (message) => setErrorMessage(message),
         },
         controller.signal,
@@ -157,6 +247,17 @@ export function AgentStreamSandbox() {
       setIsStreaming(false)
     }
   }
+
+  const restoreFromHistory = (entry: RunHistoryEntry) => {
+    setRole(entry.role)
+    setSourceText(entry.sourceText)
+    setContextEntries(entry.contextEntries.map((e) => ({ ...e })))
+  }
+
+  const removeHistoryEntry = (id: string) =>
+    setHistory((prev) => prev.filter((entry) => entry.id !== id))
+
+  const clearHistory = () => setHistory([])
 
   const handleStop = () => {
     abortRef.current?.abort()
@@ -392,6 +493,104 @@ export function AgentStreamSandbox() {
                 </div>
               )}
             </dl>
+          )}
+        </div>
+      )}
+      {history.length > 0 && (
+        <div className="sandbox-history">
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => setIsHistoryOpen((prev) => !prev)}
+            aria-expanded={isHistoryOpen}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+          >
+            最近 {history.length} 条运行历史 {isHistoryOpen ? '▲' : '▼'}
+          </button>
+          {isHistoryOpen && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button type="button" className="btn-ghost" onClick={clearHistory} style={{ fontSize: 11 }}>
+                  清空历史
+                </button>
+              </div>
+              {history.map((entry) => {
+                const roleLabel =
+                  ROLE_OPTIONS.find((opt) => opt.value === entry.role)?.label ?? entry.role
+                return (
+                  <article
+                    key={entry.id}
+                    style={{
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 8,
+                      padding: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'baseline',
+                        gap: 8,
+                      }}
+                    >
+                      <strong style={{ fontSize: 13 }}>{roleLabel}</strong>
+                      <small style={{ opacity: 0.6 }}>
+                        {new Date(entry.timestamp).toLocaleTimeString()}
+                        {typeof entry.durationMs === 'number' ? ` · ${entry.durationMs}ms` : ''}
+                        {typeof entry.tokenCount === 'number' ? ` · ${entry.tokenCount} tok` : ''}
+                      </small>
+                    </div>
+                    <div style={{ fontSize: 12, opacity: 0.75 }}>
+                      源：{entry.sourceText.slice(0, 80)}
+                      {entry.sourceText.length > 80 ? '…' : ''}
+                    </div>
+                    {entry.contextEntries.length > 0 && (
+                      <div style={{ fontSize: 11, opacity: 0.55 }}>
+                        context: {entry.contextEntries.map((e) => e.key).join(', ')}
+                      </div>
+                    )}
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: 6,
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        maxHeight: 80,
+                        overflow: 'auto',
+                        whiteSpace: 'pre-wrap',
+                      }}
+                    >
+                      {entry.output.slice(0, 240)}
+                      {entry.output.length > 240 ? '…' : ''}
+                    </pre>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => restoreFromHistory(entry)}
+                        disabled={isStreaming}
+                        style={{ fontSize: 11 }}
+                      >
+                        载入到表单
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-ghost"
+                        onClick={() => removeHistoryEntry(entry.id)}
+                        style={{ fontSize: 11 }}
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
           )}
         </div>
       )}
