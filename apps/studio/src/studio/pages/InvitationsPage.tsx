@@ -63,28 +63,69 @@ export function InvitationsPage() {
   const [auditEmail, setAuditEmail] = useState('')
   const [auditEmailInput, setAuditEmailInput] = useState('')
   const [auditOffset, setAuditOffset] = useState(0)
+  const [auditSince, setAuditSince] = useState('')
+  const [auditUntil, setAuditUntil] = useState('')
   const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null)
   const [exportError, setExportError] = useState('')
-  const auditQuery = useInvitationAuditEvents(isAdmin, {
+
+  // Convert datetime-local value (YYYY-MM-DDTHH:mm) to RFC3339 in local TZ.
+  const toRFC3339 = (local: string): string | undefined => {
+    if (!local) return undefined
+    const d = new Date(local)
+    if (Number.isNaN(d.getTime())) return undefined
+    return d.toISOString()
+  }
+
+  const sinceISO = toRFC3339(auditSince)
+  const untilISO = toRFC3339(auditUntil)
+
+  const dateRangeInvalid =
+    sinceISO !== undefined && untilISO !== undefined && new Date(sinceISO).getTime() > new Date(untilISO).getTime()
+
+  const auditQuery = useInvitationAuditEvents(isAdmin && !dateRangeInvalid, {
     limit: AUDIT_PAGE_SIZE,
     offset: auditOffset,
     actions: auditActions,
     email: auditEmail,
+    since: sinceISO,
+    until: untilISO,
   })
 
   const handleExportAudit = async (format: 'csv' | 'json') => {
     setExportError('')
+    if (dateRangeInvalid) {
+      setExportError('开始时间不能晚于结束时间')
+      return
+    }
     setExportingFormat(format)
     try {
       await downloadInvitationAuditExport(format, {
         actions: auditActions,
         email: auditEmail,
+        since: sinceISO,
+        until: untilISO,
       })
     } catch (err) {
       setExportError(err instanceof Error ? err.message : '导出失败')
     } finally {
       setExportingFormat(null)
     }
+  }
+
+  const handleClearDateRange = () => {
+    setAuditSince('')
+    setAuditUntil('')
+    setAuditOffset(0)
+  }
+
+  const handleSinceChange = (value: string) => {
+    setAuditSince(value)
+    setAuditOffset(0)
+  }
+
+  const handleUntilChange = (value: string) => {
+    setAuditUntil(value)
+    setAuditOffset(0)
   }
 
   const allInvitations = useMemo(
@@ -456,6 +497,36 @@ export function InvitationsPage() {
                 </button>
               ) : null}
             </form>
+            <div className="invitation-audit-date-range" role="group" aria-label="时间范围">
+              <label className="invitation-audit-date-field">
+                <span>起始</span>
+                <input
+                  type="datetime-local"
+                  value={auditSince}
+                  onChange={(e) => handleSinceChange(e.target.value)}
+                  aria-invalid={dateRangeInvalid || undefined}
+                />
+              </label>
+              <label className="invitation-audit-date-field">
+                <span>截止</span>
+                <input
+                  type="datetime-local"
+                  value={auditUntil}
+                  onChange={(e) => handleUntilChange(e.target.value)}
+                  aria-invalid={dateRangeInvalid || undefined}
+                />
+              </label>
+              {(auditSince || auditUntil) ? (
+                <button type="button" className="action-btn" onClick={handleClearDateRange}>
+                  清除时间
+                </button>
+              ) : null}
+              {dateRangeInvalid ? (
+                <span className="invitation-audit-date-error" role="alert">
+                  起始时间不能晚于截止时间
+                </span>
+              ) : null}
+            </div>
           </div>
           {auditQuery.isLoading ? (
             <StatePlaceholder tone="loading" title="正在加载审计事件..." />
