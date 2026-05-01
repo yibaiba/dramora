@@ -31,6 +31,8 @@ export type AuthSession = {
   organization_id: string
   role: string
   expires_at: string
+  refresh_token?: string
+  refresh_expires_at?: string
 }
 
 export type LoginRequest = {

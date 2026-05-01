@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,14 +22,19 @@ import (
 
 var ErrUnauthorized = errors.New("unauthorized")
 
-const defaultAuthTokenTTL = 7 * 24 * time.Hour
+const (
+	defaultAccessTokenTTL  = 1 * time.Hour
+	defaultRefreshTokenTTL = 30 * 24 * time.Hour
+)
 
 type AuthSession struct {
-	Token          string
-	User           domain.User
-	OrganizationID string
-	Role           string
-	ExpiresAt      time.Time
+	Token            string
+	User             domain.User
+	OrganizationID   string
+	Role             string
+	ExpiresAt        time.Time
+	RefreshToken     string
+	RefreshExpiresAt time.Time
 }
 
 type RegisterInput struct {
@@ -45,19 +51,31 @@ type LoginInput struct {
 
 type AuthService struct {
 	identityRepo repo.IdentityRepository
+	refreshRepo  repo.RefreshTokenRepository
 	jwtSecret    []byte
-	tokenTTL     time.Duration
+	accessTTL    time.Duration
+	refreshTTL   time.Duration
 }
 
 // NewAuthService 构建认证服务。
 // 不再依赖 defaultOrganizationID：注册时若无邀请令牌，AuthService 会为新
 // 用户自动建立一个 owned workspace；带邀请令牌时按邀请的 org/role 加入。
+//
+// refreshRepo 为 nil 时退化为单 token 模式（仅签发短 access token，不发
+// refresh token）。生产路径应通过 SetRefreshTokenRepository 注入实现。
 func NewAuthService(identityRepo repo.IdentityRepository, jwtSecret string) *AuthService {
 	return &AuthService{
 		identityRepo: identityRepo,
 		jwtSecret:    []byte(jwtSecret),
-		tokenTTL:     defaultAuthTokenTTL,
+		accessTTL:    defaultAccessTokenTTL,
+		refreshTTL:   defaultRefreshTokenTTL,
 	}
+}
+
+// SetRefreshTokenRepository 注入 refresh token 存储；调用后 register/login 等会
+// 自动签发 refresh token，并支持 Refresh / Logout 流程。
+func (s *AuthService) SetRefreshTokenRepository(refreshRepo repo.RefreshTokenRepository) {
+	s.refreshRepo = refreshRepo
 }
 
 func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSession, error) {
@@ -104,7 +122,7 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSe
 		}
 	}
 
-	return s.buildSession(identity)
+	return s.buildSession(ctx, identity)
 }
 
 // resolveRegistrationOrg decides which organization a new user joins:
@@ -165,7 +183,7 @@ func (s *AuthService) Login(ctx context.Context, input LoginInput) (AuthSession,
 		return AuthSession{}, ErrUnauthorized
 	}
 
-	return s.buildSession(identity)
+	return s.buildSession(ctx, identity)
 }
 
 func (s *AuthService) CurrentSession(ctx context.Context, bearerToken string) (AuthSession, error) {
@@ -195,8 +213,8 @@ func (s *AuthService) CurrentSession(ctx context.Context, bearerToken string) (A
 	}, nil
 }
 
-func (s *AuthService) buildSession(identity repo.AuthIdentity) (AuthSession, error) {
-	expiresAt := time.Now().UTC().Add(s.tokenTTL)
+func (s *AuthService) buildSession(ctx context.Context, identity repo.AuthIdentity) (AuthSession, error) {
+	expiresAt := time.Now().UTC().Add(s.accessTTL)
 	token, err := s.signToken(authClaims{
 		Subject:        identity.User.ID,
 		OrganizationID: identity.OrganizationID,
@@ -206,20 +224,134 @@ func (s *AuthService) buildSession(identity repo.AuthIdentity) (AuthSession, err
 	if err != nil {
 		return AuthSession{}, err
 	}
-	return AuthSession{
+	session := AuthSession{
 		Token:          token,
 		User:           identity.User,
 		OrganizationID: identity.OrganizationID,
 		Role:           identity.Role,
 		ExpiresAt:      expiresAt,
-	}, nil
+	}
+	if s.refreshRepo != nil {
+		raw, refreshExpiresAt, err := s.issueRefreshToken(ctx, identity)
+		if err != nil {
+			return AuthSession{}, err
+		}
+		session.RefreshToken = raw
+		session.RefreshExpiresAt = refreshExpiresAt
+	}
+	return session, nil
+}
+
+func (s *AuthService) issueRefreshToken(ctx context.Context, identity repo.AuthIdentity) (string, time.Time, error) {
+	rawBytes := make([]byte, 32)
+	if _, err := rand.Read(rawBytes); err != nil {
+		return "", time.Time{}, fmt.Errorf("generate refresh token: %w", err)
+	}
+	raw := base64.RawURLEncoding.EncodeToString(rawBytes)
+	hash := hashRefreshToken(raw)
+	expiresAt := time.Now().UTC().Add(s.refreshTTL)
+	if _, err := s.refreshRepo.Create(ctx, repo.CreateRefreshTokenParams{
+		ID:             uuid.NewString(),
+		UserID:         identity.User.ID,
+		OrganizationID: identity.OrganizationID,
+		Role:           identity.Role,
+		TokenHash:      hash,
+		ExpiresAt:      expiresAt,
+	}); err != nil {
+		return "", time.Time{}, fmt.Errorf("persist refresh token: %w", err)
+	}
+	return raw, expiresAt, nil
+}
+
+func hashRefreshToken(raw string) string {
+	sum := sha256.Sum256([]byte(raw))
+	return hex.EncodeToString(sum[:])
+}
+
+// Refresh 使用 refresh token 兑换新的 access + refresh token，旧的 refresh
+// token 立即被吊销并指向新 token。
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (AuthSession, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" || s.refreshRepo == nil {
+		return AuthSession{}, ErrUnauthorized
+	}
+	hash := hashRefreshToken(refreshToken)
+	rec, err := s.refreshRepo.GetByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return AuthSession{}, ErrUnauthorized
+		}
+		return AuthSession{}, err
+	}
+	if rec.RevokedAt != nil {
+		return AuthSession{}, ErrUnauthorized
+	}
+	if !rec.ExpiresAt.IsZero() && time.Now().UTC().After(rec.ExpiresAt) {
+		return AuthSession{}, ErrUnauthorized
+	}
+
+	identity, err := s.identityRepo.GetAuthIdentityByUserID(ctx, rec.UserID)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return AuthSession{}, ErrUnauthorized
+		}
+		return AuthSession{}, err
+	}
+	// 保留 token 颁发时的 org/role，避免在 multi-org 切换时静默升降权。
+	identity.OrganizationID = rec.OrganizationID
+	identity.Role = rec.Role
+
+	session, err := s.buildSession(ctx, identity)
+	if err != nil {
+		return AuthSession{}, err
+	}
+	if session.RefreshToken == "" {
+		return AuthSession{}, ErrUnauthorized
+	}
+	newID := hashRefreshToken(session.RefreshToken)
+	// replaced_by_id 写入的是新 token 的 hash 前缀（用于审计追溯），但更稳妥的做
+	// 法是写新 token 的行 id；为此我们重新查一次。
+	newRec, err := s.refreshRepo.GetByHash(ctx, newID)
+	if err == nil {
+		if revokeErr := s.refreshRepo.Revoke(ctx, rec.ID, &newRec.ID); revokeErr != nil {
+			return AuthSession{}, fmt.Errorf("revoke previous refresh token: %w", revokeErr)
+		}
+	} else {
+		if revokeErr := s.refreshRepo.Revoke(ctx, rec.ID, nil); revokeErr != nil {
+			return AuthSession{}, fmt.Errorf("revoke previous refresh token: %w", revokeErr)
+		}
+	}
+	return session, nil
+}
+
+// Logout 主动吊销 refresh token。token 不存在或已吊销时静默成功，避免泄露存在性。
+func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" || s.refreshRepo == nil {
+		return nil
+	}
+	hash := hashRefreshToken(refreshToken)
+	rec, err := s.refreshRepo.GetByHash(ctx, hash)
+	if err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	if err := s.refreshRepo.Revoke(ctx, rec.ID, nil); err != nil {
+		if errors.Is(err, domain.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	return nil
 }
 
 // IssueSessionForIdentity signs a session token for an already-resolved
 // identity. Useful for seeding tests or service-to-service flows where
 // password validation has already happened (or doesn't apply).
 func (s *AuthService) IssueSessionForIdentity(identity repo.AuthIdentity) (AuthSession, error) {
-	return s.buildSession(identity)
+	return s.buildSession(context.Background(), identity)
 }
 
 type authClaims struct {

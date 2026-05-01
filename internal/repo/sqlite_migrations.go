@@ -394,4 +394,19 @@ var sqliteMigrations = []string{
 		  AND NOT EXISTS (SELECT 1 FROM organization_members WHERE organization_id = '00000000-0000-0000-0000-000000000001')
 		  AND NOT EXISTS (SELECT 1 FROM projects WHERE organization_id = '00000000-0000-0000-0000-000000000001')
 		  AND NOT EXISTS (SELECT 1 FROM organization_invitations WHERE organization_id = '00000000-0000-0000-0000-000000000001')`,
+
+	// PR8: refresh token 表 — 短 access (1h) + 长 refresh (30d, 旋转)。
+	`CREATE TABLE IF NOT EXISTS auth_refresh_tokens (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		organization_id TEXT NOT NULL,
+		role TEXT NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		expires_at TEXT NOT NULL,
+		revoked_at TEXT,
+		replaced_by_id TEXT
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_active
+		ON auth_refresh_tokens (user_id, revoked_at)`,
 }

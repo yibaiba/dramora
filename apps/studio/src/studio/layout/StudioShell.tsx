@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useCreateEpisode, useCreateProject } from '../../api/hooks'
+import { logout as logoutSession } from '../../api/client'
 import type { Project } from '../../api/types'
 import { useAuthStore } from '../../state/authStore'
 import { useStudioSelection } from '../hooks/useStudioSelection'
@@ -159,7 +160,10 @@ export function StudioShell() {
           <button
             aria-label="退出登录"
             className="owner-logout"
-            onClick={clearSession}
+            onClick={() => {
+              const refresh = authSession?.refresh_token
+              void logoutSession(refresh).finally(() => clearSession())
+            }}
             title="退出登录"
             type="button"
           >

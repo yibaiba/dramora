@@ -39,6 +39,12 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_MANMU_API_BASE_URL ?? ''
 const AUTH_STORAGE_KEY = 'dramora-auth-session'
+const AUTH_PUBLIC_PATHS = [
+  '/api/v1/auth/login',
+  '/api/v1/auth/register',
+  '/api/v1/auth/refresh',
+  '/api/v1/auth/logout',
+]
 
 type ErrorEnvelope = {
   error?: {
@@ -47,16 +53,94 @@ type ErrorEnvelope = {
   }
 }
 
+let inflightRefresh: Promise<string | null> | null = null
+let onSessionRefreshed: ((session: AuthSession) => void) | null = null
+let onSessionCleared: (() => void) | null = null
+
+export function configureAuthBridge(handlers: {
+  onRefreshed?: (session: AuthSession) => void
+  onCleared?: () => void
+}) {
+  onSessionRefreshed = handlers.onRefreshed ?? null
+  onSessionCleared = handlers.onCleared ?? null
+}
+
+function readStoredSession(): AuthSession | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
+  if (!raw) {
+    return null
+  }
+  try {
+    return JSON.parse(raw) as AuthSession
+  } catch {
+    return null
+  }
+}
+
+async function attemptRefresh(): Promise<string | null> {
+  if (inflightRefresh) {
+    return inflightRefresh
+  }
+  const stored = readStoredSession()
+  if (!stored?.refresh_token) {
+    return null
+  }
+  inflightRefresh = (async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+        body: JSON.stringify({ refresh_token: stored.refresh_token }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      })
+      if (!response.ok) {
+        onSessionCleared?.()
+        return null
+      }
+      const payload = (await response.json()) as { session: AuthSession }
+      onSessionRefreshed?.(payload.session)
+      return payload.session.token
+    } catch {
+      onSessionCleared?.()
+      return null
+    } finally {
+      inflightRefresh = null
+    }
+  })()
+  return inflightRefresh
+}
+
 async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const isPublicAuthPath = AUTH_PUBLIC_PATHS.includes(path)
   const authHeader = readStoredAuthHeader()
+  const buildHeaders = (token: string | null): HeadersInit => ({
+    'content-type': 'application/json',
+    ...(token ? { authorization: `Bearer ${token}` } : {}),
+    ...init?.headers,
+  })
+
+  const initialToken = authHeader ? authHeader.replace(/^Bearer\s+/i, '') : null
   const response = await fetch(`${API_BASE_URL}${path}`, {
-    headers: {
-      'content-type': 'application/json',
-      ...(authHeader ? { authorization: authHeader } : {}),
-      ...init?.headers,
-    },
+    headers: buildHeaders(initialToken),
     ...init,
   })
+
+  if (response.status === 401 && !isPublicAuthPath) {
+    const refreshed = await attemptRefresh()
+    if (refreshed) {
+      const retryResponse = await fetch(`${API_BASE_URL}${path}`, {
+        headers: buildHeaders(refreshed),
+        ...init,
+      })
+      if (!retryResponse.ok) {
+        const payload = (await retryResponse.json().catch(() => ({}))) as ErrorEnvelope
+        throw new Error(payload.error?.message ?? `Request failed with status ${retryResponse.status}`)
+      }
+      return (await retryResponse.json()) as T
+    }
+  }
 
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as ErrorEnvelope
@@ -67,19 +151,8 @@ async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 function readStoredAuthHeader(): string | null {
-  if (typeof window === 'undefined') {
-    return null
-  }
-  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY)
-  if (!raw) {
-    return null
-  }
-  try {
-    const session = JSON.parse(raw) as AuthSession
-    return session.token ? `Bearer ${session.token}` : null
-  } catch {
-    return null
-  }
+  const session = readStoredSession()
+  return session?.token ? `Bearer ${session.token}` : null
 }
 
 export async function register(request: RegisterRequest): Promise<AuthSession> {
@@ -101,6 +174,17 @@ export async function login(request: LoginRequest): Promise<AuthSession> {
 export async function getCurrentSession(): Promise<AuthSession> {
   const payload = await fetchJSON<{ session: AuthSession }>('/api/v1/auth/me')
   return payload.session
+}
+
+export async function logout(refreshToken?: string): Promise<void> {
+  if (!refreshToken) {
+    return
+  }
+  await fetch(`${API_BASE_URL}/api/v1/auth/logout`, {
+    body: JSON.stringify({ refresh_token: refreshToken }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  }).catch(() => undefined)
 }
 
 export async function listProjects(): Promise<Project[]> {

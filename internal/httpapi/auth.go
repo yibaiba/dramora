@@ -18,11 +18,13 @@ type authRequest struct {
 }
 
 type authSessionResponse struct {
-	Token          string       `json:"token"`
-	User           userResponse `json:"user"`
-	OrganizationID string       `json:"organization_id"`
-	Role           string       `json:"role"`
-	ExpiresAt      time.Time    `json:"expires_at"`
+	Token            string       `json:"token"`
+	User             userResponse `json:"user"`
+	OrganizationID   string       `json:"organization_id"`
+	Role             string       `json:"role"`
+	ExpiresAt        time.Time    `json:"expires_at"`
+	RefreshToken     string       `json:"refresh_token,omitempty"`
+	RefreshExpiresAt *time.Time   `json:"refresh_expires_at,omitempty"`
 }
 
 type userResponse struct {
@@ -40,13 +42,19 @@ func userDTO(user domain.User) userResponse {
 }
 
 func authSessionDTO(session service.AuthSession) authSessionResponse {
-	return authSessionResponse{
+	resp := authSessionResponse{
 		Token:          session.Token,
 		User:           userDTO(session.User),
 		OrganizationID: session.OrganizationID,
 		Role:           session.Role,
 		ExpiresAt:      session.ExpiresAt.UTC(),
+		RefreshToken:   session.RefreshToken,
 	}
+	if !session.RefreshExpiresAt.IsZero() {
+		t := session.RefreshExpiresAt.UTC()
+		resp.RefreshExpiresAt = &t
+	}
+	return resp
 }
 
 func (a *api) register(w http.ResponseWriter, r *http.Request) {
@@ -115,6 +123,47 @@ func (a *api) currentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]authSessionResponse{
 		"session": authSessionDTO(session),
 	})
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (a *api) refreshSession(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	var request refreshRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	session, err := a.authService.Refresh(r.Context(), request.RefreshToken)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]authSessionResponse{
+		"session": authSessionDTO(session),
+	})
+}
+
+func (a *api) logoutSession(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var request refreshRequest
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&request)
+	}
+	// 主动忽略 logout 错误（除存储级故障外），避免泄露 token 是否存在。
+	if err := a.authService.Logout(r.Context(), request.RefreshToken); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeAuthError(w http.ResponseWriter, err error) {

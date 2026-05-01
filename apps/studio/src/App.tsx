@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { configureAuthBridge } from './api/client'
 import { useCurrentSession } from './api/hooks'
 import { useAuthStore } from './state/authStore'
 import { StudioShell } from './studio/layout/StudioShell'
@@ -18,6 +19,13 @@ function App() {
   const setSession = useAuthStore((state) => state.setSession)
   const clearSession = useAuthStore((state) => state.clearSession)
   const sessionQuery = useCurrentSession(Boolean(session?.token))
+
+  useEffect(() => {
+    configureAuthBridge({
+      onRefreshed: (next) => setSession(next),
+      onCleared: () => clearSession(),
+    })
+  }, [setSession, clearSession])
 
   useEffect(() => {
     if (sessionQuery.data) {

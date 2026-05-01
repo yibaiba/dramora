@@ -29,6 +29,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	projectRepo := repo.ProjectRepository(repo.NewMemoryProjectRepository())
 	productionRepo := repo.ProductionRepository(repo.NewMemoryProductionRepository())
 	identityRepo := repo.IdentityRepository(repo.NewMemoryIdentityRepository())
+	refreshRepo := repo.RefreshTokenRepository(repo.NewMemoryRefreshTokenRepository())
 	var db *repo.DB
 	var sqliteDB *repo.SQLiteDB
 
@@ -44,6 +45,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		projectRepo = repo.NewPostgresProjectRepository(openedDB.Pool)
 		productionRepo = repo.NewPostgresProductionRepository(openedDB.Pool)
 		identityRepo = repo.NewPostgresIdentityRepository(openedDB.Pool)
+		refreshRepo = repo.NewPostgresRefreshTokenRepository(openedDB.Pool)
 		workerMetricsRepo = repo.NewPostgresWorkerMetricsRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
@@ -55,6 +57,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		projectRepo = repo.NewSQLiteProjectRepository(openedDB.DB)
 		productionRepo = repo.NewSQLiteProductionRepository(openedDB.DB)
 		identityRepo = repo.NewSQLiteIdentityRepository(openedDB.DB)
+		refreshRepo = repo.NewSQLiteRefreshTokenRepository(openedDB.DB)
 		providerService = service.NewProviderService(repo.NewSQLiteProviderConfigRepository(openedDB.DB))
 		workerMetricsRepo = repo.NewSQLiteWorkerMetricsRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
@@ -75,13 +78,16 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		}
 	}
 
+	authService := service.NewAuthService(identityRepo, cfg.JWTSecret)
+	authService.SetRefreshTokenRepository(refreshRepo)
+
 	return &Container{
 		cfg:               cfg,
 		ctx:               ctx,
 		db:                db,
 		sqliteDB:          sqliteDB,
 		Logger:            logger.With("env", cfg.Env),
-		AuthService:       service.NewAuthService(identityRepo, cfg.JWTSecret),
+		AuthService:       authService,
 		ProjectService:    projectSvc,
 		ProductionService: productionSvc,
 		ProviderService:   providerService,

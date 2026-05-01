@@ -42,6 +42,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/meta/capabilities", capabilitiesHandler(cfg.Version))
 		r.Post("/auth/register", api.register)
 		r.Post("/auth/login", api.login)
+		r.Post("/auth/refresh", api.refreshSession)
+		r.Post("/auth/logout", api.logoutSession)
 		r.Get("/auth/me", api.currentSession)
 		r.Get("/projects", api.listProjects)
 		r.Post("/projects", api.createProject)
