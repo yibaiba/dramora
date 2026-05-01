@@ -552,3 +552,44 @@ export async function listInvitationAuditEvents(filter: InvitationAuditFilter = 
     offset: payload.offset ?? filter.offset ?? 0,
   }
 }
+
+export async function downloadInvitationAuditExport(
+  format: 'csv' | 'json',
+  filter: InvitationAuditFilter = {},
+): Promise<void> {
+  const params = new URLSearchParams()
+  params.set('format', format)
+  if (filter.actions && filter.actions.length > 0) params.set('action', filter.actions.join(','))
+  if (filter.email && filter.email.trim()) params.set('email', filter.email.trim())
+  if (filter.since) params.set('since', filter.since)
+  if (filter.until) params.set('until', filter.until)
+  const path = `/api/v1/organizations/invitations/audit/export?${params.toString()}`
+  const authHeader = readStoredAuthHeader()
+  let response = await fetch(`${API_BASE_URL}${path}`, {
+    headers: authHeader ? { authorization: authHeader } : {},
+  })
+  if (response.status === 401) {
+    const refreshed = await attemptRefresh()
+    if (refreshed) {
+      response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: { authorization: `Bearer ${refreshed}` },
+      })
+    }
+  }
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as ErrorEnvelope
+    throw new Error(payload.error?.message ?? `Export failed with status ${response.status}`)
+  }
+  const blob = await response.blob()
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/i)
+  const filename = match?.[1] ?? `invitation-audit-${new Date().toISOString().replace(/[:.]/g, '-')}.${format}`
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

@@ -2,9 +2,11 @@ package httpapi
 
 import (
 	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -428,5 +430,83 @@ func TestInvitationAuditLogCapturesLifecycle(t *testing.T) {
 	router.ServeHTTP(badResp, badReq)
 	if badResp.Code != http.StatusBadRequest {
 		t.Fatalf("invalid since: expected 400, got %d", badResp.Code)
+	}
+}
+
+func TestInvitationAuditExport(t *testing.T) {
+	t.Parallel()
+
+	router := testRouter()
+
+	// Seed a couple of invitations so the export has rows.
+	for _, email := range []string{"export-a@example.com", "export-b@example.com"} {
+		body := bytes.NewBufferString(`{"email":"` + email + `","role":"editor"}`)
+		resp := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations", body)
+		router.ServeHTTP(resp, req)
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("seed invitation %s: expected 201, got %d: %s", email, resp.Code, resp.Body.String())
+		}
+	}
+
+	// CSV export (default).
+	csvResp := httptest.NewRecorder()
+	csvReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit/export", nil)
+	router.ServeHTTP(csvResp, csvReq)
+	if csvResp.Code != http.StatusOK {
+		t.Fatalf("csv export: expected 200, got %d: %s", csvResp.Code, csvResp.Body.String())
+	}
+	if ct := csvResp.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/csv") {
+		t.Fatalf("csv export: expected text/csv content-type, got %q", ct)
+	}
+	if cd := csvResp.Header().Get("Content-Disposition"); !strings.Contains(cd, "attachment;") || !strings.Contains(cd, ".csv") {
+		t.Fatalf("csv export: expected attachment .csv disposition, got %q", cd)
+	}
+	rows, err := csv.NewReader(csvResp.Body).ReadAll()
+	if err != nil {
+		t.Fatalf("parse csv: %v", err)
+	}
+	if len(rows) < 3 {
+		t.Fatalf("expected header + ≥2 data rows, got %d rows", len(rows))
+	}
+	if rows[0][0] != "id" || rows[0][3] != "action" || rows[0][9] != "created_at" {
+		t.Fatalf("unexpected csv header: %+v", rows[0])
+	}
+
+	// JSON export with action filter.
+	jsonResp := httptest.NewRecorder()
+	jsonReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit/export?format=json&action=created", nil)
+	router.ServeHTTP(jsonResp, jsonReq)
+	if jsonResp.Code != http.StatusOK {
+		t.Fatalf("json export: expected 200, got %d: %s", jsonResp.Code, jsonResp.Body.String())
+	}
+	if ct := jsonResp.Header().Get("Content-Type"); !strings.HasPrefix(ct, "application/json") {
+		t.Fatalf("json export: expected application/json, got %q", ct)
+	}
+	if cd := jsonResp.Header().Get("Content-Disposition"); !strings.Contains(cd, ".json") {
+		t.Fatalf("json export: expected .json disposition, got %q", cd)
+	}
+	var payload struct {
+		Events  []invitationAuditEventResponse `json:"events"`
+		HasMore bool                           `json:"has_more"`
+	}
+	if err := json.Unmarshal(jsonResp.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode json export: %v", err)
+	}
+	if len(payload.Events) < 2 {
+		t.Fatalf("expected ≥2 created events in json export, got %d", len(payload.Events))
+	}
+	for _, ev := range payload.Events {
+		if ev.Action != "created" {
+			t.Fatalf("json export action filter: expected only created, got %q", ev.Action)
+		}
+	}
+
+	// Unknown format -> 400.
+	badResp := httptest.NewRecorder()
+	badReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit/export?format=xml", nil)
+	router.ServeHTTP(badResp, badReq)
+	if badResp.Code != http.StatusBadRequest {
+		t.Fatalf("invalid format: expected 400, got %d", badResp.Code)
 	}
 }

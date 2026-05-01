@@ -5155,6 +5155,12 @@ p {
   flex-wrap: wrap;
 }
 
+.invitation-audit-export-error {
+  margin: 0.5rem 0 0;
+  font-size: 0.8rem;
+  color: rgb(252, 165, 165);
+}
+
 .invitation-row-actions {
   display: inline-flex;
   gap: 0.5rem;

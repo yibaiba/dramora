@@ -367,6 +367,64 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  /api/v1/organizations/invitations/audit/export:
+    get:
+      summary: Export invitation audit events as CSV or JSON (owner/admin only)
+      description: |
+        Streams up to 5000 audit events matching the supplied filters as a downloadable
+        attachment. The `format` query selects between CSV (default) and JSON. Pagination
+        is bypassed; supply `since`/`until`/`action`/`email` to scope the export.
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: Output format. Defaults to `csv`.
+          schema:
+            type: string
+            enum: [csv, json]
+        - name: action
+          in: query
+          required: false
+          schema: { type: string }
+        - name: email
+          in: query
+          required: false
+          schema: { type: string }
+        - name: since
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+        - name: until
+          in: query
+          required: false
+          schema: { type: string, format: date-time }
+      responses:
+        "200":
+          description: Audit events stream
+          content:
+            text/csv:
+              schema:
+                type: string
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InvitationAuditEvent"
+                  has_more:
+                    type: boolean
+        "400":
+          description: Invalid format or filter parameter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
   /api/v1/projects:
     get:
       summary: List projects

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Mail, Plus, ShieldCheck, Copy, Check, Search, XCircle, RefreshCw } from 'lucide-react'
+import { Mail, Plus, ShieldCheck, Copy, Check, Search, XCircle, RefreshCw, Download } from 'lucide-react'
 import { useCreateInvitation, useOrganizationInvitations, useRevokeInvitation, useResendInvitation, useInvitationAuditEvents } from '../../api/hooks'
+import { downloadInvitationAuditExport } from '../../api/client'
 import { useAuthStore } from '../../state/authStore'
 import type { OrganizationInvitation } from '../../api/types'
 import { StatePlaceholder } from '../components/StatePlaceholder'
@@ -62,12 +63,29 @@ export function InvitationsPage() {
   const [auditEmail, setAuditEmail] = useState('')
   const [auditEmailInput, setAuditEmailInput] = useState('')
   const [auditOffset, setAuditOffset] = useState(0)
+  const [exportingFormat, setExportingFormat] = useState<'csv' | 'json' | null>(null)
+  const [exportError, setExportError] = useState('')
   const auditQuery = useInvitationAuditEvents(isAdmin, {
     limit: AUDIT_PAGE_SIZE,
     offset: auditOffset,
     actions: auditActions,
     email: auditEmail,
   })
+
+  const handleExportAudit = async (format: 'csv' | 'json') => {
+    setExportError('')
+    setExportingFormat(format)
+    try {
+      await downloadInvitationAuditExport(format, {
+        actions: auditActions,
+        email: auditEmail,
+      })
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : '导出失败')
+    } finally {
+      setExportingFormat(null)
+    }
+  }
 
   const allInvitations = useMemo(
     () => (invitationsQuery.data ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -513,7 +531,32 @@ export function InvitationsPage() {
                     <RefreshCw size={14} aria-hidden="true" />
                     刷新
                   </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => handleExportAudit('csv')}
+                    disabled={exportingFormat !== null}
+                    aria-label="导出 CSV"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    {exportingFormat === 'csv' ? '导出中…' : '导出 CSV'}
+                  </button>
+                  <button
+                    type="button"
+                    className="action-btn"
+                    onClick={() => handleExportAudit('json')}
+                    disabled={exportingFormat !== null}
+                    aria-label="导出 JSON"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    {exportingFormat === 'json' ? '导出中…' : '导出 JSON'}
+                  </button>
                 </div>
+                {exportError ? (
+                  <p className="invitation-audit-export-error" role="alert">
+                    导出失败：{exportError}
+                  </p>
+                ) : null}
               </div>
             </>
           )}

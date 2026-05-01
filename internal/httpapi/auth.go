@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -312,25 +313,23 @@ func invitationAuditDTO(ev domain.InvitationAuditEvent) invitationAuditEventResp
 	}
 }
 
-func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
-	if a.authService == nil {
-		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
-		return
-	}
+// parseInvitationAuditFilter parses common filter query params shared by list/export endpoints.
+// Returns true on success; on failure it writes an error response and returns false.
+func parseInvitationAuditFilter(w http.ResponseWriter, r *http.Request, defaultLimit, maxLimit int) (repo.InvitationAuditFilter, bool) {
 	q := r.URL.Query()
 	filter := repo.InvitationAuditFilter{
 		Email: strings.TrimSpace(q.Get("email")),
 	}
 	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
-			if parsed > 200 {
-				parsed = 200
+			if parsed > maxLimit {
+				parsed = maxLimit
 			}
 			filter.Limit = parsed
 		}
 	}
 	if filter.Limit == 0 {
-		filter.Limit = 50
+		filter.Limit = defaultLimit
 	}
 	if raw := strings.TrimSpace(q.Get("offset")); raw != "" {
 		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
@@ -358,7 +357,7 @@ func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
 			filter.Since = &t
 		} else {
 			writeError(w, http.StatusBadRequest, "invalid_since", "since must be RFC3339")
-			return
+			return filter, false
 		}
 	}
 	if raw := strings.TrimSpace(q.Get("until")); raw != "" {
@@ -366,8 +365,20 @@ func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
 			filter.Until = &t
 		} else {
 			writeError(w, http.StatusBadRequest, "invalid_until", "until must be RFC3339")
-			return
+			return filter, false
 		}
+	}
+	return filter, true
+}
+
+func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	filter, ok := parseInvitationAuditFilter(w, r, 50, 200)
+	if !ok {
+		return
 	}
 	page, err := a.authService.ListInvitationAuditEvents(r.Context(), filter)
 	if err != nil {
@@ -384,6 +395,70 @@ func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
 		"limit":    filter.Limit,
 		"offset":   filter.Offset,
 	})
+}
+
+// exportInvitationAudit streams the filtered audit log as JSON or CSV.
+// Pagination is bypassed by raising the per-request cap to 5000; offset is ignored.
+func (a *api) exportInvitationAudit(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format == "" {
+		format = "csv"
+	}
+	if format != "csv" && format != "json" {
+		writeError(w, http.StatusBadRequest, "invalid_format", "format must be csv or json")
+		return
+	}
+	filter, ok := parseInvitationAuditFilter(w, r, 5000, 5000)
+	if !ok {
+		return
+	}
+	filter.Offset = 0
+	page, err := a.authService.ListInvitationAuditEvents(r.Context(), filter)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	timestamp := time.Now().UTC().Format("20060102-150405")
+	out := make([]invitationAuditEventResponse, 0, len(page.Events))
+	for _, ev := range page.Events {
+		out = append(out, invitationAuditDTO(ev))
+	}
+	if format == "json" {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Disposition", `attachment; filename="invitation-audit-`+timestamp+`.json"`)
+		w.Header().Set("X-Has-More", strconv.FormatBool(page.HasMore))
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"events":   out,
+			"has_more": page.HasMore,
+		})
+		return
+	}
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="invitation-audit-`+timestamp+`.csv"`)
+	w.Header().Set("X-Has-More", strconv.FormatBool(page.HasMore))
+	w.WriteHeader(http.StatusOK)
+	cw := csv.NewWriter(w)
+	defer cw.Flush()
+	_ = cw.Write([]string{"id", "organization_id", "invitation_id", "action", "email", "role", "actor_email", "actor_user_id", "note", "created_at"})
+	for _, ev := range out {
+		_ = cw.Write([]string{
+			ev.ID,
+			ev.OrganizationID,
+			ev.InvitationID,
+			ev.Action,
+			ev.Email,
+			ev.Role,
+			ev.ActorEmail,
+			ev.ActorUserID,
+			ev.Note,
+			ev.CreatedAt.Format(time.RFC3339),
+		})
+	}
 }
 
 type sessionResponse struct {
