@@ -561,7 +561,31 @@ export function AgentStreamSandbox() {
           </button>
           {isHistoryOpen && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  style={{ fontSize: 11 }}
+                  onClick={() => {
+                    try {
+                      const payload = JSON.stringify(history, null, 2)
+                      const blob = new Blob([payload], { type: 'application/json;charset=utf-8' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = document.createElement('a')
+                      anchor.href = url
+                      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+                      anchor.download = `sandbox-run-history-${stamp}.json`
+                      document.body.appendChild(anchor)
+                      anchor.click()
+                      document.body.removeChild(anchor)
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                    } catch {
+                      /* swallow */
+                    }
+                  }}
+                >
+                  导出全部 JSON
+                </button>
                 <button type="button" className="btn-ghost" onClick={clearHistory} style={{ fontSize: 11 }}>
                   清空历史
                 </button>
