@@ -578,6 +578,77 @@ function LLMTelemetryPanel() {
           ) : null}
           {data.recent_events && data.recent_events.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      const header = [
+                        'started_at',
+                        'capability',
+                        'vendor',
+                        'model',
+                        'role',
+                        'mode',
+                        'duration_ms',
+                        'token_count',
+                        'success',
+                        'error_message',
+                      ]
+                      const escape = (value: unknown) => {
+                        const str = value === undefined || value === null ? '' : String(value)
+                        if (/[",\n]/.test(str)) {
+                          return `"${str.replace(/"/g, '""')}"`
+                        }
+                        return str
+                      }
+                      const rows = [header.join(',')]
+                      for (const ev of data.recent_events ?? []) {
+                        rows.push(
+                          [
+                            ev.started_at,
+                            ev.capability || 'chat',
+                            ev.vendor,
+                            ev.model || '',
+                            ev.role || '',
+                            ev.mode,
+                            ev.duration_ms,
+                            ev.token_count || '',
+                            ev.success ? 'true' : 'false',
+                            ev.error_message || '',
+                          ]
+                            .map(escape)
+                            .join(','),
+                        )
+                      }
+                      const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+                      const url = URL.createObjectURL(blob)
+                      const anchor = document.createElement('a')
+                      anchor.href = url
+                      const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+                      anchor.download = `llm-telemetry-events-${stamp}.csv`
+                      document.body.appendChild(anchor)
+                      anchor.click()
+                      document.body.removeChild(anchor)
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                    } catch {
+                      /* swallow */
+                    }
+                  }}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: 12,
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.18)',
+                    background: 'transparent',
+                    color: '#cbd5f5',
+                    cursor: 'pointer',
+                  }}
+                  title="按当前快照中的最近事件导出 CSV"
+                >
+                  导出最近 {data.recent_events.length} 条事件
+                </button>
+              </div>
               <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>
                 <thead>
                   <tr>
