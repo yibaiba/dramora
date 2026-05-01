@@ -7,14 +7,15 @@ import (
 	"time"
 )
 
-// LLMTelemetryEvent 描述单次 LLM 调用的可观测元信息。
+// LLMTelemetryEvent 描述单次 LLM / 媒体生成调用的可观测元信息。
 // 不包含 prompt / response 正文，避免 PII / 大对象进入指标面。
 type LLMTelemetryEvent struct {
 	StartedAt    time.Time `json:"started_at"`
-	Vendor       string    `json:"vendor"` // openai | anthropic | mock | seedance（chat 当前仅前三）
-	Model        string    `json:"model"`  // cfg.Model 透传
-	Role         string    `json:"role"`   // agent role / 调用方语义标识
-	Mode         string    `json:"mode"`   // complete | stream
+	Capability   string    `json:"capability"` // chat | image | video | audio
+	Vendor       string    `json:"vendor"`     // openai | anthropic | mock | seedance
+	Model        string    `json:"model"`      // cfg.Model 透传
+	Role         string    `json:"role"`       // agent role / 调用方语义标识
+	Mode         string    `json:"mode"`       // complete | stream | submit | poll | generate | synthesize
 	DurationMS   int64     `json:"duration_ms"`
 	TokenCount   int       `json:"token_count"`
 	Success      bool      `json:"success"`
@@ -27,6 +28,7 @@ type LLMTelemetrySnapshot struct {
 	SuccessCalls        uint64              `json:"success_calls"`
 	ErrorCalls          uint64              `json:"error_calls"`
 	ByVendor            map[string]uint64   `json:"by_vendor"`
+	ByCapability        map[string]uint64   `json:"by_capability"`
 	AvgDurationMSVendor map[string]int64    `json:"avg_duration_ms_by_vendor"`
 	RecentEvents        []LLMTelemetryEvent `json:"recent_events"`
 	LastEventAt         time.Time           `json:"last_event_at,omitempty"`
@@ -42,19 +44,21 @@ type llmTelemetry struct {
 	successCalls uint64
 	errorCalls   uint64
 
-	mu              sync.Mutex
-	ring            []LLMTelemetryEvent
-	cursor          int
-	full            bool
-	vendorCounts    map[string]uint64
-	vendorDurations map[string]int64 // 累计 ms，配合 vendorCounts 计算均值
+	mu               sync.Mutex
+	ring             []LLMTelemetryEvent
+	cursor           int
+	full             bool
+	vendorCounts     map[string]uint64
+	vendorDurations  map[string]int64 // 累计 ms，配合 vendorCounts 计算均值
+	capabilityCounts map[string]uint64
 }
 
 func newLLMTelemetry() *llmTelemetry {
 	return &llmTelemetry{
-		ring:            make([]LLMTelemetryEvent, llmTelemetryRingCapacity),
-		vendorCounts:    map[string]uint64{},
-		vendorDurations: map[string]int64{},
+		ring:             make([]LLMTelemetryEvent, llmTelemetryRingCapacity),
+		vendorCounts:     map[string]uint64{},
+		vendorDurations:  map[string]int64{},
+		capabilityCounts: map[string]uint64{},
 	}
 }
 
@@ -73,6 +77,9 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 	if strings.TrimSpace(ev.Vendor) == "" {
 		ev.Vendor = "unknown"
 	}
+	if strings.TrimSpace(ev.Capability) == "" {
+		ev.Capability = "chat"
+	}
 	t.ring[t.cursor] = ev
 	t.cursor = (t.cursor + 1) % len(t.ring)
 	if t.cursor == 0 {
@@ -80,6 +87,7 @@ func (t *llmTelemetry) record(ev LLMTelemetryEvent) {
 	}
 	t.vendorCounts[ev.Vendor]++
 	t.vendorDurations[ev.Vendor] += ev.DurationMS
+	t.capabilityCounts[ev.Capability]++
 }
 
 func (t *llmTelemetry) snapshot() LLMTelemetrySnapshot {
@@ -88,12 +96,16 @@ func (t *llmTelemetry) snapshot() LLMTelemetrySnapshot {
 		SuccessCalls:        atomic.LoadUint64(&t.successCalls),
 		ErrorCalls:          atomic.LoadUint64(&t.errorCalls),
 		ByVendor:            map[string]uint64{},
+		ByCapability:        map[string]uint64{},
 		AvgDurationMSVendor: map[string]int64{},
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	for k, v := range t.vendorCounts {
 		snap.ByVendor[k] = v
+	}
+	for k, v := range t.capabilityCounts {
+		snap.ByCapability[k] = v
 	}
 	for k, v := range t.vendorDurations {
 		if t.vendorCounts[k] > 0 {

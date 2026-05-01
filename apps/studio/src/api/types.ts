@@ -562,7 +562,8 @@ export type LLMTelemetryEvent = {
   vendor: string
   model: string
   role: string
-  mode: 'complete' | 'stream'
+  capability?: 'chat' | 'image' | 'video' | 'audio' | string
+  mode: 'complete' | 'stream' | 'generate' | 'synthesize' | 'submit' | 'poll' | string
   duration_ms: number
   token_count: number
   success: boolean
@@ -575,6 +576,7 @@ export type LLMTelemetrySnapshot = {
   error_calls: number
   by_vendor: Record<string, number>
   avg_duration_ms_by_vendor: Record<string, number>
+  by_capability: Record<string, number>
   recent_events: LLMTelemetryEvent[]
   last_event_at?: string
 }

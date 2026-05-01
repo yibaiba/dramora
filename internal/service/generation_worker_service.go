@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
@@ -203,7 +204,9 @@ func (s *ProductionService) submitSeedanceGenerationJob(ctx context.Context, gen
 	if err != nil {
 		return err
 	}
+	start := time.Now()
 	task, err := s.resolveSeedance(ctx).SubmitGeneration(ctx, seedanceRequestInput(generationJob))
+	s.recordCapabilityCall(start, "video", "seedance", generationJob.Model, "submit", err)
 	if err != nil {
 		_, _ = s.advanceGenerationJob(ctx, submitting, domain.GenerationJobStatusFailed, "", "seedance worker submit failed")
 		return err
@@ -265,7 +268,10 @@ func (s *ProductionService) pollSeedanceTask(
 	if strings.TrimSpace(generationJob.ProviderTaskID) == "" {
 		return provider.SeedanceGenerationTask{}, fmt.Errorf("%w: seedance provider task id is required", domain.ErrInvalidInput)
 	}
-	return s.resolveSeedance(ctx).PollGeneration(ctx, generationJob.ProviderTaskID)
+	start := time.Now()
+	task, err := s.resolveSeedance(ctx).PollGeneration(ctx, generationJob.ProviderTaskID)
+	s.recordCapabilityCall(start, "video", "seedance", generationJob.Model, "poll", err)
+	return task, err
 }
 
 func (s *ProductionService) completeSeedanceGenerationJob(

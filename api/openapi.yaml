@@ -1474,6 +1474,17 @@ paths:
                         additionalProperties:
                           type: integer
                           format: int64
+                      by_capability:
+                        type: object
+                        additionalProperties:
+                          type: integer
+                          format: int64
+                        description: |
+                          Per-capability call counts. Keys are capability names
+                          (chat / image / video / audio); chat covers the LLM
+                          adapter path while image/video/audio reflect provider
+                          worker calls (image generate, video submit/poll,
+                          audio synthesize).
                       recent_events:
                         type: array
                         items:
@@ -1488,9 +1499,12 @@ paths:
                               type: string
                             role:
                               type: string
+                            capability:
+                              type: string
+                              enum: [chat, image, video, audio]
                             mode:
                               type: string
-                              enum: [complete, stream]
+                              enum: [complete, stream, generate, synthesize, submit, poll]
                             duration_ms:
                               type: integer
                               format: int64

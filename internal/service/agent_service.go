@@ -27,9 +27,22 @@ func NewAgentService(providerSvc *ProviderService) *AgentService {
 // service was constructed without a telemetry buffer (legacy paths).
 func (s *AgentService) LLMTelemetry() LLMTelemetrySnapshot {
 	if s == nil || s.telemetry == nil {
-		return LLMTelemetrySnapshot{ByVendor: map[string]uint64{}, AvgDurationMSVendor: map[string]int64{}}
+		return LLMTelemetrySnapshot{
+			ByVendor:            map[string]uint64{},
+			ByCapability:        map[string]uint64{},
+			AvgDurationMSVendor: map[string]int64{},
+		}
 	}
 	return s.telemetry.snapshot()
+}
+
+// RecordTelemetry lets other services (e.g. ProductionService for image / audio /
+// video worker calls) feed events into the same in-process telemetry buffer.
+func (s *AgentService) RecordTelemetry(ev LLMTelemetryEvent) {
+	if s == nil || s.telemetry == nil {
+		return
+	}
+	s.telemetry.record(ev)
 }
 
 func (s *AgentService) recordTelemetry(ev LLMTelemetryEvent) {
@@ -95,6 +108,7 @@ func (s *AgentService) callLLM(ctx context.Context, role string, prompt string) 
 	}
 	ev := LLMTelemetryEvent{
 		StartedAt:  start.UTC(),
+		Capability: "chat",
 		Vendor:     cfg.ResolvedProviderType(),
 		Model:      cfg.Model,
 		Role:       role,
@@ -175,6 +189,7 @@ func (s *AgentService) RunSingleAgentStream(ctx context.Context, role string, so
 	}
 	ev := LLMTelemetryEvent{
 		StartedAt:  start.UTC(),
+		Capability: "chat",
 		Vendor:     cfg.ResolvedProviderType(),
 		Model:      cfg.Model,
 		Role:       role,

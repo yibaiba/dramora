@@ -101,12 +101,26 @@ function LLMTelemetryPanel() {
               />
             ))}
           </div>
+          {data.by_capability && Object.keys(data.by_capability).length > 0 ? (
+            <div
+              className="telemetry-by-capability"
+              style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}
+            >
+              <span className="muted" style={{ fontSize: 12, alignSelf: 'center' }}>
+                按能力：
+              </span>
+              {Object.entries(data.by_capability).map(([cap, count]) => (
+                <Stat key={cap} label={cap} value={count} />
+              ))}
+            </div>
+          ) : null}
           {data.recent_events && data.recent_events.length > 0 ? (
             <div style={{ overflowX: 'auto' }}>
               <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>
                 <thead>
                   <tr>
                     <th style={{ textAlign: 'left' }}>时间</th>
+                    <th style={{ textAlign: 'left' }}>Capability</th>
                     <th style={{ textAlign: 'left' }}>Vendor</th>
                     <th style={{ textAlign: 'left' }}>Model</th>
                     <th style={{ textAlign: 'left' }}>Role</th>
@@ -120,6 +134,7 @@ function LLMTelemetryPanel() {
                   {data.recent_events.slice(0, 10).map((ev, idx) => (
                     <tr key={`${ev.started_at}-${idx}`}>
                       <td>{ev.started_at ? new Date(ev.started_at).toLocaleTimeString() : '-'}</td>
+                      <td>{ev.capability || 'chat'}</td>
                       <td>{ev.vendor}</td>
                       <td>{ev.model || '-'}</td>
                       <td>{ev.role || '-'}</td>

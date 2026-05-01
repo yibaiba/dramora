@@ -61,3 +61,32 @@ func TestLLMTelemetryRingCaps(t *testing.T) {
 		t.Fatalf("recent=%d want 50 (cap)", len(snap.RecentEvents))
 	}
 }
+
+func TestLLMTelemetryAggregatesByCapability(t *testing.T) {
+	tel := newLLMTelemetry()
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "chat", Mode: "complete", DurationMS: 100, Success: true})
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "image", Mode: "generate", DurationMS: 300, Success: true})
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Capability: "audio", Mode: "synthesize", DurationMS: 200, Success: false, ErrorMessage: "boom"})
+	tel.record(LLMTelemetryEvent{Vendor: "seedance", Capability: "video", Mode: "submit", DurationMS: 400, Success: true})
+	snap := tel.snapshot()
+	if snap.TotalCalls != 4 {
+		t.Fatalf("total=%d want 4", snap.TotalCalls)
+	}
+	for _, key := range []string{"chat", "image", "audio", "video"} {
+		if snap.ByCapability[key] != 1 {
+			t.Fatalf("by_capability[%s]=%d want 1; full=%v", key, snap.ByCapability[key], snap.ByCapability)
+		}
+	}
+	if snap.ByVendor["openai"] != 3 || snap.ByVendor["seedance"] != 1 {
+		t.Fatalf("by_vendor=%v", snap.ByVendor)
+	}
+}
+
+func TestLLMTelemetryDefaultsCapabilityWhenMissing(t *testing.T) {
+	tel := newLLMTelemetry()
+	tel.record(LLMTelemetryEvent{Vendor: "openai", Mode: "complete", DurationMS: 50, Success: true})
+	snap := tel.snapshot()
+	if snap.ByCapability["chat"] != 1 {
+		t.Fatalf("missing capability should default to chat, got %v", snap.ByCapability)
+	}
+}

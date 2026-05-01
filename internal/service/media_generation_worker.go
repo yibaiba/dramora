@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/provider"
@@ -74,6 +75,7 @@ func (s *ProductionService) processImageGenerationJob(ctx context.Context, gener
 	if model == "" {
 		model = cfg.Model
 	}
+	start := time.Now()
 	result, err := imageProvider.Generate(ctx, provider.ImageRequest{
 		Prompt:    current.Prompt,
 		Model:     model,
@@ -81,6 +83,7 @@ func (s *ProductionService) processImageGenerationJob(ctx context.Context, gener
 		Height:    intParam(current.Params, "height"),
 		NumImages: intParam(current.Params, "n"),
 	})
+	s.recordCapabilityCall(start, "image", imageProvider.Name(), model, "generate", err)
 	if err != nil {
 		_, _ = s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusFailed, "", "image worker generation failed")
 		return err
@@ -136,12 +139,14 @@ func (s *ProductionService) processAudioGenerationJob(ctx context.Context, gener
 	if model == "" {
 		model = cfg.Model
 	}
+	start := time.Now()
 	result, err := audioProvider.Synthesize(ctx, provider.AudioRequest{
 		Text:   current.Prompt,
 		Model:  model,
 		Voice:  stringParam(current.Params, "voice"),
 		Format: stringParam(current.Params, "format"),
 	})
+	s.recordCapabilityCall(start, "audio", audioProvider.Name(), model, "synthesize", err)
 	if err != nil {
 		_, _ = s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusFailed, "", "audio worker synthesize failed")
 		return err
@@ -221,4 +226,27 @@ func (s *ProductionService) completeMediaDownload(
 		},
 	})
 	return job, err
+}
+
+// recordCapabilityCall feeds a capability worker call event into the shared
+// LLM telemetry buffer (when an AgentService is attached). Vendor and model
+// are reported as observed at call time so admin telemetry can disambiguate
+// e.g. mock vs openai vs seedance per capability.
+func (s *ProductionService) recordCapabilityCall(start time.Time, capability, vendor, model, mode string, err error) {
+	if s == nil || s.agentSvc == nil {
+		return
+	}
+	ev := LLMTelemetryEvent{
+		StartedAt:  start.UTC(),
+		Capability: capability,
+		Vendor:     strings.TrimSpace(vendor),
+		Model:      strings.TrimSpace(model),
+		Mode:       mode,
+		DurationMS: time.Since(start).Milliseconds(),
+		Success:    err == nil,
+	}
+	if err != nil {
+		ev.ErrorMessage = err.Error()
+	}
+	s.agentSvc.RecordTelemetry(ev)
 }
