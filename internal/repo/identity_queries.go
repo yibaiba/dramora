@@ -99,3 +99,22 @@ SET status = 'revoked',
     updated_at = $3
 WHERE id = $1::uuid AND organization_id = $2::uuid AND status = 'pending'
 `
+
+const insertInvitationAuditEventSQL = `
+INSERT INTO organization_invitation_events (
+    id, organization_id, invitation_id, action,
+    actor_user_id, actor_email, email, role, note, created_at
+) VALUES (
+    $1::uuid, $2::uuid, $3::uuid, $4,
+    NULLIF($5, '')::uuid, NULLIF($6, ''), $7, $8, NULLIF($9, ''), $10
+)
+`
+
+const listInvitationAuditEventsSQL = `
+SELECT id, organization_id, invitation_id, action,
+       actor_user_id, actor_email, email, role, note, created_at
+FROM organization_invitation_events
+WHERE organization_id = $1::uuid
+ORDER BY created_at DESC
+LIMIT $2
+`

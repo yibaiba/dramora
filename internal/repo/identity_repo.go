@@ -39,6 +39,9 @@ type IdentityRepository interface {
 	MarkInvitationAccepted(ctx context.Context, invitationID, userID string, acceptedAt time.Time) error
 	ListOrganizationInvitations(ctx context.Context, organizationID string) ([]domain.OrganizationInvitation, error)
 	RevokeInvitation(ctx context.Context, invitationID, organizationID string, revokedAt time.Time) error
+
+	AppendInvitationAuditEvent(ctx context.Context, params AppendInvitationAuditParams) (domain.InvitationAuditEvent, error)
+	ListInvitationAuditEvents(ctx context.Context, organizationID string, limit int) ([]domain.InvitationAuditEvent, error)
 }
 
 type CreateOrganizationParams struct {
@@ -54,6 +57,19 @@ type CreateInvitationParams struct {
 	Token           string
 	InvitedByUserID string
 	ExpiresAt       time.Time
+}
+
+type AppendInvitationAuditParams struct {
+	EventID        string
+	OrganizationID string
+	InvitationID   string
+	Action         string
+	ActorUserID    string
+	ActorEmail     string
+	Email          string
+	Role           string
+	Note           string
+	CreatedAt      time.Time
 }
 
 type PostgresIdentityRepository struct {
@@ -232,6 +248,86 @@ func (r *PostgresIdentityRepository) RevokeInvitation(ctx context.Context, invit
 		return domain.ErrNotFound
 	}
 	return nil
+}
+
+func (r *PostgresIdentityRepository) AppendInvitationAuditEvent(
+	ctx context.Context,
+	params AppendInvitationAuditParams,
+) (domain.InvitationAuditEvent, error) {
+	createdAt := params.CreatedAt.UTC()
+	_, err := r.pool.Exec(ctx, insertInvitationAuditEventSQL,
+		params.EventID,
+		params.OrganizationID,
+		params.InvitationID,
+		params.Action,
+		params.ActorUserID,
+		params.ActorEmail,
+		params.Email,
+		params.Role,
+		params.Note,
+		createdAt,
+	)
+	if err != nil {
+		return domain.InvitationAuditEvent{}, fmt.Errorf("append invitation audit: %w", err)
+	}
+	return domain.InvitationAuditEvent{
+		ID:             params.EventID,
+		OrganizationID: params.OrganizationID,
+		InvitationID:   params.InvitationID,
+		Action:         params.Action,
+		ActorUserID:    params.ActorUserID,
+		ActorEmail:     params.ActorEmail,
+		Email:          params.Email,
+		Role:           params.Role,
+		Note:           params.Note,
+		CreatedAt:      createdAt,
+	}, nil
+}
+
+func (r *PostgresIdentityRepository) ListInvitationAuditEvents(
+	ctx context.Context,
+	organizationID string,
+	limit int,
+) ([]domain.InvitationAuditEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.pool.Query(ctx, listInvitationAuditEventsSQL, organizationID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list invitation audit: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.InvitationAuditEvent
+	for rows.Next() {
+		var ev domain.InvitationAuditEvent
+		var actorUser, actorEmail, note *string
+		if scanErr := rows.Scan(
+			&ev.ID,
+			&ev.OrganizationID,
+			&ev.InvitationID,
+			&ev.Action,
+			&actorUser,
+			&actorEmail,
+			&ev.Email,
+			&ev.Role,
+			&note,
+			&ev.CreatedAt,
+		); scanErr != nil {
+			return nil, fmt.Errorf("scan invitation audit: %w", scanErr)
+		}
+		if actorUser != nil {
+			ev.ActorUserID = *actorUser
+		}
+		if actorEmail != nil {
+			ev.ActorEmail = *actorEmail
+		}
+		if note != nil {
+			ev.Note = *note
+		}
+		ev.CreatedAt = ev.CreatedAt.UTC()
+		out = append(out, ev)
+	}
+	return out, rows.Err()
 }
 
 func scanInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {

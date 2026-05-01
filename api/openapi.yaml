@@ -294,6 +294,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  /api/v1/organizations/invitations/audit:
+    get:
+      summary: List recent invitation audit events for the current organization (owner/admin only)
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+      responses:
+        "200":
+          description: Recent invitation audit events, ordered by created_at desc
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/InvitationAuditEvent"
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
   /api/v1/projects:
     get:
       summary: List projects
@@ -1401,6 +1429,22 @@ components:
           type: string
           enum: [owner, admin, editor, viewer]
           default: editor
+    InvitationAuditEvent:
+      type: object
+      required: [id, organization_id, invitation_id, action, email, role, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        invitation_id: { type: string, format: uuid }
+        action:
+          type: string
+          enum: [created, accepted, revoked, resent]
+        actor_user_id: { type: string, format: uuid, nullable: true }
+        actor_email: { type: string, nullable: true }
+        email: { type: string, format: email }
+        role: { type: string, enum: [owner, admin, editor, viewer] }
+        note: { type: string, nullable: true }
+        created_at: { type: string, format: date-time }
     CreateEpisodeRequest:
       type: object
       required:

@@ -27,6 +27,7 @@ import {
   createOrganizationInvitation,
   revokeOrganizationInvitation,
   resendOrganizationInvitation,
+  listInvitationAuditEvents,
   listSessions,
   revokeSession,
   listStorySources,
@@ -510,7 +511,10 @@ export function useCreateInvitation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (request: CreateInvitationRequest) => createOrganizationInvitation(request),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization-invitations'] })
+      queryClient.invalidateQueries({ queryKey: ['invitation-audit'] })
+    },
   })
 }
 
@@ -518,7 +522,10 @@ export function useRevokeInvitation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (invitationId: string) => revokeOrganizationInvitation(invitationId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization-invitations'] })
+      queryClient.invalidateQueries({ queryKey: ['invitation-audit'] })
+    },
   })
 }
 
@@ -526,7 +533,18 @@ export function useResendInvitation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (invitationId: string) => resendOrganizationInvitation(invitationId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization-invitations'] })
+      queryClient.invalidateQueries({ queryKey: ['invitation-audit'] })
+    },
+  })
+}
+
+export function useInvitationAuditEvents(enabled = true, limit?: number) {
+  return useQuery({
+    enabled,
+    queryFn: () => listInvitationAuditEvents(limit),
+    queryKey: ['invitation-audit', limit ?? 'default'],
   })
 }
 

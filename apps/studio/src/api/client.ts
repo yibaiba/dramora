@@ -17,6 +17,7 @@ import type {
   ProviderConfig,
   LoginRequest,
   OrganizationInvitation,
+  InvitationAuditEvent,
   RegisterRequest,
   SaveProviderConfigRequest,
   SeedEpisodeProductionResponse,
@@ -514,4 +515,12 @@ export async function resendOrganizationInvitation(invitationId: string): Promis
     { method: 'POST' },
   )
   return payload.invitation
+}
+
+export async function listInvitationAuditEvents(limit?: number): Promise<InvitationAuditEvent[]> {
+  const query = limit && limit > 0 ? `?limit=${encodeURIComponent(String(limit))}` : ''
+  const payload = await fetchJSON<{ events: InvitationAuditEvent[] }>(
+    `/api/v1/organizations/invitations/audit${query}`,
+  )
+  return payload.events ?? []
 }

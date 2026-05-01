@@ -75,6 +75,19 @@ export type CreateInvitationRequest = {
   role?: 'owner' | 'admin' | 'editor' | 'viewer'
 }
 
+export type InvitationAuditEvent = {
+  id: string
+  organization_id: string
+  invitation_id: string
+  action: 'created' | 'accepted' | 'revoked' | 'resent'
+  actor_user_id?: string
+  actor_email?: string
+  email: string
+  role: 'owner' | 'admin' | 'editor' | 'viewer'
+  note?: string
+  created_at: string
+}
+
 export type Project = {
   id: string
   organization_id: string

@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Mail, Plus, ShieldCheck, Copy, Check, Search, XCircle, RefreshCw } from 'lucide-react'
-import { useCreateInvitation, useOrganizationInvitations, useRevokeInvitation, useResendInvitation } from '../../api/hooks'
+import { useCreateInvitation, useOrganizationInvitations, useRevokeInvitation, useResendInvitation, useInvitationAuditEvents } from '../../api/hooks'
 import { useAuthStore } from '../../state/authStore'
 import type { OrganizationInvitation } from '../../api/types'
 import { StatePlaceholder } from '../components/StatePlaceholder'
@@ -44,6 +44,7 @@ export function InvitationsPage() {
   const createMutation = useCreateInvitation()
   const revokeMutation = useRevokeInvitation()
   const resendMutation = useResendInvitation()
+  const auditQuery = useInvitationAuditEvents(isAdmin, 50)
 
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<OrganizationInvitation['role']>('editor')
@@ -346,6 +347,50 @@ export function InvitationsPage() {
               重发失败：{resendError}
             </div>
           ) : null}
+        </div>
+      </section>
+
+      <section className="page-section">
+        <header className="page-section-header">
+          <h2>邀请审计日志</h2>
+          <p>记录最近的「创建 / 接受 / 吊销 / 重发」动作，便于回溯责任与跨组织审计。</p>
+        </header>
+        <div className="page-section-body">
+          {auditQuery.isLoading ? (
+            <StatePlaceholder tone="loading" title="正在加载审计事件..." />
+          ) : auditQuery.isError ? (
+            <StatePlaceholder
+              tone="error"
+              title="加载审计日志失败"
+              description={auditQuery.error instanceof Error ? auditQuery.error.message : ''}
+            />
+          ) : !auditQuery.data || auditQuery.data.length === 0 ? (
+            <StatePlaceholder tone="empty" title="暂无审计事件" description="邀请相关动作发生后会出现在这里。" />
+          ) : (
+            <ul className="invitation-list">
+              {auditQuery.data.map((event) => (
+                <li key={event.id} className="invitation-row">
+                  <div className="invitation-row-main">
+                    <span className={`invitation-status invitation-status-${event.action}`}>
+                      {event.action === 'created' && '已创建'}
+                      {event.action === 'accepted' && '已接受'}
+                      {event.action === 'revoked' && '已吊销'}
+                      {event.action === 'resent' && '已重发'}
+                    </span>
+                    <span className="invitation-email">{event.email}</span>
+                    <span className="invitation-role">{event.role}</span>
+                  </div>
+                  <div className="invitation-row-meta">
+                    {event.actor_email ? <span>操作者：{event.actor_email}</span> : null}
+                    {event.actor_user_id && !event.actor_email ? (
+                      <span>操作者 ID：{event.actor_user_id.slice(0, 8)}…</span>
+                    ) : null}
+                    <span title={event.created_at}>{new Date(event.created_at).toLocaleString()}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </section>
     </div>

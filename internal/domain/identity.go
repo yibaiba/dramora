@@ -30,3 +30,25 @@ type OrganizationInvitation struct {
 	CreatedAt        time.Time
 	UpdatedAt        time.Time
 }
+
+const (
+	InvitationActionCreated  = "created"
+	InvitationActionAccepted = "accepted"
+	InvitationActionRevoked  = "revoked"
+	InvitationActionResent   = "resent"
+)
+
+// InvitationAuditEvent 记录一次对邀请的关键动作（创建 / 接受 / 吊销 / 重发）。
+// 字段 Email/Role 是事件发生时的快照，避免邀请记录被吊销/删除后审计丢失上下文。
+type InvitationAuditEvent struct {
+	ID             string
+	OrganizationID string
+	InvitationID   string
+	Action         string
+	ActorUserID    string
+	ActorEmail     string
+	Email          string
+	Role           string
+	Note           string
+	CreatedAt      time.Time
+}

@@ -409,4 +409,20 @@ var sqliteMigrations = []string{
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_active
 		ON auth_refresh_tokens (user_id, revoked_at)`,
+
+	// PR8: 邀请审计事件 — 记录 created/accepted/revoked/resent 关键动作。
+	`CREATE TABLE IF NOT EXISTS organization_invitation_events (
+		id TEXT PRIMARY KEY,
+		organization_id TEXT NOT NULL,
+		invitation_id TEXT NOT NULL,
+		action TEXT NOT NULL,
+		actor_user_id TEXT,
+		actor_email TEXT,
+		email TEXT NOT NULL,
+		role TEXT NOT NULL,
+		note TEXT,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_invitation_events_org_created
+		ON organization_invitation_events (organization_id, created_at DESC)`,
 }

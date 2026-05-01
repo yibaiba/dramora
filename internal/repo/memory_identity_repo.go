@@ -17,6 +17,7 @@ type MemoryIdentityRepository struct {
 	organizations map[string]string // orgID -> name
 	invitations   map[string]domain.OrganizationInvitation
 	tokenIndex    map[string]string // token -> invitationID
+	auditEvents   []domain.InvitationAuditEvent
 }
 
 func NewMemoryIdentityRepository() *MemoryIdentityRepository {
@@ -165,4 +166,46 @@ func (r *MemoryIdentityRepository) RevokeInvitation(_ context.Context, invitatio
 	inv.UpdatedAt = revokedAt.UTC()
 	r.invitations[invitationID] = inv
 	return nil
+}
+
+func (r *MemoryIdentityRepository) AppendInvitationAuditEvent(
+	_ context.Context,
+	params AppendInvitationAuditParams,
+) (domain.InvitationAuditEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	ev := domain.InvitationAuditEvent{
+		ID:             params.EventID,
+		OrganizationID: params.OrganizationID,
+		InvitationID:   params.InvitationID,
+		Action:         params.Action,
+		ActorUserID:    params.ActorUserID,
+		ActorEmail:     params.ActorEmail,
+		Email:          params.Email,
+		Role:           params.Role,
+		Note:           params.Note,
+		CreatedAt:      params.CreatedAt.UTC(),
+	}
+	r.auditEvents = append(r.auditEvents, ev)
+	return ev, nil
+}
+
+func (r *MemoryIdentityRepository) ListInvitationAuditEvents(
+	_ context.Context,
+	organizationID string,
+	limit int,
+) ([]domain.InvitationAuditEvent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if limit <= 0 {
+		limit = 100
+	}
+	var out []domain.InvitationAuditEvent
+	for i := len(r.auditEvents) - 1; i >= 0 && len(out) < limit; i-- {
+		ev := r.auditEvents[i]
+		if ev.OrganizationID == organizationID {
+			out = append(out, ev)
+		}
+	}
+	return out, nil
 }

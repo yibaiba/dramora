@@ -266,3 +266,85 @@ func TestResendInvitationRevokesOldAndIssuesNewToken(t *testing.T) {
 		t.Fatalf("expected 201 registering with new resent token, got %d: %s", newRegResp.Code, newRegResp.Body.String())
 	}
 }
+
+func TestInvitationAuditLogCapturesLifecycle(t *testing.T) {
+	t.Parallel()
+
+	router := testRouter()
+
+	// 1. Create initial invitation -> expect 1 `created` audit event.
+	createBody := bytes.NewBufferString(`{"email":"audit-me@example.com","role":"editor"}`)
+	createResp := httptest.NewRecorder()
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations", createBody)
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("create invitation: expected 201, got %d: %s", createResp.Code, createResp.Body.String())
+	}
+	var created struct {
+		Invitation invitationResponse `json:"invitation"`
+	}
+	decodeBody(t, createResp, &created)
+
+	// 2. Resend it -> emits `revoked` (old) + `created` (new) audit events.
+	resendResp := httptest.NewRecorder()
+	resendReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations/"+created.Invitation.ID+":resend", nil)
+	router.ServeHTTP(resendResp, resendReq)
+	if resendResp.Code != http.StatusCreated {
+		t.Fatalf("resend invitation: expected 201, got %d: %s", resendResp.Code, resendResp.Body.String())
+	}
+	var resent struct {
+		Invitation invitationResponse `json:"invitation"`
+	}
+	decodeBody(t, resendResp, &resent)
+
+	// 3. Register the resent invitation -> emits `accepted` audit event.
+	regBody, _ := json.Marshal(map[string]string{
+		"email":            "audit-me@example.com",
+		"display_name":     "Audit Me",
+		"password":         "strongpass",
+		"invitation_token": resent.Invitation.Token,
+	})
+	regResp := httptest.NewRecorder()
+	regReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(regBody))
+	router.ServeHTTP(regResp, regReq)
+	if regResp.Code != http.StatusCreated {
+		t.Fatalf("register with resent token: expected 201, got %d: %s", regResp.Code, regResp.Body.String())
+	}
+
+	// 4. List audit events.
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations/audit", nil)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list audit: expected 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var listed struct {
+		Events []invitationAuditEventResponse `json:"events"`
+	}
+	decodeBody(t, listResp, &listed)
+
+	// Tally per-action counts and ensure invitation_id linkage is correct.
+	counts := map[string]int{}
+	var sawAcceptedForResent bool
+	for _, ev := range listed.Events {
+		counts[ev.Action]++
+		if ev.Action == "accepted" && ev.InvitationID == resent.Invitation.ID {
+			sawAcceptedForResent = true
+		}
+		if ev.Email != "audit-me@example.com" {
+			t.Fatalf("expected audit event email snapshot to match invitee, got %q", ev.Email)
+		}
+	}
+	if counts["created"] < 2 {
+		t.Fatalf("expected ≥2 created events (initial + resend), got %d", counts["created"])
+	}
+	if counts["revoked"] < 1 {
+		t.Fatalf("expected ≥1 revoked event from resend, got %d", counts["revoked"])
+	}
+	if counts["accepted"] != 1 {
+		t.Fatalf("expected exactly 1 accepted event, got %d", counts["accepted"])
+	}
+	if !sawAcceptedForResent {
+		t.Fatalf("expected accepted event to reference resent invitation %q, events=%+v", resent.Invitation.ID, listed.Events)
+	}
+}

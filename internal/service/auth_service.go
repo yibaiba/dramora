@@ -121,6 +121,19 @@ func (s *AuthService) Register(ctx context.Context, input RegisterInput) (AuthSe
 		if err := s.identityRepo.MarkInvitationAccepted(ctx, invitationID, userID, time.Now().UTC()); err != nil {
 			return AuthSession{}, fmt.Errorf("mark invitation accepted: %w", err)
 		}
+		if _, auditErr := s.identityRepo.AppendInvitationAuditEvent(ctx, repo.AppendInvitationAuditParams{
+			EventID:        uuid.NewString(),
+			OrganizationID: organizationID,
+			InvitationID:   invitationID,
+			Action:         domain.InvitationActionAccepted,
+			ActorUserID:    userID,
+			ActorEmail:     email,
+			Email:          email,
+			Role:           role,
+			CreatedAt:      time.Now().UTC(),
+		}); auditErr != nil {
+			return AuthSession{}, fmt.Errorf("audit invitation accepted: %w", auditErr)
+		}
 	}
 
 	return s.buildSession(ctx, identity)
@@ -463,7 +476,7 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 	}
 	token := base64.RawURLEncoding.EncodeToString(tokenBytes)
 
-	return s.identityRepo.CreateInvitation(ctx, repo.CreateInvitationParams{
+	inv, err := s.identityRepo.CreateInvitation(ctx, repo.CreateInvitationParams{
 		InvitationID:    uuid.NewString(),
 		OrganizationID:  auth.OrganizationID,
 		Email:           email,
@@ -472,6 +485,23 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 		InvitedByUserID: auth.UserID,
 		ExpiresAt:       time.Now().UTC().Add(defaultInvitationTTL),
 	})
+	if err != nil {
+		return domain.OrganizationInvitation{}, err
+	}
+	if _, auditErr := s.identityRepo.AppendInvitationAuditEvent(ctx, repo.AppendInvitationAuditParams{
+		EventID:        uuid.NewString(),
+		OrganizationID: auth.OrganizationID,
+		InvitationID:   inv.ID,
+		Action:         domain.InvitationActionCreated,
+		ActorUserID:    auth.UserID,
+		ActorEmail:     "",
+		Email:          inv.Email,
+		Role:           inv.Role,
+		CreatedAt:      time.Now().UTC(),
+	}); auditErr != nil {
+		return domain.OrganizationInvitation{}, fmt.Errorf("audit invitation created: %w", auditErr)
+	}
+	return inv, nil
 }
 
 func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.OrganizationInvitation, error) {
@@ -480,6 +510,16 @@ func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.Organizatio
 		return nil, ErrUnauthorized
 	}
 	return s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
+}
+
+// ListInvitationAuditEvents 返回当前组织最近的邀请审计事件，按 created_at 倒序。
+// limit<=0 时取仓库默认（100）；与 ListInvitations 共用 RequestAuth 校验。
+func (s *AuthService) ListInvitationAuditEvents(ctx context.Context, limit int) ([]domain.InvitationAuditEvent, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return nil, ErrUnauthorized
+	}
+	return s.identityRepo.ListInvitationAuditEvents(ctx, auth.OrganizationID, limit)
 }
 
 // RevokeInvitation 把 pending 状态的邀请置为 revoked。仅当前组织且 pending 才能命中；
@@ -493,7 +533,36 @@ func (s *AuthService) RevokeInvitation(ctx context.Context, invitationID string)
 	if strings.TrimSpace(invitationID) == "" {
 		return fmt.Errorf("invitation id is required: %w", domain.ErrInvalidInput)
 	}
-	return s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC())
+	list, err := s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
+	if err != nil {
+		return err
+	}
+	var snap *domain.OrganizationInvitation
+	for i := range list {
+		if list[i].ID == invitationID {
+			snap = &list[i]
+			break
+		}
+	}
+	if err := s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC()); err != nil {
+		return err
+	}
+	if snap != nil {
+		if _, auditErr := s.identityRepo.AppendInvitationAuditEvent(ctx, repo.AppendInvitationAuditParams{
+			EventID:        uuid.NewString(),
+			OrganizationID: auth.OrganizationID,
+			InvitationID:   invitationID,
+			Action:         domain.InvitationActionRevoked,
+			ActorUserID:    auth.UserID,
+			ActorEmail:     "",
+			Email:          snap.Email,
+			Role:           snap.Role,
+			CreatedAt:      time.Now().UTC(),
+		}); auditErr != nil {
+			return fmt.Errorf("audit invitation revoked: %w", auditErr)
+		}
+	}
+	return nil
 }
 
 // ResendInvitation 把当前 pending 的邀请吊销并签发一条新的同 email/role 邀请，
@@ -522,7 +591,7 @@ func (s *AuthService) ResendInvitation(ctx context.Context, invitationID string)
 	if src == nil {
 		return domain.OrganizationInvitation{}, domain.ErrNotFound
 	}
-	if err := s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC()); err != nil {
+	if err := s.RevokeInvitation(ctx, invitationID); err != nil {
 		return domain.OrganizationInvitation{}, err
 	}
 	return s.CreateInvitation(ctx, CreateInvitationInput{Email: src.Email, Role: src.Role})

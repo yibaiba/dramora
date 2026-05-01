@@ -171,6 +171,93 @@ func (r *SQLiteIdentityRepository) RevokeInvitation(ctx context.Context, invitat
 	return nil
 }
 
+func nullableString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
+}
+
+func (r *SQLiteIdentityRepository) AppendInvitationAuditEvent(
+	ctx context.Context,
+	params AppendInvitationAuditParams,
+) (domain.InvitationAuditEvent, error) {
+	createdAt := params.CreatedAt.UTC()
+	if _, err := r.db.ExecContext(ctx, sqliteInsertInvitationAuditEventSQL,
+		params.EventID,
+		params.OrganizationID,
+		params.InvitationID,
+		params.Action,
+		nullableString(params.ActorUserID),
+		nullableString(params.ActorEmail),
+		params.Email,
+		params.Role,
+		nullableString(params.Note),
+		createdAt.Format("2006-01-02T15:04:05.000Z"),
+	); err != nil {
+		return domain.InvitationAuditEvent{}, fmt.Errorf("append invitation audit: %w", err)
+	}
+	return domain.InvitationAuditEvent{
+		ID:             params.EventID,
+		OrganizationID: params.OrganizationID,
+		InvitationID:   params.InvitationID,
+		Action:         params.Action,
+		ActorUserID:    params.ActorUserID,
+		ActorEmail:     params.ActorEmail,
+		Email:          params.Email,
+		Role:           params.Role,
+		Note:           params.Note,
+		CreatedAt:      createdAt,
+	}, nil
+}
+
+func (r *SQLiteIdentityRepository) ListInvitationAuditEvents(
+	ctx context.Context,
+	organizationID string,
+	limit int,
+) ([]domain.InvitationAuditEvent, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	rows, err := r.db.QueryContext(ctx, sqliteListInvitationAuditEventsSQL, organizationID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list invitation audit: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.InvitationAuditEvent
+	for rows.Next() {
+		var ev domain.InvitationAuditEvent
+		var actorUser, actorEmail, note sql.NullString
+		var createdAt time.Time
+		if scanErr := rows.Scan(
+			&ev.ID,
+			&ev.OrganizationID,
+			&ev.InvitationID,
+			&ev.Action,
+			&actorUser,
+			&actorEmail,
+			&ev.Email,
+			&ev.Role,
+			&note,
+			&createdAt,
+		); scanErr != nil {
+			return nil, fmt.Errorf("scan invitation audit: %w", scanErr)
+		}
+		if actorUser.Valid {
+			ev.ActorUserID = actorUser.String
+		}
+		if actorEmail.Valid {
+			ev.ActorEmail = actorEmail.String
+		}
+		if note.Valid {
+			ev.Note = note.String
+		}
+		ev.CreatedAt = createdAt.UTC()
+		out = append(out, ev)
+	}
+	return out, rows.Err()
+}
+
 func scanSQLiteInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {
 	var inv domain.OrganizationInvitation
 	var invitedBy sql.NullString

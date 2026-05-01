@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -279,6 +281,57 @@ func (a *api) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]invitationResponse{"invitation": invitationDTO(inv)})
+}
+
+type invitationAuditEventResponse struct {
+	ID             string    `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	InvitationID   string    `json:"invitation_id"`
+	Action         string    `json:"action"`
+	ActorUserID    string    `json:"actor_user_id,omitempty"`
+	ActorEmail     string    `json:"actor_email,omitempty"`
+	Email          string    `json:"email"`
+	Role           string    `json:"role"`
+	Note           string    `json:"note,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+func invitationAuditDTO(ev domain.InvitationAuditEvent) invitationAuditEventResponse {
+	return invitationAuditEventResponse{
+		ID:             ev.ID,
+		OrganizationID: ev.OrganizationID,
+		InvitationID:   ev.InvitationID,
+		Action:         ev.Action,
+		ActorUserID:    ev.ActorUserID,
+		ActorEmail:     ev.ActorEmail,
+		Email:          ev.Email,
+		Role:           ev.Role,
+		Note:           ev.Note,
+		CreatedAt:      ev.CreatedAt.UTC(),
+	}
+}
+
+func (a *api) listInvitationAudit(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	limit := 0
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	events, err := a.authService.ListInvitationAuditEvents(r.Context(), limit)
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	out := make([]invitationAuditEventResponse, 0, len(events))
+	for _, ev := range events {
+		out = append(out, invitationAuditDTO(ev))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": out})
 }
 
 type sessionResponse struct {
