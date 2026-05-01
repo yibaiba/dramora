@@ -99,6 +99,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/organizations/invitations", api.createInvitation)
 			admin.Get("/organizations/invitations", api.listInvitations)
 			admin.Post("/organizations/invitations/{invitationId}:revoke", api.revokeInvitation)
+			admin.Post("/organizations/invitations/{invitationId}:resend", api.resendInvitation)
 		})
 	})
 

@@ -26,6 +26,7 @@ import {
   listOrganizationInvitations,
   createOrganizationInvitation,
   revokeOrganizationInvitation,
+  resendOrganizationInvitation,
   listSessions,
   revokeSession,
   listStorySources,
@@ -517,6 +518,14 @@ export function useRevokeInvitation() {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (invitationId: string) => revokeOrganizationInvitation(invitationId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
+  })
+}
+
+export function useResendInvitation() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (invitationId: string) => resendOrganizationInvitation(invitationId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
   })
 }

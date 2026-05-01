@@ -182,3 +182,87 @@ func TestRevokeInvitationRejectsReuse(t *testing.T) {
 		t.Fatalf("expected revoked status on listed invitation, got %q", found.Status)
 	}
 }
+
+func TestResendInvitationRevokesOldAndIssuesNewToken(t *testing.T) {
+	t.Parallel()
+
+	router := testRouter()
+
+	// 1. Create the original invitation.
+	createBody := bytes.NewBufferString(`{"email":"resend-me@example.com","role":"editor"}`)
+	createResp := httptest.NewRecorder()
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations", createBody)
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating invitation, got %d: %s", createResp.Code, createResp.Body.String())
+	}
+	var created struct {
+		Invitation invitationResponse `json:"invitation"`
+	}
+	decodeBody(t, createResp, &created)
+	if created.Invitation.ID == "" || created.Invitation.Token == "" {
+		t.Fatalf("expected invitation id+token, got %+v", created.Invitation)
+	}
+
+	// 2. Resend -> 201 with a brand new invitation (new id + new token).
+	resendResp := httptest.NewRecorder()
+	resendReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations/"+created.Invitation.ID+":resend", nil)
+	router.ServeHTTP(resendResp, resendReq)
+	if resendResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 resending invitation, got %d: %s", resendResp.Code, resendResp.Body.String())
+	}
+	var resent struct {
+		Invitation invitationResponse `json:"invitation"`
+	}
+	decodeBody(t, resendResp, &resent)
+	if resent.Invitation.ID == "" || resent.Invitation.Token == "" {
+		t.Fatalf("expected resent invitation id+token, got %+v", resent.Invitation)
+	}
+	if resent.Invitation.ID == created.Invitation.ID {
+		t.Fatalf("expected new invitation id, got same %q", resent.Invitation.ID)
+	}
+	if resent.Invitation.Token == created.Invitation.Token {
+		t.Fatalf("expected new invitation token, got same %q", resent.Invitation.Token)
+	}
+	if resent.Invitation.Email != "resend-me@example.com" || resent.Invitation.Role != "editor" {
+		t.Fatalf("expected email/role preserved, got %+v", resent.Invitation)
+	}
+	if resent.Invitation.Status != "pending" {
+		t.Fatalf("expected new invitation pending, got %q", resent.Invitation.Status)
+	}
+
+	// 3. Resending the original (now revoked) id again -> 404.
+	secondResp := httptest.NewRecorder()
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations/"+created.Invitation.ID+":resend", nil)
+	router.ServeHTTP(secondResp, secondReq)
+	if secondResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 resending revoked invitation, got %d: %s", secondResp.Code, secondResp.Body.String())
+	}
+
+	// 4. Original token should no longer be usable for registration; new token must work.
+	oldRegBody, _ := json.Marshal(map[string]string{
+		"email":            "resend-me@example.com",
+		"display_name":     "Old Token",
+		"password":         "strongpass",
+		"invitation_token": created.Invitation.Token,
+	})
+	oldRegResp := httptest.NewRecorder()
+	oldRegReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(oldRegBody))
+	router.ServeHTTP(oldRegResp, oldRegReq)
+	if oldRegResp.Code == http.StatusCreated {
+		t.Fatalf("expected old token to be rejected after resend, got 201: %s", oldRegResp.Body.String())
+	}
+
+	newRegBody, _ := json.Marshal(map[string]string{
+		"email":            "resend-me@example.com",
+		"display_name":     "New Token",
+		"password":         "strongpass",
+		"invitation_token": resent.Invitation.Token,
+	})
+	newRegResp := httptest.NewRecorder()
+	newRegReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(newRegBody))
+	router.ServeHTTP(newRegResp, newRegReq)
+	if newRegResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 registering with new resent token, got %d: %s", newRegResp.Code, newRegResp.Body.String())
+	}
+}

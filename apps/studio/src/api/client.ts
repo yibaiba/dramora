@@ -507,3 +507,11 @@ export async function revokeOrganizationInvitation(invitationId: string): Promis
     { method: 'POST' },
   )
 }
+
+export async function resendOrganizationInvitation(invitationId: string): Promise<OrganizationInvitation> {
+  const payload = await fetchJSON<{ invitation: OrganizationInvitation }>(
+    `/api/v1/organizations/invitations/${encodeURIComponent(invitationId)}:resend`,
+    { method: 'POST' },
+  )
+  return payload.invitation
+}

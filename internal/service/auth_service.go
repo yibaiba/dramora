@@ -496,6 +496,38 @@ func (s *AuthService) RevokeInvitation(ctx context.Context, invitationID string)
 	return s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC())
 }
 
+// ResendInvitation 把当前 pending 的邀请吊销并签发一条新的同 email/role 邀请，
+// 用于「邀请链接丢失 / 即将过期 / 想换一个 token」的场景。仅 owner/admin 可调用，
+// 命中条件与 RevokeInvitation 相同；找不到 / 跨组织 / 已 accepted / 已 revoked 都
+// 返回 ErrNotFound。新邀请会带新 token 与新 expires_at。
+func (s *AuthService) ResendInvitation(ctx context.Context, invitationID string) (domain.OrganizationInvitation, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return domain.OrganizationInvitation{}, ErrUnauthorized
+	}
+	if strings.TrimSpace(invitationID) == "" {
+		return domain.OrganizationInvitation{}, fmt.Errorf("invitation id is required: %w", domain.ErrInvalidInput)
+	}
+	list, err := s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
+	if err != nil {
+		return domain.OrganizationInvitation{}, err
+	}
+	var src *domain.OrganizationInvitation
+	for i := range list {
+		if list[i].ID == invitationID && list[i].Status == domain.InvitationStatusPending {
+			src = &list[i]
+			break
+		}
+	}
+	if src == nil {
+		return domain.OrganizationInvitation{}, domain.ErrNotFound
+	}
+	if err := s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC()); err != nil {
+		return domain.OrganizationInvitation{}, err
+	}
+	return s.CreateInvitation(ctx, CreateInvitationInput{Email: src.Email, Role: src.Role})
+}
+
 // SessionInfo 是 refresh token 面向调用方的脱敏视图，token_hash 已剥离。
 type SessionInfo struct {
 	ID             string
