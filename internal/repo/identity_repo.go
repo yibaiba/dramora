@@ -38,6 +38,7 @@ type IdentityRepository interface {
 	GetInvitationByToken(ctx context.Context, token string) (domain.OrganizationInvitation, error)
 	MarkInvitationAccepted(ctx context.Context, invitationID, userID string, acceptedAt time.Time) error
 	ListOrganizationInvitations(ctx context.Context, organizationID string) ([]domain.OrganizationInvitation, error)
+	RevokeInvitation(ctx context.Context, invitationID, organizationID string, revokedAt time.Time) error
 }
 
 type CreateOrganizationParams struct {
@@ -220,6 +221,17 @@ func (r *PostgresIdentityRepository) ListOrganizationInvitations(ctx context.Con
 		out = append(out, inv)
 	}
 	return out, rows.Err()
+}
+
+func (r *PostgresIdentityRepository) RevokeInvitation(ctx context.Context, invitationID, organizationID string, revokedAt time.Time) error {
+	tag, err := r.pool.Exec(ctx, revokeInvitationSQL, invitationID, organizationID, revokedAt.UTC())
+	if err != nil {
+		return fmt.Errorf("revoke invitation: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func scanInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {

@@ -156,6 +156,21 @@ func (r *SQLiteIdentityRepository) ListOrganizationInvitations(ctx context.Conte
 	return out, rows.Err()
 }
 
+func (r *SQLiteIdentityRepository) RevokeInvitation(ctx context.Context, invitationID, organizationID string, revokedAt time.Time) error {
+	res, err := r.db.ExecContext(ctx, sqliteRevokeInvitationSQL, revokedAt.UTC(), invitationID, organizationID)
+	if err != nil {
+		return fmt.Errorf("revoke invitation: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("revoke invitation rows affected: %w", err)
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 func scanSQLiteInvitation(scanner sqliteScanner) (domain.OrganizationInvitation, error) {
 	var inv domain.OrganizationInvitation
 	var invitedBy sql.NullString

@@ -104,3 +104,81 @@ func registerUser(t *testing.T, router http.Handler, email, name string) authSes
 	decodeBody(t, resp, &session)
 	return session.Session
 }
+
+func TestRevokeInvitationRejectsReuse(t *testing.T) {
+	t.Parallel()
+
+	router := testRouter()
+
+	// 1. Default test director (owner) creates an invitation.
+	createBody := bytes.NewBufferString(`{"email":"revoke-me@example.com","role":"editor"}`)
+	createResp := httptest.NewRecorder()
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations", createBody)
+	router.ServeHTTP(createResp, createReq)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("expected 201 creating invitation, got %d: %s", createResp.Code, createResp.Body.String())
+	}
+	var created struct {
+		Invitation invitationResponse `json:"invitation"`
+	}
+	decodeBody(t, createResp, &created)
+	if created.Invitation.ID == "" || created.Invitation.Token == "" {
+		t.Fatalf("expected invitation id and token, got %+v", created.Invitation)
+	}
+
+	// 2. Owner revokes the invitation -> 204.
+	revokeResp := httptest.NewRecorder()
+	revokeReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations/"+created.Invitation.ID+":revoke", nil)
+	router.ServeHTTP(revokeResp, revokeReq)
+	if revokeResp.Code != http.StatusNoContent {
+		t.Fatalf("expected 204 revoking invitation, got %d: %s", revokeResp.Code, revokeResp.Body.String())
+	}
+
+	// 3. Second revoke (already revoked) -> 404 (status no longer pending).
+	secondResp := httptest.NewRecorder()
+	secondReq := httptest.NewRequest(http.MethodPost, "/api/v1/organizations/invitations/"+created.Invitation.ID+":revoke", nil)
+	router.ServeHTTP(secondResp, secondReq)
+	if secondResp.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 revoking already-revoked invitation, got %d: %s", secondResp.Code, secondResp.Body.String())
+	}
+
+	// 4. Registering with the revoked token must fail.
+	regBody := map[string]string{
+		"email":            "revoke-me@example.com",
+		"display_name":     "Revoked",
+		"password":         "strongpass",
+		"invitation_token": created.Invitation.Token,
+	}
+	raw, _ := json.Marshal(regBody)
+	regResp := httptest.NewRecorder()
+	regReq := httptest.NewRequest(http.MethodPost, "/api/v1/auth/register", bytes.NewReader(raw))
+	router.ServeHTTP(regResp, regReq)
+	if regResp.Code == http.StatusCreated {
+		t.Fatalf("expected revoked invitation token to be rejected, got 201: %s", regResp.Body.String())
+	}
+
+	// 5. List should now show status=revoked for the invitation.
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/organizations/invitations", nil)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected 200 listing invitations, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var list struct {
+		Invitations []invitationResponse `json:"invitations"`
+	}
+	decodeBody(t, listResp, &list)
+	var found *invitationResponse
+	for i := range list.Invitations {
+		if list.Invitations[i].ID == created.Invitation.ID {
+			found = &list.Invitations[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("expected revoked invitation %q in list, got %+v", created.Invitation.ID, list.Invitations)
+	}
+	if found.Status != "revoked" {
+		t.Fatalf("expected revoked status on listed invitation, got %q", found.Status)
+	}
+}

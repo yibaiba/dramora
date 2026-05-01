@@ -92,3 +92,10 @@ const listInvitationsByOrgSQL = invitationSelect + `
 WHERE organization_id = $1::uuid
 ORDER BY created_at DESC
 `
+
+const revokeInvitationSQL = `
+UPDATE organization_invitations
+SET status = 'revoked',
+    updated_at = $3
+WHERE id = $1::uuid AND organization_id = $2::uuid AND status = 'pending'
+`

@@ -500,3 +500,10 @@ export async function createOrganizationInvitation(
   })
   return payload.invitation
 }
+
+export async function revokeOrganizationInvitation(invitationId: string): Promise<void> {
+  await fetchJSON<unknown>(
+    `/api/v1/organizations/invitations/${encodeURIComponent(invitationId)}:revoke`,
+    { method: 'POST' },
+  )
+}

@@ -244,6 +244,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  "/api/v1/organizations/invitations/{invitationId}:revoke":
+    post:
+      summary: Revoke a pending invitation (owner/admin only)
+      parameters:
+        - name: invitationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Invitation revoked (was pending in this organization)
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "404":
+          description: Invitation not found, not pending, or owned by another organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
   /api/v1/projects:
     get:
       summary: List projects

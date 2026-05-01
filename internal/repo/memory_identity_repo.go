@@ -153,3 +153,16 @@ func (r *MemoryIdentityRepository) ListOrganizationInvitations(_ context.Context
 	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
 	return out, nil
 }
+
+func (r *MemoryIdentityRepository) RevokeInvitation(_ context.Context, invitationID, organizationID string, revokedAt time.Time) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	inv, ok := r.invitations[invitationID]
+	if !ok || inv.OrganizationID != organizationID || inv.Status != domain.InvitationStatusPending {
+		return domain.ErrNotFound
+	}
+	inv.Status = domain.InvitationStatusRevoked
+	inv.UpdatedAt = revokedAt.UTC()
+	r.invitations[invitationID] = inv
+	return nil
+}

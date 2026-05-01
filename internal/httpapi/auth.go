@@ -254,6 +254,19 @@ func (a *api) listInvitations(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
 }
 
+func (a *api) revokeInvitation(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	invitationID := chi.URLParam(r, "invitationId")
+	if err := a.authService.RevokeInvitation(r.Context(), invitationID); err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 type sessionResponse struct {
 	ID             string     `json:"id"`
 	OrganizationID string     `json:"organization_id"`

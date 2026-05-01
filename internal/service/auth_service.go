@@ -482,6 +482,20 @@ func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.Organizatio
 	return s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
 }
 
+// RevokeInvitation 把 pending 状态的邀请置为 revoked。仅当前组织且 pending 才能命中；
+// 其余情况（不存在 / 跨组织 / 已 accepted / 已 revoked）一律返回 ErrNotFound 以便
+// HTTP 层映射为 404，避免泄露邀请 ID 是否存在。
+func (s *AuthService) RevokeInvitation(ctx context.Context, invitationID string) error {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return ErrUnauthorized
+	}
+	if strings.TrimSpace(invitationID) == "" {
+		return fmt.Errorf("invitation id is required: %w", domain.ErrInvalidInput)
+	}
+	return s.identityRepo.RevokeInvitation(ctx, invitationID, auth.OrganizationID, time.Now().UTC())
+}
+
 // SessionInfo 是 refresh token 面向调用方的脱敏视图，token_hash 已剥离。
 type SessionInfo struct {
 	ID             string

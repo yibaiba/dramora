@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
-import { Mail, Plus, ShieldCheck, Copy, Check, Search } from 'lucide-react'
-import { useCreateInvitation, useOrganizationInvitations } from '../../api/hooks'
+import { Mail, Plus, ShieldCheck, Copy, Check, Search, XCircle } from 'lucide-react'
+import { useCreateInvitation, useOrganizationInvitations, useRevokeInvitation } from '../../api/hooks'
 import { useAuthStore } from '../../state/authStore'
 import type { OrganizationInvitation } from '../../api/types'
 import { StatePlaceholder } from '../components/StatePlaceholder'
@@ -15,13 +15,14 @@ const ROLE_OPTIONS: Array<{ value: NonNullable<OrganizationInvitation['role']>; 
   { value: 'owner', label: 'Owner · 全权所有者' },
 ]
 
-type StatusFilter = 'all' | 'pending' | 'accepted' | 'expired'
+type StatusFilter = 'all' | 'pending' | 'accepted' | 'expired' | 'revoked'
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: '全部' },
   { value: 'pending', label: '待接受' },
   { value: 'accepted', label: '已接受' },
   { value: 'expired', label: '已失效' },
+  { value: 'revoked', label: '已吊销' },
 ]
 
 function isExpired(invitation: OrganizationInvitation): boolean {
@@ -41,6 +42,7 @@ export function InvitationsPage() {
 
   const invitationsQuery = useOrganizationInvitations(isAdmin)
   const createMutation = useCreateInvitation()
+  const revokeMutation = useRevokeInvitation()
 
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<OrganizationInvitation['role']>('editor')
@@ -48,6 +50,8 @@ export function InvitationsPage() {
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [searchInput, setSearchInput] = useState('')
+  const [revokeError, setRevokeError] = useState('')
+  const [revokingId, setRevokingId] = useState<string | null>(null)
 
   const allInvitations = useMemo(
     () => (invitationsQuery.data ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
@@ -58,15 +62,19 @@ export function InvitationsPage() {
     const pending = allInvitations.filter((inv) => inv.status === 'pending' && !isExpired(inv)).length
     const accepted = allInvitations.filter((inv) => inv.status === 'accepted').length
     const expired = allInvitations.filter((inv) => isExpired(inv)).length
-    return { all: allInvitations.length, pending, accepted, expired }
+    const revoked = allInvitations.filter((inv) => inv.status === 'revoked').length
+    return { all: allInvitations.length, pending, accepted, expired, revoked }
   }, [allInvitations])
 
   const filteredInvitations = useMemo(() => {
     const search = searchInput.trim().toLowerCase()
     return allInvitations.filter((invitation) => {
       const expired = isExpired(invitation)
-      const effectiveStatus: StatusFilter =
-        invitation.status === 'accepted' ? 'accepted' : expired ? 'expired' : 'pending'
+      let effectiveStatus: StatusFilter
+      if (invitation.status === 'accepted') effectiveStatus = 'accepted'
+      else if (invitation.status === 'revoked') effectiveStatus = 'revoked'
+      else if (expired) effectiveStatus = 'expired'
+      else effectiveStatus = 'pending'
       if (statusFilter !== 'all' && effectiveStatus !== statusFilter) {
         return false
       }
@@ -109,6 +117,23 @@ export function InvitationsPage() {
       window.setTimeout(() => setCopiedToken((current) => (current === invitation.id ? null : current)), 2000)
     } catch {
       // best-effort copy; clipboard may be unavailable in some sandboxes
+    }
+  }
+
+  async function handleRevoke(invitation: OrganizationInvitation) {
+    if (revokingId) return
+    if (typeof window !== 'undefined') {
+      const ok = window.confirm(`确认吊销发往 ${invitation.email} 的邀请？吊销后该 token 将不可再用于注册。`)
+      if (!ok) return
+    }
+    setRevokeError('')
+    setRevokingId(invitation.id)
+    try {
+      await revokeMutation.mutateAsync(invitation.id)
+    } catch (error) {
+      setRevokeError(error instanceof Error ? error.message : '吊销失败')
+    } finally {
+      setRevokingId(null)
     }
   }
 
@@ -210,14 +235,23 @@ export function InvitationsPage() {
             <ul className="invitation-list">
               {filteredInvitations.map((invitation) => {
                 const expired = isExpired(invitation)
+                const isRevoked = invitation.status === 'revoked'
+                const statusKey = isRevoked ? 'revoked' : expired ? 'expired' : invitation.status
                 const statusLabel =
-                  invitation.status === 'accepted' ? '已接受' : expired ? '已失效' : '待接受'
+                  invitation.status === 'accepted'
+                    ? '已接受'
+                    : isRevoked
+                      ? '已吊销'
+                      : expired
+                        ? '已失效'
+                        : '待接受'
+                const canRevoke = invitation.status === 'pending' && !expired
                 return (
                   <li key={invitation.id} className="invitation-row">
                     <div>
                       <strong>{invitation.email}</strong>
                       <small>
-                        <span className={`invitation-status invitation-status-${expired ? 'expired' : invitation.status}`}>
+                        <span className={`invitation-status invitation-status-${statusKey}`}>
                           {statusLabel}
                         </span>
                         · {invitation.role}
@@ -227,31 +261,49 @@ export function InvitationsPage() {
                             ? ` · 已接受 ${new Date(invitation.accepted_at).toLocaleString()}`
                             : expired
                               ? ` · 失效于 ${new Date(invitation.expires_at).toLocaleString()}`
-                              : ''}
+                              : isRevoked
+                                ? ' · 已被吊销'
+                                : ''}
                       </small>
                     </div>
-                    {invitation.status === 'pending' && !expired ? (
-                      <button
-                        type="button"
-                        className="action-btn secondary"
-                        onClick={() => handleCopy(invitation)}
-                      >
-                        {copiedToken === invitation.id ? (
-                          <>
-                            <Check size={14} aria-hidden="true" /> 已复制
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={14} aria-hidden="true" /> 复制邀请链接
-                          </>
-                        )}
-                      </button>
+                    {canRevoke ? (
+                      <div className="invitation-row-actions">
+                        <button
+                          type="button"
+                          className="action-btn secondary"
+                          onClick={() => handleCopy(invitation)}
+                        >
+                          {copiedToken === invitation.id ? (
+                            <>
+                              <Check size={14} aria-hidden="true" /> 已复制
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={14} aria-hidden="true" /> 复制邀请链接
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn warning"
+                          onClick={() => handleRevoke(invitation)}
+                          disabled={revokingId === invitation.id}
+                        >
+                          <XCircle size={14} aria-hidden="true" />
+                          {revokingId === invitation.id ? '吊销中...' : '吊销'}
+                        </button>
+                      </div>
                     ) : null}
                   </li>
                 )
               })}
             </ul>
           )}
+          {revokeError ? (
+            <div className="test-result failure" role="alert">
+              吊销失败：{revokeError}
+            </div>
+          ) : null}
         </div>
       </section>
     </div>

@@ -80,3 +80,10 @@ const sqliteListInvitationsByOrgSQL = sqliteInvitationSelect + `
 WHERE organization_id = ?
 ORDER BY created_at DESC
 `
+
+const sqliteRevokeInvitationSQL = `
+UPDATE organization_invitations
+SET status = 'revoked',
+    updated_at = ?
+WHERE id = ? AND organization_id = ? AND status = 'pending'
+`
