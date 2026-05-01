@@ -626,6 +626,53 @@ export function InvitationsPage() {
             />
           ) : (
             <>
+              {(() => {
+                const counts = auditQuery.data.events.reduce<Record<string, number>>(
+                  (acc, ev) => {
+                    acc[ev.action] = (acc[ev.action] ?? 0) + 1
+                    return acc
+                  },
+                  {},
+                )
+                const labels: Record<string, string> = {
+                  created: '已创建',
+                  accepted: '已接受',
+                  revoked: '已吊销',
+                  resent: '已重发',
+                }
+                const entries = Object.entries(counts).sort((a, b) => b[1] - a[1])
+                if (entries.length === 0) return null
+                return (
+                  <div
+                    className="invitation-audit-summary"
+                    role="status"
+                    aria-label="当前页事件分类汇总"
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      flexWrap: 'wrap',
+                      margin: '4px 0 12px',
+                      fontSize: 12,
+                      opacity: 0.85,
+                    }}
+                  >
+                    <span style={{ opacity: 0.7 }}>本页 {auditQuery.data.events.length} 条 ·</span>
+                    {entries.map(([action, count]) => (
+                      <span
+                        key={action}
+                        style={{
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                        }}
+                      >
+                        {labels[action] ?? action} · {count}
+                      </span>
+                    ))}
+                  </div>
+                )
+              })()}
               <ul className="invitation-list">
                 {auditQuery.data.events.map((event) => {
                   const isSelected = selectedAuditId === event.id
