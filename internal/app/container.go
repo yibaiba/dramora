@@ -75,7 +75,18 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	projectSvc := service.NewProjectService(projectRepo)
 	productionSvc.SetProjectService(projectSvc)
-	productionSvc.SetMediaStorage(media.NewMemoryStorage())
+	if cfg.MediaDir != "" {
+		fsStore, err := media.NewFilesystemStorage(cfg.MediaDir)
+		if err != nil {
+			logger.Warn("filesystem media storage init failed, falling back to memory", "err", err, "dir", cfg.MediaDir)
+			productionSvc.SetMediaStorage(media.NewMemoryStorage())
+		} else {
+			logger.Info("media storage", "backend", "filesystem", "root", fsStore.Root())
+			productionSvc.SetMediaStorage(fsStore)
+		}
+	} else {
+		productionSvc.SetMediaStorage(media.NewMemoryStorage())
+	}
 
 	if workerMetricsRepo != nil {
 		productionSvc.SetWorkerMetricsRepository(workerMetricsRepo, logger)

@@ -17,6 +17,7 @@ type Config struct {
 	ShutdownTimeout   time.Duration
 	DatabaseURL       string
 	DataDir           string
+	MediaDir          string
 	JWTSecret         string
 	InlineWorker      bool
 	WorkerQueues      []string
@@ -46,6 +47,7 @@ func LoadConfig() (Config, error) {
 		ShutdownTimeout:   shutdownTimeout,
 		DatabaseURL:       os.Getenv("MANMU_DATABASE_URL"),
 		DataDir:           envString("MANMU_DATA_DIR", defaultDataDir()),
+		MediaDir:          envString("MANMU_MEDIA_DIR", ""),
 		JWTSecret:         envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
 		InlineWorker:      inlineWorker,
 		WorkerQueues:      envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
