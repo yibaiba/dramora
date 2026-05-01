@@ -84,6 +84,7 @@ export function AgentFeedbackWorkspace({
   const [historyPageSize, setHistoryPageSize] = useState(RETURN_HISTORY_INITIAL_PAGE_SIZE)
   const [historySearch, setHistorySearch] = useState('')
   const [historySortOrder, setHistorySortOrder] = useState<'desc' | 'asc'>('desc')
+  const [historyTimeRange, setHistoryTimeRange] = useState<'all' | '24h' | '7d' | '30d'>('all')
   const [historyRowCopyId, setHistoryRowCopyId] = useState<string | null>(null)
   const [historyCopyState, setHistoryCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const [historyImportState, setHistoryImportState] = useState<
@@ -110,6 +111,14 @@ export function AgentFeedbackWorkspace({
   const reviewProgress = counts.total === 0 ? 0 : Math.round((reviewedCount / counts.total) * 100)
   const canCloseReviewCycle =
     counts.total > 0 && counts.needs_follow_up === 0 && counts.unmarked === 0
+  const [historyNowMs, setHistoryNowMs] = useState<number>(() => Date.now())
+  useEffect(() => {
+    if (historyTimeRange === 'all') {
+      return
+    }
+    const interval = window.setInterval(() => setHistoryNowMs(Date.now()), 60_000)
+    return () => window.clearInterval(interval)
+  }, [historyTimeRange])
   const filteredReturnHistory = returnedFollowUpHistory
     .filter((entry) => {
       const matchesSource = historyFilter === 'all' || entry.sourcePage === historyFilter
@@ -121,7 +130,18 @@ export function AgentFeedbackWorkspace({
         entry.agentLabel.toLowerCase().includes(trimmedSearch) ||
         entry.sourcePage.toLowerCase().includes(trimmedSearch) ||
         (entry.resultNote ?? '').toLowerCase().includes(trimmedSearch)
-      return matchesSource && matchesFeedback && matchesSearch
+      let matchesTime = true
+      if (historyTimeRange !== 'all') {
+        const windowMs =
+          historyTimeRange === '24h'
+            ? 24 * 60 * 60 * 1000
+            : historyTimeRange === '7d'
+              ? 7 * 24 * 60 * 60 * 1000
+              : 30 * 24 * 60 * 60 * 1000
+        const entryTime = new Date(entry.createdAt).getTime()
+        matchesTime = Number.isFinite(entryTime) && historyNowMs - entryTime <= windowMs
+      }
+      return matchesSource && matchesFeedback && matchesSearch && matchesTime
     })
     .slice()
     .sort((left, right) => {
@@ -132,7 +152,7 @@ export function AgentFeedbackWorkspace({
   const visibleReturnHistory = filteredReturnHistory.slice(0, historyPageSize)
   const hiddenReturnHistoryCount = filteredReturnHistory.length - visibleReturnHistory.length
 
-  const historyFilterSignature = `${historyFilter}|${historyFeedbackFilter}|${historySearch}|${historySortOrder}`
+  const historyFilterSignature = `${historyFilter}|${historyFeedbackFilter}|${historySearch}|${historySortOrder}|${historyTimeRange}`
   const [previousFilterSignature, setPreviousFilterSignature] = useState(historyFilterSignature)
   if (previousFilterSignature !== historyFilterSignature) {
     setPreviousFilterSignature(historyFilterSignature)
@@ -310,6 +330,77 @@ export function AgentFeedbackWorkspace({
             >
               排序：{historySortOrder === 'desc' ? '新→旧' : '旧→新'}
             </button>
+            <div className="agent-feedback-history-time-range" role="group" aria-label="时间范围">
+              {(['all', '24h', '7d', '30d'] as const).map((range) => (
+                <button
+                  key={range}
+                  type="button"
+                  aria-pressed={historyTimeRange === range}
+                  className={historyTimeRange === range ? 'asset-filter-chip active' : 'asset-filter-chip'}
+                  onClick={() => setHistoryTimeRange(range)}
+                  title={
+                    range === 'all'
+                      ? '全部时间'
+                      : range === '24h'
+                        ? '最近 24 小时'
+                        : range === '7d'
+                          ? '最近 7 天'
+                          : '最近 30 天'
+                  }
+                >
+                  {range === 'all' ? '全部' : range === '24h' ? '24h' : range === '7d' ? '7d' : '30d'}
+                </button>
+              ))}
+            </div>
+            {filteredReturnHistory.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-action"
+                onClick={() => {
+                  try {
+                    const header = ['id', 'createdAt', 'agentLabel', 'agentRole', 'sourcePage', 'feedback', 'resultNote']
+                    const escape = (value: unknown) => {
+                      const str = value === undefined || value === null ? '' : String(value)
+                      if (/[",\n]/.test(str)) {
+                        return `"${str.replace(/"/g, '""')}"`
+                      }
+                      return str
+                    }
+                    const rows = [header.join(',')]
+                    for (const entry of filteredReturnHistory) {
+                      rows.push(
+                        [
+                          entry.id,
+                          entry.createdAt,
+                          entry.agentLabel,
+                          entry.agentRole,
+                          entry.sourcePage,
+                          entry.feedback ?? '',
+                          entry.resultNote ?? '',
+                        ]
+                          .map(escape)
+                          .join(','),
+                      )
+                    }
+                    const blob = new Blob(['\uFEFF' + rows.join('\n')], { type: 'text/csv;charset=utf-8' })
+                    const url = URL.createObjectURL(blob)
+                    const anchor = document.createElement('a')
+                    anchor.href = url
+                    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+                    anchor.download = `return-history-${stamp}.csv`
+                    document.body.appendChild(anchor)
+                    anchor.click()
+                    document.body.removeChild(anchor)
+                    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+                  } catch {
+                    /* swallow: download failure is non-fatal */
+                  }
+                }}
+                title="按当前筛选导出为 CSV"
+              >
+                导出 CSV（{filteredReturnHistory.length}）
+              </button>
+            ) : null}
             {filteredReturnHistory.length > 0 && onRemoveHistoryEntries ? (
               <button
                 type="button"
