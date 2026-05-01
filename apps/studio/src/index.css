@@ -1822,6 +1822,16 @@ p {
   color: rgba(226, 232, 240, 0.85);
 }
 
+.blackboard-chip-next {
+  border-color: rgba(56, 189, 248, 0.55);
+  color: rgba(186, 230, 253, 0.96);
+  background: linear-gradient(
+    180deg,
+    rgba(8, 145, 178, 0.32) 0%,
+    rgba(8, 145, 178, 0.18) 100%
+  );
+}
+
 .recovery-card {
   display: flex;
   flex-direction: column;

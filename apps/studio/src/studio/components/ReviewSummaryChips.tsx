@@ -85,6 +85,45 @@ export function ReviewSummaryChips({
       >
         {canCloseRound ? '可收口本轮' : allCleared ? '尚无回传' : '协同处理中'}
       </span>
+      {(() => {
+        let nextLabel = ''
+        let nextTo: string | null = null
+        let nextTitle = ''
+        if (canCloseRound && currentSide !== 'storyAnalysis') {
+          nextLabel = '下一步：回解析收口'
+          nextTo = studioRoutePaths.storyAnalysis
+          nextTitle = '回到解析页执行收口'
+        } else if (storyboardPendingCount > 0 && !storyboardCurrent) {
+          nextLabel = '下一步：去 Storyboard'
+          nextTo = studioRoutePaths.storyboard
+          nextTitle = '继续处理 Storyboard 待跟进'
+        } else if (assetsGraphPendingCount > 0 && !assetsGraphCurrent) {
+          nextLabel = '下一步：去 Assets / Graph'
+          nextTo = studioRoutePaths.assetsGraph
+          nextTitle = '继续处理 Assets / Graph 待跟进'
+        } else if (
+          (storyboardPendingCount > 0 && storyboardCurrent) ||
+          (assetsGraphPendingCount > 0 && assetsGraphCurrent)
+        ) {
+          nextLabel = '下一步：本页处理待跟进'
+        }
+        if (!nextLabel) return null
+        const className = 'blackboard-chip blackboard-chip-next'
+        return nextTo ? (
+          <Link
+            className={`${className} blackboard-chip-link`}
+            to={nextTo}
+            state={nextTo === studioRoutePaths.storyAnalysis ? storyAnalysisLinkState : undefined}
+            title={nextTitle}
+          >
+            {nextLabel}
+          </Link>
+        ) : (
+          <span className={className} title={nextTitle || undefined}>
+            {nextLabel}
+          </span>
+        )
+      })()}
       {typeof returnedStoryboardCount === 'number' &&
       typeof returnedAssetsGraphCount === 'number' &&
       returnedStoryboardCount + returnedAssetsGraphCount > 0 ? (
