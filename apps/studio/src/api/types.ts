@@ -543,7 +543,10 @@ export type SaveProviderConfigRequest = {
 
 export type TestProviderResult = {
   ok: boolean
+  capability?: string
+  provider_type?: string
   model: string
+  probe?: string
   latency_ms: number
   error?: string
 }

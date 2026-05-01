@@ -256,8 +256,8 @@ function ProviderCard({
           {testResult && (
             <div className={`test-result ${testResult.ok ? 'success' : 'failure'}`}>
               {testResult.ok
-                ? `连接成功 · ${testResult.model} · ${testResult.latency_ms}ms`
-                : `失败: ${testResult.error}`}
+                ? `连接成功 · ${testResult.capability ?? ''}${testResult.provider_type ? ' / ' + testResult.provider_type : ''} · ${testResult.model} · ${testResult.latency_ms}ms${testResult.probe ? ' · ' + testResult.probe : ''}`
+                : `失败: ${testResult.error}${testResult.probe ? '（probe: ' + testResult.probe + '）' : ''}`}
             </div>
           )}
         </div>

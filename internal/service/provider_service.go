@@ -134,45 +134,99 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 }
 
 type TestProviderResult struct {
-	OK        bool   `json:"ok"`
-	Model     string `json:"model"`
-	LatencyMS int64  `json:"latency_ms"`
-	Error     string `json:"error,omitempty"`
+	OK           bool   `json:"ok"`
+	Capability   string `json:"capability,omitempty"`
+	ProviderType string `json:"provider_type,omitempty"`
+	Model        string `json:"model"`
+	Probe        string `json:"probe,omitempty"`
+	LatencyMS    int64  `json:"latency_ms"`
+	Error        string `json:"error,omitempty"`
+}
+
+// capabilityProbeURL picks the most appropriate health-check endpoint for a
+// given (capability, providerType) pair. We deliberately keep these probes
+// capability-agnostic where possible (e.g. OpenAI's /v1/models authenticates
+// the API key for chat / image / audio alike), but expose the chosen URL on
+// the result so the admin UI can show what was actually probed.
+//
+// Returns ("", true) when the capability/vendor combination is presence-only
+// and should skip the network round-trip (currently: mock for any capability,
+// seedance video which is POST-only).
+func capabilityProbeURL(capability, providerType, baseURL string) (probeURL string, presenceOnly bool) {
+	base := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	switch providerType {
+	case "mock":
+		return "", true
+	case "seedance":
+		return "", true
+	case "anthropic":
+		return base + "/v1/models", false
+	case "openai":
+		return base + "/models", false
+	default:
+		if base == "" {
+			return "", false
+		}
+		return base + "/models", false
+	}
 }
 
 func (s *ProviderService) TestProviderConfig(ctx context.Context, capability string) TestProviderResult {
 	cfg, err := s.configs.GetProviderConfig(ctx, capability)
 	if err != nil {
-		return TestProviderResult{Error: "端点未配置"}
+		return TestProviderResult{Capability: capability, Error: "端点未配置"}
 	}
 
-	// Mock adapters never hit the network; report OK immediately so the
-	// admin UI does not flag deterministic offline configs as broken.
 	resolvedType := cfg.ResolvedProviderType()
-	if resolvedType == "mock" {
-		return TestProviderResult{OK: true, Model: cfg.Model, LatencyMS: 0}
+	allowed, ok := CapabilityProviderTypes[capability]
+	if ok {
+		if !allowed[resolvedType] {
+			return TestProviderResult{
+				Capability:   capability,
+				ProviderType: resolvedType,
+				Model:        cfg.Model,
+				Error: fmt.Sprintf(
+					"provider_type %q 与 capability %q 不匹配（允许：%s）",
+					resolvedType, capability, allowedProviderTypeList(capability),
+				),
+			}
+		}
 	}
 
-	// Anthropic uses x-api-key (not Bearer) and exposes /v1/models.
-	// Seedance ARK is a POST-only task endpoint; a GET probe would
-	// always return 405, so we treat baseURL+apiKey presence as the
-	// minimum sanity check and skip the network round-trip.
-	if resolvedType == "seedance" {
-		if strings.TrimSpace(cfg.APIKey) == "" || strings.TrimSpace(cfg.BaseURL) == "" {
-			return TestProviderResult{Error: "缺少 base_url 或 api_key"}
+	probeURL, presenceOnly := capabilityProbeURL(capability, resolvedType, cfg.BaseURL)
+	if presenceOnly {
+		// Mock paths never need credentials; seedance-style POST-only paths
+		// can only be sanity-checked by ensuring base_url + api_key exist.
+		if resolvedType != "mock" {
+			if strings.TrimSpace(cfg.APIKey) == "" || strings.TrimSpace(cfg.BaseURL) == "" {
+				return TestProviderResult{
+					Capability:   capability,
+					ProviderType: resolvedType,
+					Model:        cfg.Model,
+					Error:        "缺少 base_url 或 api_key",
+				}
+			}
 		}
-		return TestProviderResult{OK: true, Model: cfg.Model, LatencyMS: 0}
+		return TestProviderResult{
+			OK:           true,
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			Probe:        "presence-only",
+		}
 	}
 
 	start := time.Now()
 	client := &http.Client{Timeout: time.Duration(cfg.TimeoutMS) * time.Millisecond}
-	probeURL := cfg.BaseURL + "/models"
-	if resolvedType == "anthropic" {
-		probeURL = strings.TrimRight(cfg.BaseURL, "/") + "/v1/models"
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, probeURL, nil)
 	if err != nil {
-		return TestProviderResult{Error: fmt.Sprintf("构造请求失败: %v", err)}
+		return TestProviderResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			Probe:        probeURL,
+			Error:        fmt.Sprintf("构造请求失败: %v", err),
+		}
 	}
 	if resolvedType == "anthropic" {
 		req.Header.Set("x-api-key", cfg.APIKey)
@@ -184,16 +238,44 @@ func (s *ProviderService) TestProviderConfig(ctx context.Context, capability str
 	resp, err := client.Do(req)
 	latency := time.Since(start).Milliseconds()
 	if err != nil {
-		return TestProviderResult{Error: fmt.Sprintf("连接失败: %v", err), LatencyMS: latency}
+		return TestProviderResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			Probe:        probeURL,
+			Error:        fmt.Sprintf("连接失败: %v", err),
+			LatencyMS:    latency,
+		}
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
-		return TestProviderResult{Error: "API Key 无效 (401)", LatencyMS: latency}
+		return TestProviderResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			Probe:        probeURL,
+			Error:        "API Key 无效 (401)",
+			LatencyMS:    latency,
+		}
 	}
 	if resp.StatusCode >= 400 {
-		return TestProviderResult{Error: fmt.Sprintf("端点返回 %d", resp.StatusCode), LatencyMS: latency}
+		return TestProviderResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			Probe:        probeURL,
+			Error:        fmt.Sprintf("端点返回 %d", resp.StatusCode),
+			LatencyMS:    latency,
+		}
 	}
 
-	return TestProviderResult{OK: true, Model: cfg.Model, LatencyMS: latency}
+	return TestProviderResult{
+		OK:           true,
+		Capability:   capability,
+		ProviderType: resolvedType,
+		Model:        cfg.Model,
+		Probe:        probeURL,
+		LatencyMS:    latency,
+	}
 }
