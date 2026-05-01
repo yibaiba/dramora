@@ -10,11 +10,14 @@ import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   useAssetRecovery,
+  useGenerationJobs,
   useLockAsset,
   useSaveCharacterBible,
   useSeedEpisodeAssets,
   useSeedStoryMap,
+  useStoryAnalyses,
   useStoryboardWorkspace,
+  useWorkflowRun,
 } from '../../api/hooks'
 import type { Asset, AssetStatus, StoryMapItem } from '../../api/types'
 import {
@@ -27,6 +30,7 @@ import { AssetsGraphInspector } from '../components/AssetsGraphInspector'
 import { RecoveryPanel } from '../components/RecoveryPanel'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import { StatePlaceholder } from '../components/StatePlaceholder'
+import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import {
   cloneCharacterBibleDraft,
   createCharacterBibleDraft,
@@ -40,6 +44,7 @@ import { studioRoutePaths } from '../routes'
 import {
   buildStoryboardCharacterReferences,
   mapWorkspaceDisplayShots,
+  resolveEpisodeWorkflowRunId,
   selectShotsForStoryMapNode,
 } from '../utils'
 
@@ -66,6 +71,13 @@ export function AssetsGraphPage() {
   const { activeEpisode } = useStudioSelection()
   const location = useLocation()
   const { data: storyboardWorkspace } = useStoryboardWorkspace(activeEpisode?.id)
+  const { data: analyses = [] } = useStoryAnalyses(activeEpisode?.id)
+  const { data: jobs = [] } = useGenerationJobs()
+  const currentWorkflowRunId = useMemo(
+    () => resolveEpisodeWorkflowRunId(activeEpisode?.id, analyses, jobs),
+    [activeEpisode?.id, analyses, jobs],
+  )
+  const { data: workflowRun } = useWorkflowRun(currentWorkflowRunId)
   const lockAsset = useLockAsset()
   const saveCharacterBible = useSaveCharacterBible()
   const seedAssets = useSeedEpisodeAssets()
@@ -777,6 +789,7 @@ export function AssetsGraphPage() {
             emptyHint="这条资产暂无写入轨迹"
           />
         ) : null}
+        <WorkflowRecoveryTimeline workflowRun={workflowRun} />
       </article>
     </section>
   )
