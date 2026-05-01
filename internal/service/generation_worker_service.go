@@ -108,6 +108,18 @@ func (s *ProductionService) processGenerationJob(ctx context.Context, generation
 	if isStoryAnalysisJob(generationJob) {
 		return s.processStoryAnalysisJob(ctx, generationJob)
 	}
+	if isImageGenerationJob(generationJob) {
+		if generationJob.Status != domain.GenerationJobStatusQueued {
+			return nil
+		}
+		return s.processImageGenerationJob(ctx, generationJob)
+	}
+	if isAudioGenerationJob(generationJob) {
+		if generationJob.Status != domain.GenerationJobStatusQueued {
+			return nil
+		}
+		return s.processAudioGenerationJob(ctx, generationJob)
+	}
 	if !isSeedanceVideoJob(generationJob) {
 		if generationJob.Status != domain.GenerationJobStatusQueued {
 			return nil
