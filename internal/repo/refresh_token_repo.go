@@ -38,6 +38,8 @@ type CreateRefreshTokenParams struct {
 type RefreshTokenRepository interface {
 	Create(ctx context.Context, params CreateRefreshTokenParams) (RefreshTokenRecord, error)
 	GetByHash(ctx context.Context, tokenHash string) (RefreshTokenRecord, error)
+	GetByID(ctx context.Context, id string) (RefreshTokenRecord, error)
+	ListByUserID(ctx context.Context, userID string) ([]RefreshTokenRecord, error)
 	Revoke(ctx context.Context, id string, replacedByID *string) error
 }
 

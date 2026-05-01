@@ -9,6 +9,7 @@ import { AssetsGraphPage } from './studio/pages/AssetsGraphPage'
 import { AuthPage } from './studio/pages/AuthPage'
 import { HomePage } from './studio/pages/HomePage'
 import { InvitationsPage } from './studio/pages/InvitationsPage'
+import { SessionsPage } from './studio/pages/SessionsPage'
 import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
 import { TimelineExportPage } from './studio/pages/TimelineExportPage'
@@ -65,6 +66,7 @@ function App() {
         <Route path="admin/settings" element={<AdminSettingsPage />} />
         <Route path="admin/invitations" element={<InvitationsPage />} />
         <Route path="admin/worker-metrics" element={<WorkerMetricsPage />} />
+        <Route path="account/sessions" element={<SessionsPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

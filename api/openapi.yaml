@@ -160,6 +160,45 @@ paths:
       responses:
         "204":
           description: Refresh token revoked (idempotent)
+  /api/v1/auth/sessions:
+    get:
+      summary: List all refresh-token sessions for the current user
+      responses:
+        "200":
+          description: Sessions belonging to the authenticated user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sessions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Session"
+        "401":
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
+  "/api/v1/auth/sessions/{sessionId}:revoke":
+    post:
+      summary: Revoke a refresh-token session belonging to the current user
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session revoked (or already revoked — idempotent)
+        "404":
+          description: Session not found or owned by another user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
   /api/v1/organizations/invitations:
     get:
       summary: List invitations for the current organization (owner/admin only)
@@ -1390,6 +1429,36 @@ components:
         refresh_expires_at:
           type: string
           format: date-time
+        current_session_id:
+          type: string
+          description: ID of the refresh-token row issued for this session (use with /auth/sessions/{id}:revoke).
+    Session:
+      type: object
+      required:
+        - id
+        - organization_id
+        - role
+        - created_at
+        - expires_at
+      properties:
+        id:
+          type: string
+        organization_id:
+          type: string
+        role:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+        replaced_by_id:
+          type: string
     Project:
       type: object
       required:

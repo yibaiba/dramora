@@ -20,6 +20,7 @@ import type {
   RegisterRequest,
   SaveProviderConfigRequest,
   SeedEpisodeProductionResponse,
+  Session,
   SaveTimelineRequest,
   SaveShotPromptPackRequest,
   ShotPromptPack,
@@ -185,6 +186,17 @@ export async function logout(refreshToken?: string): Promise<void> {
     headers: { 'content-type': 'application/json' },
     method: 'POST',
   }).catch(() => undefined)
+}
+
+export async function listSessions(): Promise<Session[]> {
+  const payload = await fetchJSON<{ sessions: Session[] }>('/api/v1/auth/sessions')
+  return payload.sessions ?? []
+}
+
+export async function revokeSession(sessionId: string): Promise<void> {
+  await fetchJSON<unknown>(`/api/v1/auth/sessions/${encodeURIComponent(sessionId)}:revoke`, {
+    method: 'POST',
+  })
 }
 
 export async function listProjects(): Promise<Project[]> {

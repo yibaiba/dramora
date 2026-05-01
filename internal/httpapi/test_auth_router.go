@@ -30,8 +30,7 @@ func newAuthenticatedTestRouter(handler http.Handler, authService *service.AuthS
 
 func (r authenticatedTestRouter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if strings.HasPrefix(req.URL.Path, "/api/v1/") &&
-		!strings.HasPrefix(req.URL.Path, "/api/v1/auth/") &&
-		req.URL.Path != "/api/v1/meta/capabilities" &&
+		!isAuthContextPublicPath(req.URL.Path) &&
 		req.Header.Get("Authorization") == "" {
 		req.Header.Set("Authorization", r.authorization)
 	}

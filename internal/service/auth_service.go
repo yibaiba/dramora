@@ -34,6 +34,7 @@ type AuthSession struct {
 	Role             string
 	ExpiresAt        time.Time
 	RefreshToken     string
+	RefreshTokenID   string
 	RefreshExpiresAt time.Time
 }
 
@@ -232,35 +233,37 @@ func (s *AuthService) buildSession(ctx context.Context, identity repo.AuthIdenti
 		ExpiresAt:      expiresAt,
 	}
 	if s.refreshRepo != nil {
-		raw, refreshExpiresAt, err := s.issueRefreshToken(ctx, identity)
+		raw, refreshID, refreshExpiresAt, err := s.issueRefreshToken(ctx, identity)
 		if err != nil {
 			return AuthSession{}, err
 		}
 		session.RefreshToken = raw
+		session.RefreshTokenID = refreshID
 		session.RefreshExpiresAt = refreshExpiresAt
 	}
 	return session, nil
 }
 
-func (s *AuthService) issueRefreshToken(ctx context.Context, identity repo.AuthIdentity) (string, time.Time, error) {
+func (s *AuthService) issueRefreshToken(ctx context.Context, identity repo.AuthIdentity) (string, string, time.Time, error) {
 	rawBytes := make([]byte, 32)
 	if _, err := rand.Read(rawBytes); err != nil {
-		return "", time.Time{}, fmt.Errorf("generate refresh token: %w", err)
+		return "", "", time.Time{}, fmt.Errorf("generate refresh token: %w", err)
 	}
 	raw := base64.RawURLEncoding.EncodeToString(rawBytes)
 	hash := hashRefreshToken(raw)
 	expiresAt := time.Now().UTC().Add(s.refreshTTL)
+	id := uuid.NewString()
 	if _, err := s.refreshRepo.Create(ctx, repo.CreateRefreshTokenParams{
-		ID:             uuid.NewString(),
+		ID:             id,
 		UserID:         identity.User.ID,
 		OrganizationID: identity.OrganizationID,
 		Role:           identity.Role,
 		TokenHash:      hash,
 		ExpiresAt:      expiresAt,
 	}); err != nil {
-		return "", time.Time{}, fmt.Errorf("persist refresh token: %w", err)
+		return "", "", time.Time{}, fmt.Errorf("persist refresh token: %w", err)
 	}
-	return raw, expiresAt, nil
+	return raw, id, expiresAt, nil
 }
 
 func hashRefreshToken(raw string) string {
@@ -477,4 +480,77 @@ func (s *AuthService) ListInvitations(ctx context.Context) ([]domain.Organizatio
 		return nil, ErrUnauthorized
 	}
 	return s.identityRepo.ListOrganizationInvitations(ctx, auth.OrganizationID)
+}
+
+// SessionInfo 是 refresh token 面向调用方的脱敏视图，token_hash 已剥离。
+type SessionInfo struct {
+	ID             string
+	OrganizationID string
+	Role           string
+	CreatedAt      time.Time
+	ExpiresAt      time.Time
+	RevokedAt      *time.Time
+	ReplacedByID   *string
+}
+
+func sessionInfoFromRecord(rec repo.RefreshTokenRecord) SessionInfo {
+	return SessionInfo{
+		ID:             rec.ID,
+		OrganizationID: rec.OrganizationID,
+		Role:           rec.Role,
+		CreatedAt:      rec.CreatedAt.UTC(),
+		ExpiresAt:      rec.ExpiresAt.UTC(),
+		RevokedAt:      rec.RevokedAt,
+		ReplacedByID:   rec.ReplacedByID,
+	}
+}
+
+// ListSessions 列出当前登录用户的全部 refresh token（含已吊销/过期的，由前端按
+// revoked_at / expires_at 渲染状态）。
+func (s *AuthService) ListSessions(ctx context.Context) ([]SessionInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+	if s.refreshRepo == nil {
+		return []SessionInfo{}, nil
+	}
+	records, err := s.refreshRepo.ListByUserID(ctx, auth.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SessionInfo, 0, len(records))
+	for _, rec := range records {
+		out = append(out, sessionInfoFromRecord(rec))
+	}
+	return out, nil
+}
+
+// RevokeSession 由用户主动吊销自己名下的某个 refresh token。
+//
+// 跨用户访问统一返回 ErrNotFound 而不是 Forbidden，避免泄露 session id 是否存在。
+// 已吊销的 session 视为幂等成功。
+func (s *AuthService) RevokeSession(ctx context.Context, sessionID string) error {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return ErrUnauthorized
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return fmt.Errorf("session id is required: %w", domain.ErrInvalidInput)
+	}
+	if s.refreshRepo == nil {
+		return domain.ErrNotFound
+	}
+	rec, err := s.refreshRepo.GetByID(ctx, sessionID)
+	if err != nil {
+		return err
+	}
+	if rec.UserID != auth.UserID {
+		return domain.ErrNotFound
+	}
+	if rec.RevokedAt != nil {
+		return nil
+	}
+	return s.refreshRepo.Revoke(ctx, sessionID, nil)
 }

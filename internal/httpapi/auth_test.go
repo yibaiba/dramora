@@ -175,3 +175,132 @@ func TestAuthRefreshRotatesAndLogoutInvalidates(t *testing.T) {
 		t.Fatalf("expected post-logout refresh 401, got %d: %s", postLogoutResp.Code, postLogoutResp.Body.String())
 	}
 }
+
+func TestAuthListAndRevokeOwnSessions(t *testing.T) {
+	t.Parallel()
+
+	router := testRouter()
+
+	// Register user A — produces session 1.
+	regA := httptest.NewRecorder()
+	router.ServeHTTP(regA, httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/register",
+		body(`{"email":"a@example.com","display_name":"User A","password":"strongpass"}`),
+	))
+	if regA.Code != http.StatusCreated {
+		t.Fatalf("register A: %d %s", regA.Code, regA.Body.String())
+	}
+	var registered struct {
+		Session authSessionResponse `json:"session"`
+	}
+	decodeBody(t, regA, &registered)
+	if registered.Session.CurrentSessionID == "" {
+		t.Fatalf("expected current_session_id on register response")
+	}
+	tokenA := registered.Session.Token
+	currentID := registered.Session.CurrentSessionID
+
+	// Login A again — produces session 2.
+	loginA := httptest.NewRecorder()
+	router.ServeHTTP(loginA, httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/login",
+		body(`{"email":"a@example.com","password":"strongpass"}`),
+	))
+	if loginA.Code != http.StatusOK {
+		t.Fatalf("login A: %d %s", loginA.Code, loginA.Body.String())
+	}
+	var second struct {
+		Session authSessionResponse `json:"session"`
+	}
+	decodeBody(t, loginA, &second)
+	secondID := second.Session.CurrentSessionID
+	secondRefresh := second.Session.RefreshToken
+	if secondID == "" || secondID == currentID {
+		t.Fatalf("expected distinct second session id, got %q vs %q", secondID, currentID)
+	}
+
+	// List A's sessions.
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sessions", nil)
+	listReq.Header.Set("Authorization", "Bearer "+tokenA)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list sessions: %d %s", listResp.Code, listResp.Body.String())
+	}
+	var listed struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	decodeBody(t, listResp, &listed)
+	if len(listed.Sessions) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(listed.Sessions))
+	}
+
+	// Revoke the second session.
+	revokeResp := httptest.NewRecorder()
+	revokeReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/sessions/"+secondID+":revoke",
+		nil,
+	)
+	revokeReq.Header.Set("Authorization", "Bearer "+tokenA)
+	router.ServeHTTP(revokeResp, revokeReq)
+	if revokeResp.Code != http.StatusNoContent {
+		t.Fatalf("revoke session: %d %s", revokeResp.Code, revokeResp.Body.String())
+	}
+
+	// Refreshing with the revoked token should fail.
+	refreshResp := httptest.NewRecorder()
+	router.ServeHTTP(refreshResp, httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/refresh",
+		body(`{"refresh_token":"`+secondRefresh+`"}`),
+	))
+	if refreshResp.Code != http.StatusUnauthorized {
+		t.Fatalf("expected revoked refresh 401, got %d: %s", refreshResp.Code, refreshResp.Body.String())
+	}
+
+	// Register user B and confirm B cannot revoke A's sessions (404 — no leak).
+	regB := httptest.NewRecorder()
+	router.ServeHTTP(regB, httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/register",
+		body(`{"email":"b@example.com","display_name":"User B","password":"strongpass"}`),
+	))
+	if regB.Code != http.StatusCreated {
+		t.Fatalf("register B: %d %s", regB.Code, regB.Body.String())
+	}
+	var bSession struct {
+		Session authSessionResponse `json:"session"`
+	}
+	decodeBody(t, regB, &bSession)
+
+	crossResp := httptest.NewRecorder()
+	crossReq := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/auth/sessions/"+currentID+":revoke",
+		nil,
+	)
+	crossReq.Header.Set("Authorization", "Bearer "+bSession.Session.Token)
+	router.ServeHTTP(crossResp, crossReq)
+	if crossResp.Code != http.StatusNotFound {
+		t.Fatalf("expected cross-user revoke 404, got %d: %s", crossResp.Code, crossResp.Body.String())
+	}
+
+	// B sees only own sessions.
+	listB := httptest.NewRecorder()
+	listBReq := httptest.NewRequest(http.MethodGet, "/api/v1/auth/sessions", nil)
+	listBReq.Header.Set("Authorization", "Bearer "+bSession.Session.Token)
+	router.ServeHTTP(listB, listBReq)
+	if listB.Code != http.StatusOK {
+		t.Fatalf("list B sessions: %d %s", listB.Code, listB.Body.String())
+	}
+	var listedB struct {
+		Sessions []sessionResponse `json:"sessions"`
+	}
+	decodeBody(t, listB, &listedB)
+	if len(listedB.Sessions) != 1 {
+		t.Fatalf("expected exactly 1 session for B, got %d", len(listedB.Sessions))
+	}
+}

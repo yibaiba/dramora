@@ -56,6 +56,34 @@ func (r *MemoryRefreshTokenRepository) GetByHash(_ context.Context, tokenHash st
 	return rec, nil
 }
 
+func (r *MemoryRefreshTokenRepository) GetByID(_ context.Context, id string) (RefreshTokenRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	rec, ok := r.byID[id]
+	if !ok {
+		return RefreshTokenRecord{}, domain.ErrNotFound
+	}
+	return rec, nil
+}
+
+func (r *MemoryRefreshTokenRepository) ListByUserID(_ context.Context, userID string) ([]RefreshTokenRecord, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]RefreshTokenRecord, 0)
+	for _, rec := range r.byID {
+		if rec.UserID == userID {
+			out = append(out, rec)
+		}
+	}
+	// Order by CreatedAt desc for stable presentation.
+	for i := 1; i < len(out); i++ {
+		for j := i; j > 0 && out[j].CreatedAt.After(out[j-1].CreatedAt); j-- {
+			out[j], out[j-1] = out[j-1], out[j]
+		}
+	}
+	return out, nil
+}
+
 func (r *MemoryRefreshTokenRepository) Revoke(_ context.Context, id string, replacedByID *string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

@@ -24,6 +24,16 @@ WHERE token_hash = ?
 LIMIT 1
 `
 
+const sqliteGetRefreshTokenByIDSQL = sqliteRefreshTokenSelect + `
+WHERE id = ?
+LIMIT 1
+`
+
+const sqliteListRefreshTokensByUserSQL = sqliteRefreshTokenSelect + `
+WHERE user_id = ?
+ORDER BY created_at DESC
+`
+
 const sqliteRevokeRefreshTokenSQL = `
 UPDATE auth_refresh_tokens
 SET revoked_at = COALESCE(revoked_at, strftime('%Y-%m-%dT%H:%M:%fZ','now')),
@@ -65,6 +75,60 @@ func (r *SQLiteRefreshTokenRepository) GetByHash(ctx context.Context, tokenHash 
 		return RefreshTokenRecord{}, domain.ErrNotFound
 	}
 	return rec, err
+}
+
+func (r *SQLiteRefreshTokenRepository) GetByID(ctx context.Context, id string) (RefreshTokenRecord, error) {
+	rec, err := scanSQLiteRefreshTokenRow(r.db.QueryRowContext(ctx, sqliteGetRefreshTokenByIDSQL, id))
+	if err == sql.ErrNoRows {
+		return RefreshTokenRecord{}, domain.ErrNotFound
+	}
+	return rec, err
+}
+
+func (r *SQLiteRefreshTokenRepository) ListByUserID(ctx context.Context, userID string) ([]RefreshTokenRecord, error) {
+	rows, err := r.db.QueryContext(ctx, sqliteListRefreshTokensByUserSQL, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list refresh tokens by user: %w", err)
+	}
+	defer rows.Close()
+	out := make([]RefreshTokenRecord, 0)
+	for rows.Next() {
+		var (
+			rec          RefreshTokenRecord
+			createdAt    string
+			expiresAt    string
+			revokedAt    sql.NullString
+			replacedByID sql.NullString
+		)
+		if err := rows.Scan(
+			&rec.ID, &rec.UserID, &rec.OrganizationID, &rec.Role, &rec.TokenHash,
+			&createdAt, &expiresAt, &revokedAt, &replacedByID,
+		); err != nil {
+			return nil, fmt.Errorf("scan refresh token: %w", err)
+		}
+		if rec.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+			return nil, err
+		}
+		if rec.ExpiresAt, err = parseSQLiteTime(expiresAt); err != nil {
+			return nil, err
+		}
+		if revokedAt.Valid {
+			t, err := parseSQLiteTime(revokedAt.String)
+			if err != nil {
+				return nil, err
+			}
+			rec.RevokedAt = &t
+		}
+		if replacedByID.Valid {
+			v := replacedByID.String
+			rec.ReplacedByID = &v
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate refresh tokens: %w", err)
+	}
+	return out, nil
 }
 
 func (r *SQLiteRefreshTokenRepository) Revoke(ctx context.Context, id string, replacedByID *string) error {

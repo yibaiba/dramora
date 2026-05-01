@@ -25,6 +25,20 @@ WHERE token_hash = $1
 LIMIT 1
 `
 
+const pgGetRefreshTokenByIDSQL = `
+SELECT id, user_id, organization_id, role, token_hash, created_at, expires_at, revoked_at, replaced_by_id
+FROM auth_refresh_tokens
+WHERE id = $1
+LIMIT 1
+`
+
+const pgListRefreshTokensByUserSQL = `
+SELECT id, user_id, organization_id, role, token_hash, created_at, expires_at, revoked_at, replaced_by_id
+FROM auth_refresh_tokens
+WHERE user_id = $1
+ORDER BY created_at DESC
+`
+
 const pgRevokeRefreshTokenSQL = `
 UPDATE auth_refresh_tokens
 SET revoked_at = COALESCE(revoked_at, NOW()),
@@ -63,6 +77,34 @@ func (r *PostgresRefreshTokenRepository) GetByHash(ctx context.Context, tokenHas
 		return RefreshTokenRecord{}, domain.ErrNotFound
 	}
 	return rec, err
+}
+
+func (r *PostgresRefreshTokenRepository) GetByID(ctx context.Context, id string) (RefreshTokenRecord, error) {
+	rec, err := scanPGRefreshTokenRow(r.pool.QueryRow(ctx, pgGetRefreshTokenByIDSQL, id))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RefreshTokenRecord{}, domain.ErrNotFound
+	}
+	return rec, err
+}
+
+func (r *PostgresRefreshTokenRepository) ListByUserID(ctx context.Context, userID string) ([]RefreshTokenRecord, error) {
+	rows, err := r.pool.Query(ctx, pgListRefreshTokensByUserSQL, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list refresh tokens by user: %w", err)
+	}
+	defer rows.Close()
+	out := make([]RefreshTokenRecord, 0)
+	for rows.Next() {
+		rec, err := scanPGRefreshTokenRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate refresh tokens: %w", err)
+	}
+	return out, nil
 }
 
 func (r *PostgresRefreshTokenRepository) Revoke(ctx context.Context, id string, replacedByID *string) error {

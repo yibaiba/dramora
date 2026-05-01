@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-chi/chi/v5"
+
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/service"
 )
@@ -25,6 +27,7 @@ type authSessionResponse struct {
 	ExpiresAt        time.Time    `json:"expires_at"`
 	RefreshToken     string       `json:"refresh_token,omitempty"`
 	RefreshExpiresAt *time.Time   `json:"refresh_expires_at,omitempty"`
+	CurrentSessionID string       `json:"current_session_id,omitempty"`
 }
 
 type userResponse struct {
@@ -43,12 +46,13 @@ func userDTO(user domain.User) userResponse {
 
 func authSessionDTO(session service.AuthSession) authSessionResponse {
 	resp := authSessionResponse{
-		Token:          session.Token,
-		User:           userDTO(session.User),
-		OrganizationID: session.OrganizationID,
-		Role:           session.Role,
-		ExpiresAt:      session.ExpiresAt.UTC(),
-		RefreshToken:   session.RefreshToken,
+		Token:            session.Token,
+		User:             userDTO(session.User),
+		OrganizationID:   session.OrganizationID,
+		Role:             session.Role,
+		ExpiresAt:        session.ExpiresAt.UTC(),
+		RefreshToken:     session.RefreshToken,
+		CurrentSessionID: session.RefreshTokenID,
 	}
 	if !session.RefreshExpiresAt.IsZero() {
 		t := session.RefreshExpiresAt.UTC()
@@ -248,4 +252,62 @@ func (a *api) listInvitations(w http.ResponseWriter, r *http.Request) {
 		out = append(out, invitationDTO(inv))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"invitations": out})
+}
+
+type sessionResponse struct {
+	ID             string     `json:"id"`
+	OrganizationID string     `json:"organization_id"`
+	Role           string     `json:"role"`
+	CreatedAt      time.Time  `json:"created_at"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	RevokedAt      *time.Time `json:"revoked_at,omitempty"`
+	ReplacedByID   string     `json:"replaced_by_id,omitempty"`
+}
+
+func sessionDTO(info service.SessionInfo) sessionResponse {
+	resp := sessionResponse{
+		ID:             info.ID,
+		OrganizationID: info.OrganizationID,
+		Role:           info.Role,
+		CreatedAt:      info.CreatedAt.UTC(),
+		ExpiresAt:      info.ExpiresAt.UTC(),
+	}
+	if info.RevokedAt != nil {
+		t := info.RevokedAt.UTC()
+		resp.RevokedAt = &t
+	}
+	if info.ReplacedByID != nil {
+		resp.ReplacedByID = *info.ReplacedByID
+	}
+	return resp
+}
+
+func (a *api) listSessions(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	items, err := a.authService.ListSessions(r.Context())
+	if err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	out := make([]sessionResponse, 0, len(items))
+	for _, info := range items {
+		out = append(out, sessionDTO(info))
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": out})
+}
+
+func (a *api) revokeSession(w http.ResponseWriter, r *http.Request) {
+	if a.authService == nil {
+		writeError(w, http.StatusNotImplemented, "not_supported", "auth service is not configured")
+		return
+	}
+	sessionID := chi.URLParam(r, "sessionId")
+	if err := a.authService.RevokeSession(r.Context(), sessionID); err != nil {
+		writeAuthError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -25,6 +25,8 @@ import {
   listProviderConfigs,
   listOrganizationInvitations,
   createOrganizationInvitation,
+  listSessions,
+  revokeSession,
   listStorySources,
   listStoryAnalyses,
   listStoryboardShots,
@@ -507,5 +509,21 @@ export function useCreateInvitation() {
   return useMutation({
     mutationFn: (request: CreateInvitationRequest) => createOrganizationInvitation(request),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['organization-invitations'] }),
+  })
+}
+
+export function useSessions(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: listSessions,
+    queryKey: ['auth-sessions'],
+  })
+}
+
+export function useRevokeSession() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (sessionId: string) => revokeSession(sessionId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-sessions'] }),
   })
 }
