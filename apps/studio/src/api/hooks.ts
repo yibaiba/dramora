@@ -522,11 +522,30 @@ export function useLLMTelemetry(enabled = true) {
   })
 }
 
-export function useProviderAuditEvents(enabled = true) {
+export type ProviderAuditFilter = {
+  action?: string
+  capability?: string
+  sinceMinutes?: number
+  limit?: number
+}
+
+export function useProviderAuditEvents(filter?: ProviderAuditFilter, enabled = true) {
+  const params: ProviderAuditFilter = { limit: 50, ...(filter ?? {}) }
   return useQuery({
     enabled,
-    queryFn: () => fetchProviderAuditEvents({ limit: 50 }),
-    queryKey: ['admin', 'provider-audit'],
+    queryFn: () => {
+      const since =
+        params.sinceMinutes != null
+          ? new Date(Date.now() - params.sinceMinutes * 60 * 1000).toISOString()
+          : undefined
+      return fetchProviderAuditEvents({
+        action: params.action,
+        capability: params.capability,
+        since,
+        limit: params.limit,
+      })
+    },
+    queryKey: ['admin', 'provider-audit', params],
     refetchInterval: enabled ? 15000 : false,
   })
 }

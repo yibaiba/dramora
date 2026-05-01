@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2, Activity } from 'lucide-react'
 import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useSaveProviderConfig, useTestProviderConfig } from '../../api/hooks'
@@ -73,20 +73,88 @@ export function AdminSettingsPage() {
 }
 
 function ProviderAuditPanel() {
-  const { data, isLoading, isError, error } = useProviderAuditEvents()
+  const [actionFilter, setActionFilter] = useState<'all' | 'save' | 'test'>('all')
+  const [capabilityFilter, setCapabilityFilter] = useState<'all' | 'chat' | 'image' | 'video' | 'audio'>('all')
+  const [sinceMinutes, setSinceMinutes] = useState<'all' | '15' | '60' | '1440' | '10080'>('all')
+
+  const filter = useMemo(
+    () => ({
+      action: actionFilter === 'all' ? undefined : actionFilter,
+      capability: capabilityFilter === 'all' ? undefined : capabilityFilter,
+      sinceMinutes: sinceMinutes === 'all' ? undefined : Number(sinceMinutes),
+      limit: 100,
+    }),
+    [actionFilter, capabilityFilter, sinceMinutes],
+  )
+
+  const { data, isLoading, isError, error } = useProviderAuditEvents(filter)
+
+  const onReset = () => {
+    setActionFilter('all')
+    setCapabilityFilter('all')
+    setSinceMinutes('all')
+  }
+
   return (
     <section className="provider-card" style={{ marginTop: 24 }}>
       <header className="provider-card-header">
         <Activity size={18} aria-hidden="true" />
         <h2>Provider 配置审计</h2>
-        <span className="provider-card-hint">每 15s 刷新 · 最近 50 条 save / test 记录</span>
+        <span className="provider-card-hint">
+          每 15s 刷新 · {data ? `当前 ${data.events.length} 条${data.has_more ? ' (还有更多)' : ''}` : '加载中…'}
+        </span>
       </header>
+      <div
+        style={{
+          display: 'flex',
+          gap: 12,
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          margin: '8px 0 12px',
+          fontSize: 12,
+        }}
+      >
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          动作：
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value as typeof actionFilter)}>
+            <option value="all">全部</option>
+            <option value="save">save</option>
+            <option value="test">test</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          Capability：
+          <select
+            value={capabilityFilter}
+            onChange={(e) => setCapabilityFilter(e.target.value as typeof capabilityFilter)}
+          >
+            <option value="all">全部</option>
+            <option value="chat">chat</option>
+            <option value="image">image</option>
+            <option value="video">video</option>
+            <option value="audio">audio</option>
+          </select>
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          时间窗口：
+          <select value={sinceMinutes} onChange={(e) => setSinceMinutes(e.target.value as typeof sinceMinutes)}>
+            <option value="all">全部</option>
+            <option value="15">最近 15 分钟</option>
+            <option value="60">最近 1 小时</option>
+            <option value="1440">最近 24 小时</option>
+            <option value="10080">最近 7 天</option>
+          </select>
+        </label>
+        <button type="button" onClick={onReset} className="btn-ghost" style={{ fontSize: 12 }}>
+          重置筛选
+        </button>
+      </div>
       {isLoading ? (
         <p className="muted">加载中…</p>
       ) : isError ? (
         <p className="error">无法加载（需要 owner/admin 权限）：{(error as Error)?.message ?? 'unknown'}</p>
       ) : !data || data.events.length === 0 ? (
-        <p className="muted">尚无 provider 配置审计记录</p>
+        <p className="muted">当前筛选下无审计记录</p>
       ) : (
         <div style={{ overflowX: 'auto' }}>
           <table className="telemetry-table" style={{ width: '100%', fontSize: 12 }}>
