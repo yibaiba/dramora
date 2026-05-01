@@ -5403,6 +5403,86 @@ p {
   border-top: 1px solid rgba(148, 163, 184, 0.12);
 }
 
+.invitation-audit-row {
+  padding: 0;
+}
+
+.invitation-audit-row-trigger {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  align-items: stretch;
+  padding: 0.75rem 0.9rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  border-radius: 6px;
+  transition: background-color 0.15s ease;
+}
+
+.invitation-audit-row-trigger:hover {
+  background: rgba(148, 163, 184, 0.08);
+}
+
+.invitation-audit-row.is-selected {
+  background: rgba(56, 189, 248, 0.06);
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.invitation-audit-detail {
+  padding: 0.75rem 0.9rem 0.9rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.invitation-audit-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.6rem 1rem;
+  margin: 0;
+}
+
+.invitation-audit-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.invitation-audit-detail-grid dt {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgb(148, 163, 184);
+}
+
+.invitation-audit-detail-grid dd {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgb(226, 232, 240);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.invitation-audit-detail-grid code {
+  font-size: 0.75rem;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 0.15rem 0.35rem;
+  border-radius: 4px;
+  word-break: break-all;
+}
+
+.action-btn.tiny {
+  padding: 0.1rem 0.45rem;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 .invitation-audit-pager-info {
   font-size: 0.78rem;
   color: rgb(148, 163, 184);

@@ -56,6 +56,9 @@ export function InvitationsPage() {
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [resendError, setResendError] = useState('')
   const [resendingId, setResendingId] = useState<string | null>(null)
+  const [copiedTokenRaw, setCopiedTokenRaw] = useState<string | null>(null)
+  const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null)
+  const [copiedAuditField, setCopiedAuditField] = useState<string | null>(null)
 
   // Audit log filter state
   const AUDIT_PAGE_SIZE = 20
@@ -212,6 +215,33 @@ export function InvitationsPage() {
       window.setTimeout(() => setCopiedToken((current) => (current === invitation.id ? null : current)), 2000)
     } catch {
       // best-effort copy; clipboard may be unavailable in some sandboxes
+    }
+  }
+
+  async function handleCopyRawToken(invitation: OrganizationInvitation) {
+    try {
+      await navigator.clipboard.writeText(invitation.token)
+      setCopiedTokenRaw(invitation.id)
+      window.setTimeout(
+        () => setCopiedTokenRaw((current) => (current === invitation.id ? null : current)),
+        2000,
+      )
+    } catch {
+      // best-effort copy
+    }
+  }
+
+  async function handleCopyAuditField(eventId: string, field: string, value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      const key = `${eventId}:${field}`
+      setCopiedAuditField(key)
+      window.setTimeout(
+        () => setCopiedAuditField((current) => (current === key ? null : current)),
+        1500,
+      )
+    } catch {
+      // best-effort copy
     }
   }
 
@@ -405,6 +435,22 @@ export function InvitationsPage() {
                         <button
                           type="button"
                           className="action-btn secondary"
+                          onClick={() => handleCopyRawToken(invitation)}
+                          title={`仅复制原始 token（…${invitation.token.slice(-6)}）`}
+                        >
+                          {copiedTokenRaw === invitation.id ? (
+                            <>
+                              <Check size={14} aria-hidden="true" /> 已复制 token
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={14} aria-hidden="true" /> 复制 token
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          className="action-btn secondary"
                           onClick={() => handleResend(invitation)}
                           disabled={resendingId === invitation.id || revokingId === invitation.id}
                           title="生成新 token 并自动吊销旧链接"
@@ -581,27 +627,126 @@ export function InvitationsPage() {
           ) : (
             <>
               <ul className="invitation-list">
-                {auditQuery.data.events.map((event) => (
-                  <li key={event.id} className="invitation-row">
-                    <div className="invitation-row-main">
-                      <span className={`invitation-status invitation-status-${event.action}`}>
-                        {event.action === 'created' && '已创建'}
-                        {event.action === 'accepted' && '已接受'}
-                        {event.action === 'revoked' && '已吊销'}
-                        {event.action === 'resent' && '已重发'}
-                      </span>
-                      <span className="invitation-email">{event.email}</span>
-                      <span className="invitation-role">{event.role}</span>
-                    </div>
-                    <div className="invitation-row-meta">
-                      {event.actor_email ? <span>操作者：{event.actor_email}</span> : null}
-                      {event.actor_user_id && !event.actor_email ? (
-                        <span>操作者 ID：{event.actor_user_id.slice(0, 8)}…</span>
+                {auditQuery.data.events.map((event) => {
+                  const isSelected = selectedAuditId === event.id
+                  return (
+                    <li
+                      key={event.id}
+                      className={`invitation-row invitation-audit-row${isSelected ? ' is-selected' : ''}`}
+                    >
+                      <button
+                        type="button"
+                        className="invitation-audit-row-trigger"
+                        onClick={() =>
+                          setSelectedAuditId((current) => (current === event.id ? null : event.id))
+                        }
+                        aria-expanded={isSelected}
+                        aria-controls={`audit-detail-${event.id}`}
+                      >
+                        <div className="invitation-row-main">
+                          <span className={`invitation-status invitation-status-${event.action}`}>
+                            {event.action === 'created' && '已创建'}
+                            {event.action === 'accepted' && '已接受'}
+                            {event.action === 'revoked' && '已吊销'}
+                            {event.action === 'resent' && '已重发'}
+                          </span>
+                          <span className="invitation-email">{event.email}</span>
+                          <span className="invitation-role">{event.role}</span>
+                        </div>
+                        <div className="invitation-row-meta">
+                          {event.actor_email ? <span>操作者：{event.actor_email}</span> : null}
+                          {event.actor_user_id && !event.actor_email ? (
+                            <span>操作者 ID：{event.actor_user_id.slice(0, 8)}…</span>
+                          ) : null}
+                          <span title={event.created_at}>
+                            {new Date(event.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                      </button>
+                      {isSelected ? (
+                        <div
+                          id={`audit-detail-${event.id}`}
+                          className="invitation-audit-detail"
+                          role="region"
+                          aria-label="审计事件详情"
+                        >
+                          <dl className="invitation-audit-detail-grid">
+                            <div>
+                              <dt>事件 ID</dt>
+                              <dd>
+                                <code>{event.id}</code>
+                                <button
+                                  type="button"
+                                  className="action-btn secondary tiny"
+                                  onClick={() => handleCopyAuditField(event.id, 'id', event.id)}
+                                >
+                                  {copiedAuditField === `${event.id}:id` ? '已复制' : '复制'}
+                                </button>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>邀请 ID</dt>
+                              <dd>
+                                <code>{event.invitation_id}</code>
+                                <button
+                                  type="button"
+                                  className="action-btn secondary tiny"
+                                  onClick={() =>
+                                    handleCopyAuditField(event.id, 'invitation_id', event.invitation_id)
+                                  }
+                                >
+                                  {copiedAuditField === `${event.id}:invitation_id` ? '已复制' : '复制'}
+                                </button>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>组织 ID</dt>
+                              <dd>
+                                <code>{event.organization_id}</code>
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>动作</dt>
+                              <dd>{event.action}</dd>
+                            </div>
+                            <div>
+                              <dt>邀请邮箱</dt>
+                              <dd>{event.email}</dd>
+                            </div>
+                            <div>
+                              <dt>角色</dt>
+                              <dd>{event.role}</dd>
+                            </div>
+                            <div>
+                              <dt>操作者</dt>
+                              <dd>
+                                {event.actor_email ?? '—'}
+                                {event.actor_user_id ? (
+                                  <small style={{ marginLeft: 6, opacity: 0.7 }}>
+                                    ({event.actor_user_id})
+                                  </small>
+                                ) : null}
+                              </dd>
+                            </div>
+                            <div>
+                              <dt>发生时间</dt>
+                              <dd title={event.created_at}>
+                                {new Date(event.created_at).toLocaleString()}{' '}
+                                <small style={{ opacity: 0.7 }}>{event.created_at}</small>
+                              </dd>
+                            </div>
+                            {event.note ? (
+                              <div style={{ gridColumn: '1 / -1' }}>
+                                <dt>备注</dt>
+                                <dd>{event.note}</dd>
+                              </div>
+                            ) : null}
+                          </dl>
+                        </div>
                       ) : null}
-                      <span title={event.created_at}>{new Date(event.created_at).toLocaleString()}</span>
-                    </div>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
               </ul>
               <div className="invitation-audit-pager">
                 <span className="invitation-audit-pager-info">
