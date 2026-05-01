@@ -722,6 +722,21 @@ Rules:
 - Adding a new vendor adapter requires three coordinated edits: register it in `internal/provider/llm_factory.go` (or its own factory), append it to `service.ValidProviderTypes`, and add it to the relevant capability rows of `service.CapabilityProviderTypes` (and the OpenAPI `enum`).
 - Studio mirrors the matrix in `apps/studio/src/studio/pages/AdminSettingsPage.tsx` (`CAPABILITY_PROVIDER_TYPES` / `CAPABILITY_DEFAULT_PROVIDER_TYPE`); these constants must be updated in lock-step with the backend matrix.
 
+### 9. Capability provider abstractions (image / video / audio)
+
+In addition to `LLMProvider` (chat), the provider package now exposes parallel abstractions for the remaining three capabilities, all routed through `provider_type`:
+
+- `provider.ImageProvider` (`Generate`) → `NewImageProvider(CapabilityConfig)`; supports `openai` (calls `${BaseURL}/images/generations`) and `mock` (deterministic `manmu://providers/mock-image/...` URLs).
+- `provider.VideoProvider` (`Submit` / `Poll`) → `NewVideoProvider(CapabilityConfig)`; supports `seedance` (wraps the existing `SeedanceAdapter` for ARK) and `mock` (returns deterministic `mock-video-*` task IDs that always poll `succeeded`).
+- `provider.AudioProvider` (`Synthesize`) → `NewAudioProvider(CapabilityConfig)`; supports `openai` (calls `${BaseURL}/audio/speech`, returns bytes) and `mock` (deterministic URL).
+
+Rules:
+
+- All three factories share `CapabilityConfig` (`ProviderType / BaseURL / APIKey / Model / Timeout`) — primitive-only, mirrors `LLMConfig`.
+- Empty `ProviderType` falls back to the capability default declared in section 8 (`openai` for image/audio, `seedance` for video).
+- Mock implementations never make network calls and are safe to use in unit tests for offline determinism (sha1-based URLs).
+- The factories live in `internal/provider/capability_factory.go`; adding a new vendor requires editing the factory switch + capability matrix + OpenAPI enum (same triple-write rule as section 8).
+
 ---
 
 ## Scenario: SQLite default persistence with PostgreSQL fallback
