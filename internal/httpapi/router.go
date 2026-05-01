@@ -92,12 +92,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/events/stream", streamEventsHandler)
 		r.Post("/agents/stream", api.streamAgentRun)
 
-		// admin routes (owner/admin role required)
+		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
 			admin.Use(requireRole("owner", "admin"))
 			admin.Get("/admin/providers", api.listProviderConfigs)
-			admin.Post("/admin/providers:save", api.saveProviderConfig)
-			admin.Post("/admin/providers/{capability}:test", api.testProviderConfig)
 			admin.Get("/admin/worker-metrics", api.getAdminWorkerMetrics)
 			admin.Get("/admin/llm-telemetry", api.getAdminLLMTelemetry)
 			admin.Get("/admin/provider-audit", api.listProviderAuditEvents)
@@ -107,6 +105,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Get("/organizations/invitations/audit/export", api.exportInvitationAudit)
 			admin.Post("/organizations/invitations/{invitationId}:revoke", api.revokeInvitation)
 			admin.Post("/organizations/invitations/{invitationId}:resend", api.resendInvitation)
+
+			// owner-only mutations: provider config save / test 真实凭证写入
+			admin.Group(func(owner chi.Router) {
+				owner.Use(requireRole("owner"))
+				owner.Post("/admin/providers:save", api.saveProviderConfig)
+				owner.Post("/admin/providers/{capability}:test", api.testProviderConfig)
+			})
 		})
 	})
 

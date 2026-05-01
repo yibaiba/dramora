@@ -126,3 +126,73 @@ func TestProviderAuditRejectsViewerRole(t *testing.T) {
 		t.Fatalf("expected 403 for viewer, got %d: %s", resp.Code, resp.Body.String())
 	}
 }
+
+func TestProviderSaveRequiresOwnerRole(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	identityRepo := repo.NewMemoryIdentityRepository()
+	const orgID = "00000000-0000-0000-0000-000000000001"
+	authService := service.NewAuthService(identityRepo, "test-secret")
+	providerSvc := service.NewProviderService(repo.NewMemoryProviderConfigRepository())
+	providerSvc.SetAuditRepository(repo.NewMemoryProviderAuditRepository())
+
+	router := NewRouter(RouterConfig{
+		Logger:          logger,
+		Version:         "test",
+		AuthService:     authService,
+		ProviderService: providerSvc,
+	})
+
+	// admin (read-only) seed
+	identity, err := identityRepo.CreateUserWithMembership(context.Background(), repo.CreateUserWithMembershipParams{
+		UserID:         "00000000-0000-0000-0000-0000000000ad",
+		OrganizationID: orgID,
+		Email:          "admin-readonly@example.com",
+		DisplayName:    "Admin",
+		PasswordHash:   "$2a$10$abcdefghijklmnopqrstuv",
+		Role:           "admin",
+	})
+	if err != nil {
+		t.Fatalf("seed admin: %v", err)
+	}
+	session, err := authService.IssueSessionForIdentity(identity)
+	if err != nil {
+		t.Fatalf("issue token: %v", err)
+	}
+
+	// admin can read provider list
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/providers", nil)
+	listReq.Header.Set("Authorization", "Bearer "+session.Token)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected admin GET /admin/providers 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+
+	// admin cannot save provider config
+	saveBody, _ := json.Marshal(map[string]any{
+		"capability":    "chat",
+		"provider_type": "openai",
+		"base_url":      "https://example.com",
+		"api_key":       "sk-test",
+		"model":         "gpt-4o-mini",
+	})
+	saveResp := httptest.NewRecorder()
+	saveReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers:save", bytes.NewReader(saveBody))
+	saveReq.Header.Set("Content-Type", "application/json")
+	saveReq.Header.Set("Authorization", "Bearer "+session.Token)
+	router.ServeHTTP(saveResp, saveReq)
+	if saveResp.Code != http.StatusForbidden {
+		t.Fatalf("expected admin POST :save 403, got %d: %s", saveResp.Code, saveResp.Body.String())
+	}
+
+	// admin cannot run :test
+	testResp := httptest.NewRecorder()
+	testReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers/chat:test", nil)
+	testReq.Header.Set("Authorization", "Bearer "+session.Token)
+	router.ServeHTTP(testResp, testReq)
+	if testResp.Code != http.StatusForbidden {
+		t.Fatalf("expected admin POST :test 403, got %d: %s", testResp.Code, testResp.Body.String())
+	}
+}
