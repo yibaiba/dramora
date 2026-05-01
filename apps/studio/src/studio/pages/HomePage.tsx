@@ -22,7 +22,7 @@ import {
   useStoryMap,
   useWorkflowRun,
 } from '../../api/hooks'
-import type { Episode, GenerationJob, Project } from '../../api/types'
+import type { Episode, GenerationJob, Project, WorkflowRun } from '../../api/types'
 import { agentFollowUpFeedbackLabel } from '../agentOutput'
 import { AnalysisResultCard } from '../components/StoryAnalysisPanel'
 import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
@@ -143,6 +143,8 @@ export function HomePage() {
         storyMapReady={storyMapReady}
         workflowRun={workflowRun}
       />
+
+      <WorkflowRecoverySummaryCard workflowRun={workflowRun} />
 
       <WorkflowRecoveryTimeline workflowRun={workflowRun} />
 
@@ -434,5 +436,102 @@ function WorkspaceHero({
         ))}
       </div>
     </section>
+  )
+}
+
+function WorkflowRecoverySummaryCard({ workflowRun }: { workflowRun?: WorkflowRun }) {
+  if (!workflowRun) return null
+  const summary = workflowRun.checkpoint_summary
+  const nodes = workflowRun.node_runs ?? []
+  const hasAny =
+    Boolean(summary) ||
+    nodes.length > 0 ||
+    (workflowRun.status && workflowRun.status !== 'draft')
+  if (!hasAny) return null
+  const counts = nodes.reduce<Record<string, number>>((acc, node) => {
+    acc[node.status] = (acc[node.status] ?? 0) + 1
+    return acc
+  }, {})
+  const total = nodes.length
+  const succeeded = counts.succeeded ?? 0
+  const failed = counts.failed ?? 0
+  const running = counts.running ?? 0
+  const waiting = (counts.pending ?? 0) + (counts.waiting_approval ?? 0)
+  const skipped = counts.skipped ?? 0
+  const checkpointSeq = summary?.sequence ?? 0
+  const savedAt = summary?.saved_at
+  const savedAtLabel = savedAt
+    ? new Date(savedAt).toLocaleString()
+    : '尚未保存检查点'
+  const headline =
+    workflowRun.status === 'succeeded'
+      ? '工作流已收口'
+      : workflowRun.status === 'failed'
+        ? '工作流失败需介入'
+        : workflowRun.status === 'waiting_approval'
+          ? '工作流等待审批'
+          : workflowRun.status === 'running'
+            ? '工作流执行中'
+            : '工作流就绪'
+  return (
+    <article
+      className="surface-card"
+      aria-label="Workflow recovery summary"
+      style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <span className="section-kicker">Recovery snapshot</span>
+          <strong style={{ display: 'block', marginTop: 4 }}>{headline}</strong>
+        </div>
+        <small className="muted" style={{ fontSize: 12 }}>
+          检查点 #{checkpointSeq} · {savedAtLabel}
+        </small>
+      </div>
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(112px, 1fr))',
+          gap: 8,
+        }}
+      >
+        <SummaryStat label="节点总数" value={total} />
+        <SummaryStat label="已完成" value={succeeded} tone={succeeded > 0 ? 'ok' : undefined} />
+        <SummaryStat label="运行中" value={running} tone={running > 0 ? 'warn' : undefined} />
+        <SummaryStat label="待执行" value={waiting} />
+        <SummaryStat label="失败" value={failed} tone={failed > 0 ? 'err' : undefined} />
+        <SummaryStat label="跳过" value={skipped} />
+      </div>
+      {summary && summary.blackboard_roles.length > 0 && (
+        <div style={{ fontSize: 12, opacity: 0.75 }}>
+          黑板角色：{summary.blackboard_roles.join('、')}
+        </div>
+      )}
+    </article>
+  )
+}
+
+function SummaryStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone?: 'ok' | 'warn' | 'err'
+}) {
+  const color = tone === 'ok' ? '#3ddc84' : tone === 'warn' ? '#ff8c42' : tone === 'err' ? '#ff6b6b' : undefined
+  return (
+    <div
+      style={{
+        padding: '8px 10px',
+        borderRadius: 8,
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.08)',
+      }}
+    >
+      <div style={{ fontSize: 11, opacity: 0.65 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, color }}>{value}</div>
+    </div>
   )
 }
