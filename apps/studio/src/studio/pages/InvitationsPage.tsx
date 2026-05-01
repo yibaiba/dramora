@@ -128,6 +128,26 @@ export function InvitationsPage() {
     setAuditOffset(0)
   }
 
+  // Format a Date as datetime-local input value in the browser's local time zone.
+  const toLocalDateTimeInput = (d: Date): string => {
+    const pad = (n: number) => String(n).padStart(2, '0')
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+  }
+
+  const applyQuickRange = (durationMs: number) => {
+    const now = new Date()
+    const since = new Date(now.getTime() - durationMs)
+    setAuditSince(toLocalDateTimeInput(since))
+    setAuditUntil(toLocalDateTimeInput(now))
+    setAuditOffset(0)
+  }
+
+  const QUICK_RANGES: Array<{ label: string; ms: number }> = [
+    { label: '最近 1h', ms: 60 * 60 * 1000 },
+    { label: '最近 24h', ms: 24 * 60 * 60 * 1000 },
+    { label: '最近 7d', ms: 7 * 24 * 60 * 60 * 1000 },
+  ]
+
   const allInvitations = useMemo(
     () => (invitationsQuery.data ?? []).slice().sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [invitationsQuery.data],
@@ -521,6 +541,18 @@ export function InvitationsPage() {
                   清除时间
                 </button>
               ) : null}
+              <div className="invitation-audit-date-quick" role="group" aria-label="快捷范围">
+                {QUICK_RANGES.map((range) => (
+                  <button
+                    key={range.label}
+                    type="button"
+                    className="action-btn invitation-audit-date-quick-btn"
+                    onClick={() => applyQuickRange(range.ms)}
+                  >
+                    {range.label}
+                  </button>
+                ))}
+              </div>
               {dateRangeInvalid ? (
                 <span className="invitation-audit-date-error" role="alert">
                   起始时间不能晚于截止时间
