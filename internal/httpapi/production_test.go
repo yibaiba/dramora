@@ -547,6 +547,34 @@ func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {
 		t.Fatalf("expected idempotent video job %q, got %q", videoPayload.GenerationJob.ID, duplicateVideoPayload.GenerationJob.ID)
 	}
 
+	packRecoveryResp := httptest.NewRecorder()
+	packRecoveryReq := httptest.NewRequest(
+		http.MethodGet,
+		"/api/v1/storyboard-shots/"+shotPayload.StoryboardShots[0].ID+"/prompt-pack/recovery",
+		nil,
+	)
+	router.ServeHTTP(packRecoveryResp, packRecoveryReq)
+	if packRecoveryResp.Code != http.StatusOK {
+		t.Fatalf("expected prompt pack recovery 200, got %d: %s", packRecoveryResp.Code, packRecoveryResp.Body.String())
+	}
+	var packRecoveryPayload struct {
+		Recovery promptPackRecoveryResponse `json:"prompt_pack_recovery"`
+	}
+	decodeBody(t, packRecoveryResp, &packRecoveryPayload)
+	if packRecoveryPayload.Recovery.Summary.JobsTotal == 0 {
+		t.Fatalf("expected prompt pack recovery to surface generation jobs, got %+v", packRecoveryPayload.Recovery.Summary)
+	}
+	foundJob := false
+	for _, j := range packRecoveryPayload.Recovery.Jobs {
+		if j.Job.ID == videoPayload.GenerationJob.ID {
+			foundJob = true
+			break
+		}
+	}
+	if !foundJob {
+		t.Fatalf("expected video job %q in prompt pack recovery, got %+v", videoPayload.GenerationJob.ID, packRecoveryPayload.Recovery.Jobs)
+	}
+
 	timelineResp := httptest.NewRecorder()
 	timelineReq := httptest.NewRequest(
 		http.MethodPost,

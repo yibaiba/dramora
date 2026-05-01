@@ -412,6 +412,65 @@ func generationJobRecoveryDTO(recovery service.GenerationJobRecovery) generation
 	}
 }
 
+type promptPackRecoveryJobResponse struct {
+	Job     generationJobResponse                `json:"generation_job"`
+	Summary generationJobRecoverySummaryResponse `json:"summary"`
+}
+
+type promptPackRecoverySummaryResponse struct {
+	JobsTotal           int                        `json:"jobs_total"`
+	TerminalCount       int                        `json:"terminal_count"`
+	RecoverableCount    int                        `json:"recoverable_count"`
+	InFlightCount       int                        `json:"in_flight_count"`
+	HasRecoverable      bool                       `json:"has_recoverable"`
+	LastEventAt         time.Time                  `json:"last_event_at"`
+	NextHint            string                     `json:"next_hint"`
+	LatestStatus        domain.GenerationJobStatus `json:"latest_status,omitempty"`
+	LatestStatusJobID   string                     `json:"latest_status_job_id,omitempty"`
+	LatestStatusJobTime time.Time                  `json:"latest_status_job_time,omitempty"`
+}
+
+type promptPackRecoveryResponse struct {
+	Pack    shotPromptPackResponse            `json:"prompt_pack"`
+	Jobs    []promptPackRecoveryJobResponse   `json:"jobs"`
+	Summary promptPackRecoverySummaryResponse `json:"summary"`
+}
+
+func promptPackRecoveryDTO(recovery service.PromptPackRecovery) promptPackRecoveryResponse {
+	jobs := make([]promptPackRecoveryJobResponse, 0, len(recovery.Jobs))
+	for _, item := range recovery.Jobs {
+		jobs = append(jobs, promptPackRecoveryJobResponse{
+			Job: generationJobDTO(item.Job),
+			Summary: generationJobRecoverySummaryResponse{
+				IsTerminal:       item.Summary.IsTerminal,
+				IsRecoverable:    item.Summary.IsRecoverable,
+				CurrentStatus:    item.Summary.CurrentStatus,
+				StatusEnteredAt:  item.Summary.StatusEnteredAt,
+				LastEventAt:      item.Summary.LastEventAt,
+				StatusEventCount: item.Summary.StatusEventCount,
+				TotalEventCount:  item.Summary.TotalEventCount,
+				NextHint:         item.Summary.NextHint,
+			},
+		})
+	}
+	return promptPackRecoveryResponse{
+		Pack: shotPromptPackDTO(recovery.Pack),
+		Jobs: jobs,
+		Summary: promptPackRecoverySummaryResponse{
+			JobsTotal:           recovery.Summary.JobsTotal,
+			TerminalCount:       recovery.Summary.TerminalCount,
+			RecoverableCount:    recovery.Summary.RecoverableCount,
+			InFlightCount:       recovery.Summary.InFlightCount,
+			HasRecoverable:      recovery.Summary.HasRecoverable,
+			LastEventAt:         recovery.Summary.LastEventAt,
+			NextHint:            recovery.Summary.NextHint,
+			LatestStatus:        recovery.Summary.LatestStatus,
+			LatestStatusJobID:   recovery.Summary.LatestStatusJobID,
+			LatestStatusJobTime: recovery.Summary.LatestStatusJobTime,
+		},
+	}
+}
+
 func approvalGateDTO(gate domain.ApprovalGate) approvalGateResponse {
 	return approvalGateResponse{
 		ID: gate.ID, ProjectID: gate.ProjectID, EpisodeID: gate.EpisodeID,

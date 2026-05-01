@@ -949,6 +949,51 @@ paths:
                     $ref: "#/components/schemas/ShotPromptPack"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/storyboard-shots/{shotId}/prompt-pack/recovery:
+    get:
+      summary: |
+        Recovery view for a shot prompt pack — aggregates the shot's prompt
+        pack with all generation jobs that consumed it. Each job is reported
+        with the same recovery summary used by /generation-jobs/{jobId}/recovery.
+      parameters:
+        - $ref: "#/components/parameters/ShotID"
+      responses:
+        "200":
+          description: Prompt pack recovery snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  prompt_pack_recovery:
+                    type: object
+                    properties:
+                      prompt_pack:
+                        $ref: "#/components/schemas/ShotPromptPack"
+                      jobs:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            generation_job:
+                              type: object
+                            summary:
+                              type: object
+                      summary:
+                        type: object
+                        properties:
+                          jobs_total: { type: integer }
+                          terminal_count: { type: integer }
+                          recoverable_count: { type: integer }
+                          in_flight_count: { type: integer }
+                          has_recoverable: { type: boolean }
+                          last_event_at: { type: string, format: date-time }
+                          next_hint: { type: string }
+                          latest_status: { type: string }
+                          latest_status_job_id: { type: string }
+                          latest_status_job_time: { type: string, format: date-time }
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/storyboard-shots/{shotId}/prompt-pack:generate:
     post:
       summary: Generate an SD2 fast prompt pack for a storyboard shot

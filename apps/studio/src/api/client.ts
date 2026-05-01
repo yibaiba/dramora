@@ -13,6 +13,7 @@ import type {
   ExportRecovery,
   GenerationJob,
   GenerationJobRecovery,
+  PromptPackRecovery,
   Project,
   ProviderConfig,
   LoginRequest,
@@ -237,6 +238,13 @@ export async function getGenerationJobRecovery(jobId: string): Promise<Generatio
     `/api/v1/generation-jobs/${jobId}/recovery`,
   )
   return payload.generation_job_recovery
+}
+
+export async function getShotPromptPackRecovery(shotId: string): Promise<PromptPackRecovery> {
+  const payload = await fetchJSON<{ prompt_pack_recovery: PromptPackRecovery }>(
+    `/api/v1/storyboard-shots/${shotId}/prompt-pack/recovery`,
+  )
+  return payload.prompt_pack_recovery
 }
 
 export async function getWorkflowRun(workflowRunId: string): Promise<WorkflowRun> {

@@ -147,6 +147,30 @@ export type GenerationJobRecovery = {
   summary: GenerationJobRecoverySummary
 }
 
+export type PromptPackRecoveryJob = {
+  generation_job: GenerationJob
+  summary: GenerationJobRecoverySummary
+}
+
+export type PromptPackRecoverySummary = {
+  jobs_total: number
+  terminal_count: number
+  recoverable_count: number
+  in_flight_count: number
+  has_recoverable: boolean
+  last_event_at: string
+  next_hint: string
+  latest_status?: GenerationJobStatus
+  latest_status_job_id?: string
+  latest_status_job_time?: string
+}
+
+export type PromptPackRecovery = {
+  prompt_pack: ShotPromptPack
+  jobs: PromptPackRecoveryJob[]
+  summary: PromptPackRecoverySummary
+}
+
 export type WorkflowRun = {
   id: string
   project_id: string

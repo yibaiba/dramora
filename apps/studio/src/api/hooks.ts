@@ -16,6 +16,7 @@ import {
   getStoryMap,
   getWorkflowRun,
   getGenerationJobRecovery,
+  getShotPromptPackRecovery,
   getStoryboardWorkspace,
   listEpisodeAssets,
   listEpisodes,
@@ -144,6 +145,16 @@ export function useGenerationJobRecovery(jobId?: string, options?: { enabled?: b
     enabled,
     queryFn: () => getGenerationJobRecovery(jobId ?? ''),
     queryKey: ['generation-job-recovery', jobId],
+    refetchInterval: 15_000,
+  })
+}
+
+export function useShotPromptPackRecovery(shotId?: string, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? Boolean(shotId)
+  return useQuery({
+    enabled,
+    queryFn: () => getShotPromptPackRecovery(shotId ?? ''),
+    queryKey: ['prompt-pack-recovery', shotId],
     refetchInterval: 15_000,
   })
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/jobs"
@@ -319,4 +320,120 @@ func clonePromptParams(values map[string]any) map[string]any {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+// PromptPackRecoveryJob 是 PromptPackRecovery 中每个关联生成任务的快照。
+type PromptPackRecoveryJob struct {
+	Job     domain.GenerationJob
+	Summary GenerationJobRecoverySummary
+}
+
+// PromptPackRecoverySummary 汇总 prompt pack 视角下所有关联生成任务的可恢复状态。
+type PromptPackRecoverySummary struct {
+	JobsTotal           int
+	TerminalCount       int
+	RecoverableCount    int
+	InFlightCount       int
+	LastEventAt         time.Time
+	HasRecoverable      bool
+	NextHint            string
+	LatestStatus        domain.GenerationJobStatus
+	LatestStatusJobID   string
+	LatestStatusJobTime time.Time
+}
+
+// PromptPackRecovery 描述 shot prompt pack 与其触发的生成任务集合的恢复视图。
+// 不引入新的 events 表：每个 job 复用 GenerationJobEvent，pack-level summary 由各 job recovery summary 汇总而成。
+type PromptPackRecovery struct {
+	Pack    domain.ShotPromptPack
+	Jobs    []PromptPackRecoveryJob
+	Summary PromptPackRecoverySummary
+}
+
+func (s *ProductionService) GetShotPromptPackRecovery(
+	ctx context.Context,
+	shotID string,
+) (PromptPackRecovery, error) {
+	pack, err := s.GetShotPromptPack(ctx, shotID)
+	if err != nil {
+		return PromptPackRecovery{}, err
+	}
+	allJobs, err := s.production.ListGenerationJobs(ctx)
+	if err != nil {
+		return PromptPackRecovery{}, err
+	}
+	matched := make([]PromptPackRecoveryJob, 0)
+	for _, job := range allJobs {
+		if !generationJobMatchesPromptPack(job, pack) {
+			continue
+		}
+		events, evErr := s.production.ListGenerationJobEvents(ctx, job.ID, 0)
+		if evErr != nil {
+			return PromptPackRecovery{}, evErr
+		}
+		matched = append(matched, PromptPackRecoveryJob{
+			Job:     job,
+			Summary: buildGenerationJobRecoverySummary(job, events),
+		})
+	}
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].Job.CreatedAt.After(matched[j].Job.CreatedAt)
+	})
+	return PromptPackRecovery{
+		Pack:    pack,
+		Jobs:    matched,
+		Summary: buildPromptPackRecoverySummary(matched),
+	}, nil
+}
+
+func generationJobMatchesPromptPack(job domain.GenerationJob, pack domain.ShotPromptPack) bool {
+	if job.Params == nil {
+		return false
+	}
+	if v, ok := job.Params["prompt_pack_id"]; ok {
+		if s, _ := v.(string); s != "" && s == pack.ID {
+			return true
+		}
+	}
+	if v, ok := job.Params["shot_id"]; ok {
+		if s, _ := v.(string); s != "" && s == pack.ShotID {
+			return true
+		}
+	}
+	return false
+}
+
+func buildPromptPackRecoverySummary(jobs []PromptPackRecoveryJob) PromptPackRecoverySummary {
+	summary := PromptPackRecoverySummary{JobsTotal: len(jobs)}
+	for _, item := range jobs {
+		if item.Summary.IsTerminal {
+			summary.TerminalCount++
+		}
+		if item.Summary.IsRecoverable {
+			summary.RecoverableCount++
+			summary.HasRecoverable = true
+		}
+		if !item.Summary.IsTerminal && !item.Summary.IsRecoverable {
+			summary.InFlightCount++
+		}
+		if item.Summary.LastEventAt.After(summary.LastEventAt) {
+			summary.LastEventAt = item.Summary.LastEventAt
+		}
+		if item.Job.UpdatedAt.After(summary.LatestStatusJobTime) {
+			summary.LatestStatus = item.Job.Status
+			summary.LatestStatusJobID = item.Job.ID
+			summary.LatestStatusJobTime = item.Job.UpdatedAt
+		}
+	}
+	switch {
+	case summary.JobsTotal == 0:
+		summary.NextHint = "未触发生成任务"
+	case summary.HasRecoverable:
+		summary.NextHint = "存在可恢复任务，建议人工介入或等待 worker 重试"
+	case summary.InFlightCount > 0:
+		summary.NextHint = "仍有任务在进行，等待完成"
+	case summary.TerminalCount == summary.JobsTotal:
+		summary.NextHint = "全部终态，可考虑重新触发"
+	}
+	return summary
 }
