@@ -33,6 +33,7 @@ type ProviderAuditFilter struct {
 	OrganizationID string
 	Actions        []string
 	Capabilities   []string
+	ActorEmails    []string
 	Since          *time.Time
 	Until          *time.Time
 	Limit          int
@@ -93,6 +94,7 @@ func (r *MemoryProviderAuditRepository) ListProviderAuditEvents(
 	matched := make([]domain.ProviderAuditEvent, 0)
 	actionSet := stringSet(filter.Actions)
 	capSet := stringSet(filter.Capabilities)
+	actorSet := lowerStringSet(filter.ActorEmails)
 	for _, ev := range r.events {
 		if filter.OrganizationID != "" && ev.OrganizationID != filter.OrganizationID {
 			continue
@@ -101,6 +103,9 @@ func (r *MemoryProviderAuditRepository) ListProviderAuditEvents(
 			continue
 		}
 		if len(capSet) > 0 && !capSet[ev.Capability] {
+			continue
+		}
+		if len(actorSet) > 0 && !actorSet[strings.ToLower(strings.TrimSpace(ev.ActorEmail))] {
 			continue
 		}
 		if filter.Since != nil && ev.CreatedAt.Before(*filter.Since) {
@@ -142,6 +147,20 @@ func stringSet(in []string) map[string]bool {
 	out := make(map[string]bool, len(in))
 	for _, s := range in {
 		s = strings.TrimSpace(s)
+		if s != "" {
+			out[s] = true
+		}
+	}
+	return out
+}
+
+func lowerStringSet(in []string) map[string]bool {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]bool, len(in))
+	for _, s := range in {
+		s = strings.ToLower(strings.TrimSpace(s))
 		if s != "" {
 			out[s] = true
 		}
@@ -225,6 +244,14 @@ func (r *SQLiteProviderAuditRepository) ListProviderAuditEvents(
 			args = append(args, c)
 		}
 		conds = append(conds, "capability IN ("+strings.Join(ph, ",")+")")
+	}
+	if len(filter.ActorEmails) > 0 {
+		ph := make([]string, 0, len(filter.ActorEmails))
+		for _, e := range filter.ActorEmails {
+			ph = append(ph, "LOWER(?)")
+			args = append(args, strings.TrimSpace(e))
+		}
+		conds = append(conds, "LOWER(IFNULL(actor_email,'')) IN ("+strings.Join(ph, ",")+")")
 	}
 	if filter.Since != nil {
 		conds = append(conds, "created_at >= ?")

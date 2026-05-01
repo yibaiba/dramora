@@ -536,6 +536,7 @@ export function useResetLLMTelemetry() {
 export type ProviderAuditFilter = {
   action?: string
   capability?: string
+  actor?: string
   sinceMinutes?: number
   limit?: number
 }
@@ -552,6 +553,7 @@ export function useProviderAuditEvents(filter?: ProviderAuditFilter, enabled = t
       return fetchProviderAuditEvents({
         action: params.action,
         capability: params.capability,
+        actor: params.actor,
         since,
         limit: params.limit,
       })

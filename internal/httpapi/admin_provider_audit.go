@@ -54,6 +54,9 @@ func (a *api) listProviderAuditEvents(w http.ResponseWriter, r *http.Request) {
 	if caps := q.Get("capability"); caps != "" {
 		filter.Capabilities = splitCSV(caps)
 	}
+	if actor := q.Get("actor"); actor != "" {
+		filter.ActorEmails = splitCSV(actor)
+	}
 	if since := q.Get("since"); since != "" {
 		if t, err := time.Parse(time.RFC3339, since); err == nil {
 			filter.Since = &t

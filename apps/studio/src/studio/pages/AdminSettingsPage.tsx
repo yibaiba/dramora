@@ -77,15 +77,18 @@ function ProviderAuditPanel() {
   const [actionFilter, setActionFilter] = useState<'all' | 'save' | 'test'>('all')
   const [capabilityFilter, setCapabilityFilter] = useState<'all' | 'chat' | 'image' | 'video' | 'audio'>('all')
   const [sinceMinutes, setSinceMinutes] = useState<'all' | '15' | '60' | '1440' | '10080'>('all')
+  const [actorInput, setActorInput] = useState('')
+  const [actorFilter, setActorFilter] = useState('')
 
   const filter = useMemo(
     () => ({
       action: actionFilter === 'all' ? undefined : actionFilter,
       capability: capabilityFilter === 'all' ? undefined : capabilityFilter,
       sinceMinutes: sinceMinutes === 'all' ? undefined : Number(sinceMinutes),
+      actor: actorFilter.trim() === '' ? undefined : actorFilter.trim(),
       limit: 100,
     }),
-    [actionFilter, capabilityFilter, sinceMinutes],
+    [actionFilter, capabilityFilter, sinceMinutes, actorFilter],
   )
 
   const { data, isLoading, isError, error } = useProviderAuditEvents(filter)
@@ -96,6 +99,8 @@ function ProviderAuditPanel() {
     setActionFilter('all')
     setCapabilityFilter('all')
     setSinceMinutes('all')
+    setActorInput('')
+    setActorFilter('')
   }
 
   const onExport = async () => {
@@ -168,6 +173,31 @@ function ProviderAuditPanel() {
             <option value="1440">最近 24 小时</option>
             <option value="10080">最近 7 天</option>
           </select>
+        </label>
+        <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          Actor：
+          <input
+            type="text"
+            value={actorInput}
+            onChange={(e) => setActorInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                setActorFilter(actorInput)
+              }
+            }}
+            onBlur={() => setActorFilter(actorInput)}
+            placeholder="email，多个用逗号分隔"
+            style={{
+              padding: '4px 8px',
+              fontSize: 12,
+              borderRadius: 4,
+              border: '1px solid rgba(255,255,255,0.2)',
+              background: 'rgba(0,0,0,0.2)',
+              color: 'inherit',
+              minWidth: 200,
+            }}
+          />
         </label>
         <button type="button" onClick={onReset} className="btn-ghost" style={{ fontSize: 12 }}>
           重置筛选

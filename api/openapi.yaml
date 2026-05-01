@@ -1621,6 +1621,11 @@ paths:
             type: string
           description: Comma-separated list of capabilities (chat,image,video,audio).
         - in: query
+          name: actor
+          schema:
+            type: string
+          description: Comma-separated list of actor emails (case-insensitive exact match).
+        - in: query
           name: since
           schema:
             type: string

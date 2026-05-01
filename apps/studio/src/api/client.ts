@@ -513,6 +513,7 @@ export async function resetLLMTelemetry(): Promise<LLMTelemetrySnapshot> {
 export async function fetchProviderAuditEvents(filter?: {
   action?: string
   capability?: string
+  actor?: string
   since?: string
   until?: string
   limit?: number
@@ -521,6 +522,7 @@ export async function fetchProviderAuditEvents(filter?: {
   const search = new URLSearchParams()
   if (filter?.action) search.set('action', filter.action)
   if (filter?.capability) search.set('capability', filter.capability)
+  if (filter?.actor) search.set('actor', filter.actor)
   if (filter?.since) search.set('since', filter.since)
   if (filter?.until) search.set('until', filter.until)
   if (filter?.limit) search.set('limit', String(filter.limit))
@@ -533,6 +535,7 @@ export async function fetchProviderAuditEvents(filter?: {
 export async function downloadProviderAuditCSV(filter?: {
   action?: string
   capability?: string
+  actor?: string
   since?: string
   until?: string
   limit?: number
@@ -541,6 +544,7 @@ export async function downloadProviderAuditCSV(filter?: {
   const search = new URLSearchParams()
   if (filter?.action) search.set('action', filter.action)
   if (filter?.capability) search.set('capability', filter.capability)
+  if (filter?.actor) search.set('actor', filter.actor)
   if (filter?.since) search.set('since', filter.since)
   if (filter?.until) search.set('until', filter.until)
   if (filter?.limit) search.set('limit', String(filter.limit))
