@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { Sparkles, Plus, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Sparkles, Plus, Trash2, Save, X } from 'lucide-react'
 import { streamAgentRun, type AgentStreamDoneFrame } from '../../api/agentStream'
 
 const ROLE_OPTIONS = [
@@ -34,6 +34,50 @@ const CONTEXT_PRESETS: { label: string; entries: ContextEntry[] }[] = [
   },
 ]
 
+const SAVED_PRESETS_KEY = 'dramora-sandbox-context-presets'
+
+type SavedPreset = { id: string; label: string; entries: ContextEntry[] }
+
+function loadSavedPresets(): SavedPreset[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(SAVED_PRESETS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed
+      .filter((p): p is SavedPreset => {
+        if (!p || typeof p !== 'object') return false
+        const obj = p as Record<string, unknown>
+        return (
+          typeof obj.id === 'string' &&
+          typeof obj.label === 'string' &&
+          Array.isArray(obj.entries)
+        )
+      })
+      .map((p) => ({
+        id: p.id,
+        label: p.label,
+        entries: p.entries
+          .filter((e): e is ContextEntry =>
+            !!e && typeof e === 'object' && typeof (e as ContextEntry).key === 'string',
+          )
+          .map((e) => ({ key: String(e.key), value: String(e.value ?? '') })),
+      }))
+  } catch {
+    return []
+  }
+}
+
+function persistSavedPresets(presets: SavedPreset[]) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(SAVED_PRESETS_KEY, JSON.stringify(presets))
+  } catch {
+    /* quota exceeded or storage disabled — ignore */
+  }
+}
+
 export function AgentStreamSandbox() {
   const [role, setRole] = useState('story_analyst')
   const [sourceText, setSourceText] = useState('小镇雨夜，少年送伞给陌生人。')
@@ -42,7 +86,31 @@ export function AgentStreamSandbox() {
   const [doneFrame, setDoneFrame] = useState<AgentStreamDoneFrame | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isStreaming, setIsStreaming] = useState(false)
+  const [savedPresets, setSavedPresets] = useState<SavedPreset[]>(() => loadSavedPresets())
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
+  const [newPresetLabel, setNewPresetLabel] = useState('')
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    persistSavedPresets(savedPresets)
+  }, [savedPresets])
+
+  const saveCurrentAsPreset = () => {
+    const label = newPresetLabel.trim()
+    if (!label) return
+    const entries = contextEntries
+      .map((e) => ({ key: e.key.trim(), value: e.value }))
+      .filter((e) => e.key !== '')
+    if (entries.length === 0) return
+    setSavedPresets((prev) => [
+      ...prev.filter((p) => p.label !== label),
+      { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, label, entries },
+    ])
+    setNewPresetLabel('')
+    setIsSavingPreset(false)
+  }
+  const removeSavedPreset = (id: string) =>
+    setSavedPresets((prev) => prev.filter((p) => p.id !== id))
 
   const updateEntry = (idx: number, patch: Partial<ContextEntry>) => {
     setContextEntries((prev) => prev.map((entry, i) => (i === idx ? { ...entry, ...patch } : entry)))
@@ -150,6 +218,45 @@ export function AgentStreamSandbox() {
                 填入：{preset.label}
               </button>
             ))}
+            {savedPresets.map((preset) => (
+              <span
+                key={preset.id}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}
+              >
+                <button
+                  type="button"
+                  onClick={() => applyPreset(preset.entries)}
+                  disabled={isStreaming}
+                  className="btn-ghost"
+                  style={{ fontSize: 11 }}
+                  title={`${preset.entries.length} 项`}
+                >
+                  ★ {preset.label}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSavedPreset(preset.id)}
+                  disabled={isStreaming}
+                  className="btn-ghost"
+                  style={{ fontSize: 11, padding: '2px 6px' }}
+                  title="删除此预设"
+                  aria-label={`删除预设 ${preset.label}`}
+                >
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+            {contextEntries.length > 0 && !isSavingPreset && (
+              <button
+                type="button"
+                onClick={() => setIsSavingPreset(true)}
+                disabled={isStreaming}
+                className="btn-ghost"
+                style={{ fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+              >
+                <Save size={11} /> 保存为预设
+              </button>
+            )}
             {contextEntries.length > 0 && (
               <button
                 type="button"
@@ -162,6 +269,41 @@ export function AgentStreamSandbox() {
               </button>
             )}
           </div>
+          {isSavingPreset && (
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <input
+                type="text"
+                value={newPresetLabel}
+                onChange={(e) => setNewPresetLabel(e.target.value)}
+                placeholder="预设名称（如 director 依赖 screenwriter）"
+                disabled={isStreaming}
+                className="input"
+                style={{ flex: '1 1 200px', fontSize: 12 }}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={saveCurrentAsPreset}
+                disabled={isStreaming || !newPresetLabel.trim()}
+                className="btn"
+                style={{ fontSize: 11 }}
+              >
+                保存
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSavingPreset(false)
+                  setNewPresetLabel('')
+                }}
+                disabled={isStreaming}
+                className="btn-ghost"
+                style={{ fontSize: 11 }}
+              >
+                取消
+              </button>
+            </div>
+          )}
           {contextEntries.length === 0 ? (
             <p className="muted" style={{ fontSize: 12, margin: 0 }}>
               还未填入任何上游输出。例如 <code>outline_planner</code> 等需要 <code>story_analyst_output</code> 时，
