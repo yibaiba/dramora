@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles, Plus, Trash2, Save, X } from 'lucide-react'
 import { streamAgentRun, type AgentStreamDoneFrame } from '../../api/agentStream'
 
@@ -140,6 +140,44 @@ function persistSavedPresets(presets: SavedPreset[]) {
   }
 }
 
+type DiffLine = { kind: 'eq' | 'add' | 'del'; left?: string; right?: string }
+
+function computeLineDiff(a: string, b: string): DiffLine[] {
+  const al = a.split('\n')
+  const bl = b.split('\n')
+  const m = al.length
+  const n = bl.length
+  const dp: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0))
+  for (let i = m - 1; i >= 0; i--) {
+    for (let j = n - 1; j >= 0; j--) {
+      dp[i][j] = al[i] === bl[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1])
+    }
+  }
+  const out: DiffLine[] = []
+  let i = 0
+  let j = 0
+  while (i < m && j < n) {
+    if (al[i] === bl[j]) {
+      out.push({ kind: 'eq', left: al[i], right: bl[j] })
+      i++
+      j++
+    } else if (dp[i + 1][j] >= dp[i][j + 1]) {
+      out.push({ kind: 'del', left: al[i] })
+      i++
+    } else {
+      out.push({ kind: 'add', right: bl[j] })
+      j++
+    }
+  }
+  while (i < m) {
+    out.push({ kind: 'del', left: al[i++] })
+  }
+  while (j < n) {
+    out.push({ kind: 'add', right: bl[j++] })
+  }
+  return out
+}
+
 export function AgentStreamSandbox() {
   const [role, setRole] = useState('story_analyst')
   const [sourceText, setSourceText] = useState('小镇雨夜，少年送伞给陌生人。')
@@ -153,7 +191,21 @@ export function AgentStreamSandbox() {
   const [newPresetLabel, setNewPresetLabel] = useState('')
   const [history, setHistory] = useState<RunHistoryEntry[]>(() => loadRunHistory())
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
+  const [diffSelection, setDiffSelection] = useState<string[]>([])
   const abortRef = useRef<AbortController | null>(null)
+
+  const toggleDiffSelection = (id: string) => {
+    setDiffSelection((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id)
+      if (prev.length >= 2) return [prev[1], id]
+      return [...prev, id]
+    })
+  }
+
+  const diffEntries = useMemo(
+    () => diffSelection.map((id) => history.find((h) => h.id === id)).filter((x): x is RunHistoryEntry => Boolean(x)),
+    [diffSelection, history],
+  )
 
   useEffect(() => {
     persistSavedPresets(savedPresets)
@@ -569,6 +621,22 @@ export function AgentStreamSandbox() {
                       {entry.output.length > 240 ? '…' : ''}
                     </pre>
                     <div style={{ display: 'flex', gap: 6 }}>
+                      <label
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          fontSize: 11,
+                          opacity: 0.8,
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={diffSelection.includes(entry.id)}
+                          onChange={() => toggleDiffSelection(entry.id)}
+                        />
+                        对比
+                      </label>
                       <button
                         type="button"
                         className="btn-ghost"
@@ -590,6 +658,101 @@ export function AgentStreamSandbox() {
                   </article>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+      {diffEntries.length > 0 && (
+        <div className="sandbox-diff" style={{ marginTop: 12 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'baseline',
+              justifyContent: 'space-between',
+              gap: 8,
+            }}
+          >
+            <strong style={{ fontSize: 13 }}>
+              输出对比 ({diffEntries.length}/2)
+            </strong>
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setDiffSelection([])}
+              style={{ fontSize: 11 }}
+            >
+              清除对比
+            </button>
+          </div>
+          {diffEntries.length === 1 && (
+            <div style={{ fontSize: 11, opacity: 0.6, marginTop: 6 }}>
+              再勾选一条历史记录即可生成 diff。
+            </div>
+          )}
+          {diffEntries.length === 2 && (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 8, fontSize: 11, opacity: 0.7, marginBottom: 4 }}>
+                <span style={{ flex: 1 }}>
+                  A · {new Date(diffEntries[0].timestamp).toLocaleTimeString()} ·{' '}
+                  {ROLE_OPTIONS.find((o) => o.value === diffEntries[0].role)?.label ?? diffEntries[0].role}
+                </span>
+                <span style={{ flex: 1 }}>
+                  B · {new Date(diffEntries[1].timestamp).toLocaleTimeString()} ·{' '}
+                  {ROLE_OPTIONS.find((o) => o.value === diffEntries[1].role)?.label ?? diffEntries[1].role}
+                </span>
+              </div>
+              <div
+                style={{
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 6,
+                  maxHeight: 320,
+                  overflow: 'auto',
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                  fontSize: 11,
+                }}
+              >
+                {computeLineDiff(diffEntries[0].output, diffEntries[1].output).map((line, idx) => {
+                  const bg =
+                    line.kind === 'add'
+                      ? 'rgba(74, 222, 128, 0.08)'
+                      : line.kind === 'del'
+                      ? 'rgba(248, 113, 113, 0.08)'
+                      : 'transparent'
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        background: bg,
+                        borderBottom: '1px solid rgba(255,255,255,0.03)',
+                      }}
+                    >
+                      <pre
+                        style={{
+                          margin: 0,
+                          padding: '2px 6px',
+                          whiteSpace: 'pre-wrap',
+                          color: line.kind === 'del' ? '#fca5a5' : line.kind === 'eq' ? undefined : 'transparent',
+                        }}
+                      >
+                        {line.left ?? ''}
+                      </pre>
+                      <pre
+                        style={{
+                          margin: 0,
+                          padding: '2px 6px',
+                          whiteSpace: 'pre-wrap',
+                          borderLeft: '1px solid rgba(255,255,255,0.05)',
+                          color: line.kind === 'add' ? '#86efac' : line.kind === 'eq' ? undefined : 'transparent',
+                        }}
+                      >
+                        {line.right ?? ''}
+                      </pre>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )}
         </div>
