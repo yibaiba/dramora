@@ -26,6 +26,7 @@ import type { Episode, GenerationJob, Project } from '../../api/types'
 import { agentFollowUpFeedbackLabel } from '../agentOutput'
 import { AnalysisResultCard } from '../components/StoryAnalysisPanel'
 import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
+import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { buildStoryAnalysisReviewSnapshot } from '../reviewPersistence'
@@ -142,6 +143,8 @@ export function HomePage() {
         storyMapReady={storyMapReady}
         workflowRun={workflowRun}
       />
+
+      <WorkflowRecoveryTimeline workflowRun={workflowRun} />
 
       <div className="dashboard-grid">
         <article className="surface-card">
