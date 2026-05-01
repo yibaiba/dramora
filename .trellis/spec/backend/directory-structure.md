@@ -586,6 +586,126 @@ Provider integration stays behind `internal/provider`; handlers and domain code 
 
 ---
 
+## Scenario: LLMProvider abstraction with provider_type routing
+
+### 1. Scope / Trigger
+
+- Trigger: the chat capability must support multiple upstream LLM vendors (OpenAI-compatible / Anthropic / offline mock) selected per `provider_config` row, with both blocking and SSE-streaming responses.
+- Applies to `internal/provider/llm*.go`, `internal/service/agent_service.go`, `internal/service/provider_service.go`, the `provider_configs.provider_type` column, and the `/api/v1/agents/stream` SSE handler.
+
+### 2. Signatures
+
+Provider interface and factory:
+
+```go
+type LLMProvider interface {
+    Complete(ctx context.Context, req LLMRequest) (*LLMResponse, error)
+    CompleteStream(ctx context.Context, req LLMRequest, onChunk StreamHandler) (*LLMResponse, error)
+}
+
+type StreamChunk struct {
+    Delta string
+    Done  bool
+}
+type StreamHandler func(StreamChunk) error
+
+func NewLLMProvider(cfg LLMConfig) (LLMProvider, error) // cfg.ProviderType ∈ {"openai","anthropic","mock"}
+```
+
+AgentService streaming entry:
+
+```go
+func (s *AgentService) RunSingleAgentStream(
+    ctx context.Context,
+    role string,
+    sourceText string,
+    contextMap map[string]string,
+    onDelta func(string) error,
+) (*AgentResult, error)
+```
+
+HTTP route:
+
+```text
+POST /api/v1/agents/stream    body: {role, source_text, context?}    response: text/event-stream
+```
+
+Domain helper:
+
+```go
+func (c ProviderConfig) ResolvedProviderType() string // empty -> "openai" (legacy compatibility)
+```
+
+### 3. Contracts
+
+- `provider_configs.provider_type` is the source of truth for adapter selection. Empty/missing rows MUST be treated as `"openai"` via `ResolvedProviderType()` so legacy data keeps working without backfill.
+- Allowed values: `openai`, `anthropic`, `mock`. `ProviderService.SaveProviderConfig` MUST reject anything else with a validation error; the whitelist lives in `service.ValidProviderTypes`.
+- The `mock` provider MUST NOT make any network call and MUST emit a parseable JSON output and at least one streaming chunk; `TestProviderConfig` short-circuits to ok for `mock`.
+- The OpenAI adapter targets `${BaseURL}/chat/completions`; streaming uses SSE frames `data: {...}` terminated by `data: [DONE]`.
+- The Anthropic adapter targets `${BaseURL}/v1/messages`, sends `x-api-key` (NOT bearer) and lifts the leading `system` message into the top-level `system` field; streaming consumes `message_start` / `content_block_delta` / `message_delta` / `message_stop` and aggregates `usage.input_tokens` + `usage.output_tokens`.
+- Streaming HTTP clients MUST NOT carry a global timeout on the `http.Client`; cancellation flows exclusively through `ctx`. Buffered scanners MUST set buffer ≥ 1 MiB to tolerate large frames.
+- The SSE endpoint MUST emit only the events `delta` (incremental tokens), `done` (final `AgentResult` summary), and `error` (terminal). Each frame MUST be `event: <name>\ndata: <json>\n\n` followed by `Flusher.Flush()`. A client disconnect (`ctx.Err()`) MUST exit silently without writing an `error` frame.
+- The endpoint MUST set `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, and `X-Accel-Buffering: no` so reverse proxies do not buffer.
+- `AgentService.RunSingleAgentStream` reuses `buildAgentPrompt`; callers may inject prior agent outputs through `contextMap` so dependent roles (e.g. `screenwriter`) work without spinning up the workflow engine.
+- Provider/api/key values MUST stay inside `internal/provider` and `internal/repo`; handlers MUST NOT read env vars or vendor-specific URLs directly.
+
+### 4. Validation & Error Matrix
+
+| Condition | Required behavior |
+| --- | --- |
+| `provider_type` empty in DB | `ResolvedProviderType()` returns `"openai"`; adapter constructs OpenAI client. |
+| `provider_type` not in whitelist | `SaveProviderConfig` returns validation error; row not written. |
+| `provider_type = "mock"` | Adapter produces deterministic JSON; `CompleteStream` emits ≥1 chunk; `TestProviderConfig` returns `ok=true` without network. |
+| Upstream returns non-2xx (openai/anthropic) | Adapter returns explicit error; SSE handler emits one `event: error` frame and stops. |
+| Client disconnects mid-stream | `onDelta` returns `ctx.Err()`; handler exits silently, no `error` frame. |
+| Streaming buffer overflow (>64 KiB default) | Scanner MUST be configured with ≥1 MiB max so SSE frames are not truncated. |
+| `role` or `source_text` missing in `/agents/stream` | Return HTTP 400 `invalid_request` BEFORE writing SSE headers. |
+| `AgentService` not wired in `RouterConfig` | `/agents/stream` returns HTTP 503 `agent_unavailable`. |
+
+### 5. Good/Base/Bad Cases
+
+- Good: `internal/provider/llm_test.go` uses `httptest.Server` to assert OpenAI SSE framing, Anthropic event-type switching, and mock determinism without external creds.
+- Base: a fresh SQLite install with no `provider_type` column transparently behaves as openai because of `ResolvedProviderType()` + idempotent `ALTER TABLE ... ADD COLUMN`.
+- Bad: handler imports an LLM SDK directly, or `agent_service.go` switches on `cfg.ProviderType` instead of going through `provider.NewLLMProvider`.
+
+### 6. Tests Required
+
+- `internal/provider/llm_test.go`: openai/anthropic httptest for both `Complete` and `CompleteStream`, mock determinism + JSON parse, factory case-insensitive + unknown error, handler-error abort.
+- `internal/httpapi/agents_test.go`: SSE end-to-end happy path (≥2 `delta` + final `done`), 400 on missing/invalid body, 503 when `AgentService` is nil.
+- Validation: `gofmt -w apps internal && GOTOOLCHAIN=local go test ./... && GOTOOLCHAIN=local go build ./...`.
+
+### 7. Wrong vs Correct
+
+#### Wrong
+
+```go
+// route handler dispatches on provider type directly
+switch cfg.ProviderType {
+case "anthropic":
+    return callAnthropic(ctx, cfg, prompt)
+default:
+    return callOpenAI(ctx, cfg, prompt)
+}
+```
+
+#### Correct
+
+```go
+llm, err := provider.NewLLMProvider(provider.LLMConfig{
+    ProviderType: cfg.ResolvedProviderType(),
+    BaseURL:      cfg.BaseURL,
+    APIKey:       cfg.APIKey,
+    Model:        cfg.Model,
+    Timeout:      time.Duration(cfg.TimeoutMS) * time.Millisecond,
+})
+if err != nil { return nil, err }
+return llm.CompleteStream(ctx, req, onChunk)
+```
+
+The adapter selection, SSE framing, and vendor-specific HTTP details all stay inside `internal/provider`; service code only sees the `LLMProvider` interface.
+
+---
+
 ## Scenario: SQLite default persistence with PostgreSQL fallback
 
 ### 1. Scope / Trigger
