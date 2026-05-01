@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Sparkles, Plus, Trash2, Save, X } from 'lucide-react'
 import { streamAgentRun, type AgentStreamDoneFrame } from '../../api/agentStream'
 
@@ -51,44 +51,61 @@ type RunHistoryEntry = {
   timestamp: string
 }
 
+function sanitizeRunHistoryEntries(value: unknown): RunHistoryEntry[] {
+  if (!Array.isArray(value)) return []
+  return value
+    .filter((entry): entry is RunHistoryEntry => {
+      if (!entry || typeof entry !== 'object') return false
+      const obj = entry as Record<string, unknown>
+      return (
+        typeof obj.id === 'string' &&
+        typeof obj.role === 'string' &&
+        typeof obj.sourceText === 'string' &&
+        Array.isArray(obj.contextEntries) &&
+        typeof obj.output === 'string' &&
+        typeof obj.timestamp === 'string'
+      )
+    })
+    .map((entry) => ({
+      id: entry.id,
+      role: entry.role,
+      sourceText: entry.sourceText,
+      contextEntries: entry.contextEntries
+        .filter((e): e is ContextEntry =>
+          !!e && typeof e === 'object' && typeof (e as ContextEntry).key === 'string',
+        )
+        .map((e) => ({ key: String(e.key), value: String(e.value ?? '') })),
+      output: entry.output,
+      durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : undefined,
+      tokenCount: typeof entry.tokenCount === 'number' ? entry.tokenCount : undefined,
+      timestamp: entry.timestamp,
+    }))
+}
+
 function loadRunHistory(): RunHistoryEntry[] {
   if (typeof window === 'undefined') return []
   try {
     const raw = window.localStorage.getItem(SAVED_HISTORY_KEY)
     if (!raw) return []
-    const parsed = JSON.parse(raw) as unknown
-    if (!Array.isArray(parsed)) return []
-    return parsed
-      .filter((entry): entry is RunHistoryEntry => {
-        if (!entry || typeof entry !== 'object') return false
-        const obj = entry as Record<string, unknown>
-        return (
-          typeof obj.id === 'string' &&
-          typeof obj.role === 'string' &&
-          typeof obj.sourceText === 'string' &&
-          Array.isArray(obj.contextEntries) &&
-          typeof obj.output === 'string' &&
-          typeof obj.timestamp === 'string'
-        )
-      })
-      .map((entry) => ({
-        id: entry.id,
-        role: entry.role,
-        sourceText: entry.sourceText,
-        contextEntries: entry.contextEntries
-          .filter((e): e is ContextEntry =>
-            !!e && typeof e === 'object' && typeof (e as ContextEntry).key === 'string',
-          )
-          .map((e) => ({ key: String(e.key), value: String(e.value ?? '') })),
-        output: entry.output,
-        durationMs: typeof entry.durationMs === 'number' ? entry.durationMs : undefined,
-        tokenCount: typeof entry.tokenCount === 'number' ? entry.tokenCount : undefined,
-        timestamp: entry.timestamp,
-      }))
-      .slice(0, MAX_HISTORY_ENTRIES)
+    return sanitizeRunHistoryEntries(JSON.parse(raw)).slice(0, MAX_HISTORY_ENTRIES)
   } catch {
     return []
   }
+}
+
+function mergeRunHistoryEntries(
+  current: RunHistoryEntry[],
+  incoming: RunHistoryEntry[],
+): RunHistoryEntry[] {
+  const seen = new Set<string>()
+  const merged: RunHistoryEntry[] = []
+  for (const entry of [...incoming, ...current]) {
+    if (seen.has(entry.id)) continue
+    seen.add(entry.id)
+    merged.push(entry)
+  }
+  merged.sort((a, b) => b.timestamp.localeCompare(a.timestamp))
+  return merged.slice(0, MAX_HISTORY_ENTRIES)
 }
 
 function persistRunHistory(history: RunHistoryEntry[]) {
@@ -310,6 +327,37 @@ export function AgentStreamSandbox() {
     setHistory((prev) => prev.filter((entry) => entry.id !== id))
 
   const clearHistory = () => setHistory([])
+
+  const importInputRef = useRef<HTMLInputElement | null>(null)
+  const [importStatus, setImportStatus] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null)
+  const handleImportClick = () => importInputRef.current?.click()
+  const handleImportFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onerror = () => setImportStatus({ tone: 'err', text: '读取失败' })
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result ?? '')) as unknown
+        const incoming = sanitizeRunHistoryEntries(parsed)
+        if (incoming.length === 0) {
+          setImportStatus({ tone: 'err', text: '未发现可导入条目' })
+          return
+        }
+        let addedCount = 0
+        setHistory((prev) => {
+          const merged = mergeRunHistoryEntries(prev, incoming)
+          addedCount = merged.length - prev.length
+          return merged
+        })
+        setImportStatus({ tone: 'ok', text: `已合并 ${addedCount} 条新记录` })
+      } catch {
+        setImportStatus({ tone: 'err', text: 'JSON 解析失败' })
+      }
+    }
+    reader.readAsText(file)
+  }
 
   const handleStop = () => {
     abortRef.current?.abort()
@@ -548,19 +596,52 @@ export function AgentStreamSandbox() {
           )}
         </div>
       )}
-      {history.length > 0 && (
-        <div className="sandbox-history">
+      <div className="sandbox-history">
+        <input
+          ref={importInputRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {history.length > 0 ? (
+            <button
+              type="button"
+              className="btn-ghost"
+              onClick={() => setIsHistoryOpen((prev) => !prev)}
+              aria-expanded={isHistoryOpen}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+            >
+              最近 {history.length} 条运行历史 {isHistoryOpen ? '▲' : '▼'}
+            </button>
+          ) : (
+            <span className="muted" style={{ fontSize: 12 }}>
+              暂无运行历史
+            </span>
+          )}
           <button
             type="button"
             className="btn-ghost"
-            onClick={() => setIsHistoryOpen((prev) => !prev)}
-            aria-expanded={isHistoryOpen}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}
+            style={{ fontSize: 11 }}
+            onClick={handleImportClick}
+            title="从导出的 sandbox-run-history JSON 文件导入合并历史"
           >
-            最近 {history.length} 条运行历史 {isHistoryOpen ? '▲' : '▼'}
+            导入 JSON
           </button>
-          {isHistoryOpen && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+          {importStatus && (
+            <span
+              style={{
+                fontSize: 11,
+                color: importStatus.tone === 'ok' ? '#3ddc84' : '#ff8c42',
+              }}
+            >
+              {importStatus.text}
+            </span>
+          )}
+        </div>
+        {history.length > 0 && isHistoryOpen && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
                 <button
                   type="button"
@@ -685,7 +766,6 @@ export function AgentStreamSandbox() {
             </div>
           )}
         </div>
-      )}
       {diffEntries.length > 0 && (
         <div className="sandbox-diff" style={{ marginTop: 12 }}>
           <div
