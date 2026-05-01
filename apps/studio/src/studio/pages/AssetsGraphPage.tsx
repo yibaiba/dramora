@@ -402,6 +402,8 @@ export function AssetsGraphPage() {
                 storyboardPendingCount={agentOutputHandoff.reviewContext.storyboardPendingCount}
                 assetsGraphPendingCount={agentOutputHandoff.reviewContext.assetsGraphPendingCount}
                 totalReturnedCount={agentOutputHandoff.reviewContext.totalReturnedCount}
+                returnedStoryboardCount={agentOutputHandoff.reviewContext.storyboardReturnedCount}
+                returnedAssetsGraphCount={agentOutputHandoff.reviewContext.assetsGraphReturnedCount}
                 storyAnalysisLinkState={buildStoryAnalysisFollowUpReturnState(agentOutputHandoff, 'Assets / Graph')}
               />
             ) : null}

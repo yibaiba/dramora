@@ -357,6 +357,8 @@ export function StoryboardPage() {
               storyboardPendingCount={assetsGraphHandoff.reviewContext.storyboardPendingCount}
               assetsGraphPendingCount={assetsGraphHandoff.reviewContext.assetsGraphPendingCount}
               totalReturnedCount={assetsGraphHandoff.reviewContext.totalReturnedCount}
+              returnedStoryboardCount={assetsGraphHandoff.reviewContext.storyboardReturnedCount}
+              returnedAssetsGraphCount={assetsGraphHandoff.reviewContext.assetsGraphReturnedCount}
               storyAnalysisLinkState={buildStoryAnalysisFollowUpReturnState(assetsGraphHandoff, 'Storyboard')}
             />
           ) : null}
