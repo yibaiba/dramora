@@ -107,3 +107,8 @@ func (a *api) smokeChatProvider(w http.ResponseWriter, r *http.Request) {
 	result := a.providerService.SmokeChatProvider(r.Context())
 	writeJSON(w, http.StatusOK, Envelope{"smoke_result": result})
 }
+
+func (a *api) smokeChatProviderStream(w http.ResponseWriter, r *http.Request) {
+	result := a.providerService.SmokeChatProviderStream(r.Context())
+	writeJSON(w, http.StatusOK, Envelope{"smoke_result": result})
+}

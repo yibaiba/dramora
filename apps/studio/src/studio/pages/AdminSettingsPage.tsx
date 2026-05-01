@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Settings, Zap, Image, Video, Volume2, Activity, Download } from 'lucide-react'
-import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useResetLLMTelemetry, useSaveProviderConfig, useSmokeChatProvider, useTestProviderConfig } from '../../api/hooks'
+import { useLLMTelemetry, useProviderAuditEvents, useProviderConfigs, useResetLLMTelemetry, useSaveProviderConfig, useSmokeChatProvider, useSmokeChatProviderStream, useTestProviderConfig } from '../../api/hooks'
 import { downloadProviderAuditCSV } from '../../api/client'
 import { AgentStreamSandbox } from '../components/AgentStreamSandbox'
 import type {
@@ -749,6 +749,7 @@ function ProviderCard({
   const saveMutation = useSaveProviderConfig()
   const testMutation = useTestProviderConfig()
   const smokeMutation = useSmokeChatProvider()
+  const smokeStreamMutation = useSmokeChatProviderStream()
   const [editing, setEditing] = useState(!config)
   const allowedTypes = CAPABILITY_PROVIDER_TYPES[capability]
   const defaultType = CAPABILITY_DEFAULT_PROVIDER_TYPE[capability]
@@ -804,6 +805,22 @@ function ProviderCard({
     })
   }
 
+  function handleSmokeStream() {
+    setSmokeResult(null)
+    smokeStreamMutation.mutate(undefined, {
+      onError: (err) =>
+        setSmokeResult({
+          capability: 'chat',
+          error: err instanceof Error ? err.message : '请求失败',
+          latency_ms: 0,
+          model: '',
+          ok: false,
+          streamed: true,
+        }),
+      onSuccess: (r) => setSmokeResult(r),
+    })
+  }
+
   return (
     <section className="provider-card" aria-label={label}>
       <div className="provider-card-header">
@@ -840,10 +857,21 @@ function ProviderCard({
                 type="button"
                 className="action-btn secondary"
                 onClick={handleSmoke}
-                disabled={smokeMutation.isPending}
+                disabled={smokeMutation.isPending || smokeStreamMutation.isPending}
                 title="发起一次最小真实 chat 调用，验证 base_url + api_key + model 端到端可用"
               >
                 {smokeMutation.isPending ? '实测中...' : '实测对话'}
+              </button>
+            )}
+            {capability === 'chat' && (
+              <button
+                type="button"
+                className="action-btn secondary"
+                onClick={handleSmokeStream}
+                disabled={smokeMutation.isPending || smokeStreamMutation.isPending}
+                title="发起一次最小流式 chat 调用，验证 SSE 帧解析与 CompleteStream 链路"
+              >
+                {smokeStreamMutation.isPending ? '流式中...' : '实测流式'}
               </button>
             )}
           </div>
@@ -857,10 +885,10 @@ function ProviderCard({
           {capability === 'chat' && smokeResult && (
             <div className={`test-result ${smokeResult.ok ? 'success' : 'failure'}`}>
               {smokeResult.ok
-                ? `实测对话成功 · ${smokeResult.provider_type ?? ''} · ${smokeResult.model} · ${smokeResult.latency_ms}ms${
+                ? `${smokeResult.streamed ? '实测流式' : '实测对话'}成功 · ${smokeResult.provider_type ?? ''} · ${smokeResult.model} · ${smokeResult.latency_ms}ms${
                     smokeResult.token_count ? ' · ' + smokeResult.token_count + ' tokens' : ''
-                  } · 回复：${smokeResult.content ?? ''}`
-                : `实测失败: ${smokeResult.error ?? ''}`}
+                  }${smokeResult.streamed && smokeResult.chunk_count ? ' · ' + smokeResult.chunk_count + ' chunks' : ''} · 回复：${smokeResult.content ?? ''}`
+                : `${smokeResult.streamed ? '流式失败' : '实测失败'}: ${smokeResult.error ?? ''}`}
             </div>
           )}
         </div>

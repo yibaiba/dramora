@@ -123,3 +123,81 @@ func TestSmokeChatProviderReturnsErrorWhenChatNotConfigured(t *testing.T) {
 		t.Fatalf("expected error message, got empty")
 	}
 }
+
+func TestSmokeChatProviderStreamUsesMockAdapter(t *testing.T) {
+	t.Parallel()
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret")
+	providerCfgRepo := repo.NewMemoryProviderConfigRepository()
+	auditRepo := repo.NewMemoryProviderAuditRepository()
+	providerSvc := service.NewProviderService(providerCfgRepo)
+	providerSvc.SetAuditRepository(auditRepo)
+
+	rawRouter := NewRouter(RouterConfig{
+		Logger:          logger,
+		Version:         "test",
+		AuthService:     authService,
+		ProviderService: providerSvc,
+	})
+	router := newAuthenticatedTestRouter(rawRouter, authService)
+
+	saveBody, _ := json.Marshal(map[string]any{
+		"capability":    "chat",
+		"provider_type": "mock",
+		"base_url":      "https://example.com",
+		"api_key":       "sk-test",
+		"model":         "mock-1",
+	})
+	saveResp := httptest.NewRecorder()
+	saveReq := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers:save", bytes.NewReader(saveBody))
+	saveReq.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(saveResp, saveReq)
+	if saveResp.Code != http.StatusOK {
+		t.Fatalf("expected save 200, got %d: %s", saveResp.Code, saveResp.Body.String())
+	}
+
+	resp := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/providers/chat:smoke-stream", nil)
+	router.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var payload struct {
+		SmokeResult service.SmokeChatResult `json:"smoke_result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !payload.SmokeResult.OK {
+		t.Fatalf("expected ok=true, got %+v", payload.SmokeResult)
+	}
+	if !payload.SmokeResult.Streamed {
+		t.Fatalf("expected streamed=true")
+	}
+	if payload.SmokeResult.ChunkCount <= 0 {
+		t.Fatalf("expected chunk_count > 0, got %d", payload.SmokeResult.ChunkCount)
+	}
+	if payload.SmokeResult.Content == "" {
+		t.Fatalf("expected non-empty aggregated content")
+	}
+
+	listResp := httptest.NewRecorder()
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/admin/provider-audit?action=smoke_stream", nil)
+	router.ServeHTTP(listResp, listReq)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("expected audit list 200, got %d: %s", listResp.Code, listResp.Body.String())
+	}
+	var auditPayload struct {
+		Events []providerAuditEventDTO `json:"events"`
+	}
+	if err := json.NewDecoder(listResp.Body).Decode(&auditPayload); err != nil {
+		t.Fatalf("decode audit: %v", err)
+	}
+	if len(auditPayload.Events) != 1 {
+		t.Fatalf("expected exactly 1 smoke_stream audit event, got %d", len(auditPayload.Events))
+	}
+	if !auditPayload.Events[0].Success {
+		t.Fatalf("expected smoke_stream audit success=true, got %+v", auditPayload.Events[0])
+	}
+}

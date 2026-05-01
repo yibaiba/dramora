@@ -21,6 +21,8 @@ type SmokeChatResult struct {
 	Content      string `json:"content,omitempty"`
 	TokenCount   int    `json:"token_count,omitempty"`
 	LatencyMS    int64  `json:"latency_ms"`
+	Streamed     bool   `json:"streamed,omitempty"`
+	ChunkCount   int    `json:"chunk_count,omitempty"`
 	Error        string `json:"error,omitempty"`
 }
 
@@ -96,5 +98,112 @@ func (s *ProviderService) SmokeChatProvider(ctx context.Context) SmokeChatResult
 		Content:      preview,
 		TokenCount:   resp.TotalTokens,
 		LatencyMS:    latency,
+	}
+}
+
+// SmokeChatProviderStream 走 LLMProvider.CompleteStream 链路验证 chat 配置的流式输出能力。
+// 在统计 chunk 数量的同时落 audit，验证 SSE / 流式解析全链路工作正常。
+func (s *ProviderService) SmokeChatProviderStream(ctx context.Context) SmokeChatResult {
+	const capability = "chat"
+	cfg, err := s.configs.GetProviderConfig(ctx, capability)
+	if err != nil {
+		s.recordAudit(ctx, domain.ProviderAuditActionSmokeStream, capability, "", "", false, "端点未配置")
+		return SmokeChatResult{Capability: capability, Streamed: true, Error: "端点未配置"}
+	}
+	resolvedType := cfg.ResolvedProviderType()
+
+	llm, err := provider.NewLLMProvider(provider.LLMConfig{
+		ProviderType: resolvedType,
+		BaseURL:      cfg.BaseURL,
+		APIKey:       cfg.APIKey,
+		Model:        cfg.Model,
+		Timeout:      time.Duration(cfg.TimeoutMS) * time.Millisecond,
+	})
+	if err != nil {
+		msg := fmt.Sprintf("初始化 LLM 适配器失败: %v", err)
+		s.recordAudit(ctx, domain.ProviderAuditActionSmokeStream, capability, resolvedType, cfg.Model, false, msg)
+		return SmokeChatResult{Capability: capability, ProviderType: resolvedType, Model: cfg.Model, Streamed: true, Error: msg}
+	}
+
+	var (
+		chunkCount int
+		streamed   strings.Builder
+	)
+	start := time.Now()
+	resp, err := llm.CompleteStream(ctx, provider.LLMRequest{
+		Model: cfg.Model,
+		Messages: []provider.ChatMessage{
+			{Role: "system", Content: "You are a connectivity probe. Answer briefly."},
+			{Role: "user", Content: smokeChatPrompt},
+		},
+		MaxTokens: 16,
+	}, func(chunk provider.StreamChunk) error {
+		if chunk.Done {
+			return nil
+		}
+		if chunk.Delta != "" {
+			chunkCount++
+			streamed.WriteString(chunk.Delta)
+		}
+		return nil
+	})
+	latency := time.Since(start).Milliseconds()
+	if err != nil {
+		msg := fmt.Sprintf("CompleteStream 调用失败: %v", err)
+		s.recordAudit(ctx, domain.ProviderAuditActionSmokeStream, capability, resolvedType, cfg.Model, false, msg)
+		return SmokeChatResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			LatencyMS:    latency,
+			Streamed:     true,
+			ChunkCount:   chunkCount,
+			Error:        msg,
+		}
+	}
+	content := strings.TrimSpace(streamed.String())
+	if content == "" && resp != nil {
+		content = strings.TrimSpace(resp.Content)
+	}
+	if content == "" {
+		msg := "stream 未产生任何 delta"
+		s.recordAudit(ctx, domain.ProviderAuditActionSmokeStream, capability, resolvedType, cfg.Model, false, msg)
+		return SmokeChatResult{
+			Capability:   capability,
+			ProviderType: resolvedType,
+			Model:        cfg.Model,
+			LatencyMS:    latency,
+			Streamed:     true,
+			ChunkCount:   chunkCount,
+			Error:        msg,
+		}
+	}
+	preview := content
+	if len(preview) > 240 {
+		preview = preview[:240] + "…"
+	}
+	tokens := 0
+	if resp != nil {
+		tokens = resp.TotalTokens
+	}
+	s.recordAudit(
+		ctx,
+		domain.ProviderAuditActionSmokeStream,
+		capability,
+		resolvedType,
+		cfg.Model,
+		true,
+		fmt.Sprintf("latency=%dms chunks=%d", latency, chunkCount),
+	)
+	return SmokeChatResult{
+		OK:           true,
+		Capability:   capability,
+		ProviderType: resolvedType,
+		Model:        cfg.Model,
+		Content:      preview,
+		TokenCount:   tokens,
+		LatencyMS:    latency,
+		Streamed:     true,
+		ChunkCount:   chunkCount,
 	}
 }

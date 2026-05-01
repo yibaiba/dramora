@@ -606,6 +606,8 @@ export type SmokeChatResult = {
   content?: string
   token_count?: number
   latency_ms: number
+  streamed?: boolean
+  chunk_count?: number
   error?: string
 }
 

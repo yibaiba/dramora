@@ -1514,6 +1514,26 @@ paths:
                 properties:
                   smoke_result:
                     $ref: "#/components/schemas/SmokeChatResult"
+  "/api/v1/admin/providers/chat:smoke-stream":
+    post:
+      summary: End-to-end streaming smoke test against the configured chat provider (owner-only)
+      description: |
+        Identical to `/api/v1/admin/providers/chat:smoke` except the call is
+        issued via `LLMProvider.CompleteStream` so that SSE / chunk parsing is
+        exercised end-to-end. The response carries the aggregated reply text,
+        the number of delta chunks observed (`chunk_count`), `streamed: true`,
+        latency, and token count. Always returns HTTP 200 with `ok` flag in
+        the body; failures surface in `error`.
+      responses:
+        "200":
+          description: Streaming smoke result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  smoke_result:
+                    $ref: "#/components/schemas/SmokeChatResult"
   /api/v1/admin/worker-metrics:
     get:
       summary: Snapshot of cross-process worker observability counters (owner/admin)
@@ -3070,5 +3090,11 @@ components:
           type: integer
         latency_ms:
           type: integer
+        streamed:
+          type: boolean
+          description: True when the smoke call was issued via CompleteStream.
+        chunk_count:
+          type: integer
+          description: Number of non-terminal stream deltas observed (streamed variant only).
         error:
           type: string

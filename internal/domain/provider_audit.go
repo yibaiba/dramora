@@ -6,7 +6,8 @@ import "time"
 const (
 	ProviderAuditActionSave  = "save"
 	ProviderAuditActionTest  = "test"
-	ProviderAuditActionSmoke = "smoke"
+	ProviderAuditActionSmoke       = "smoke"
+	ProviderAuditActionSmokeStream = "smoke_stream"
 )
 
 // ProviderAuditEvent 记录管理员对 provider 端点配置的关键动作。

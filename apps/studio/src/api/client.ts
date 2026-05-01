@@ -505,6 +505,14 @@ export async function smokeChatProvider(): Promise<SmokeChatResult> {
   return payload.smoke_result
 }
 
+export async function smokeChatProviderStream(): Promise<SmokeChatResult> {
+  const payload = await fetchJSON<{ smoke_result: SmokeChatResult }>(
+    '/api/v1/admin/providers/chat:smoke-stream',
+    { method: 'POST' },
+  )
+  return payload.smoke_result
+}
+
 export async function fetchWorkerMetrics(): Promise<WorkerMetricsSnapshot> {
   const payload = await fetchJSON<{ worker_metrics: WorkerMetricsSnapshot }>(
     '/api/v1/admin/worker-metrics',

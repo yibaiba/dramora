@@ -52,6 +52,7 @@ import {
 	startStoryAnalysis,
 	testProviderConfig,
 	smokeChatProvider,
+	smokeChatProviderStream,
 	fetchWorkerMetrics,
 	fetchLLMTelemetry,
 	resetLLMTelemetry,
@@ -520,6 +521,12 @@ export function useTestProviderConfig() {
 export function useSmokeChatProvider() {
   return useMutation({
     mutationFn: () => smokeChatProvider(),
+  })
+}
+
+export function useSmokeChatProviderStream() {
+  return useMutation({
+    mutationFn: () => smokeChatProviderStream(),
   })
 }
 
