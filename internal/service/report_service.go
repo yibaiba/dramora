@@ -44,12 +44,17 @@ func (s *ReportService) GenerateReport(
 	reportID := uuid.New().String()
 	now := time.Now().Unix()
 
-	// 1. 查询期间内所有交易
-	filter := repo.WalletTransactionFilter{
+	// 1. 查询期间内所有交易（使用新的 List 方法进行日期范围过滤）
+	startTime := time.Unix(periodStart, 0).UTC()
+	endTime := time.Unix(periodEnd, 0).UTC()
+	opts := repo.WalletTransactionFilterOptions{
 		OrganizationID: orgID,
-		// 注：WalletTransactionFilter 没有日期范围字段，需要后期补充或在业务层处理
+		StartTime:      startTime,
+		EndTime:        endTime,
+		Limit:          1000,
+		Offset:         0,
 	}
-	page, err := s.walletRepo.ListTransactions(ctx, filter)
+	page, err := s.walletRepo.List(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list transactions: %w", err)
 	}
@@ -59,11 +64,6 @@ func (s *ReportService) GenerateReport(
 	operationStats := make(map[domain.OperationType]map[string]int64) // op_type -> {count, amount}
 
 	for _, tx := range page.Transactions {
-		// 过滤时间范围
-		if tx.CreatedAt.Unix() < periodStart || tx.CreatedAt.Unix() > periodEnd {
-			continue
-		}
-
 		// 统计总额
 		if tx.Kind == domain.WalletKindAdjust {
 			// adjust 根据 Direction 判断增减
@@ -90,13 +90,32 @@ func (s *ReportService) GenerateReport(
 		}
 	}
 
-	// 3. 查询待结算统计
+	// 3. 查询待结算统计（使用新的 List 方法按时间范围和状态过滤）
 	pendingCount := int(0)
 	pendingAmount := int64(0)
 	resolvedCount := int(0)
 	failedCount := int(0)
-	// 注：PendingBillingRepository 没有按时间范围的查询方法，这里先用简单处理
-	// 后续应扩展 repository 接口
+	pbOpts := repo.PendingBillingFilterOptions{
+		OrganizationID: orgID,
+		StartTime:      startTime,
+		EndTime:        endTime,
+		Limit:          1000,
+		Offset:         0,
+	}
+	pendingBillings, err := s.pendingBillingRepo.List(ctx, pbOpts)
+	if err == nil {
+		for _, pb := range pendingBillings {
+			switch pb.Status {
+			case domain.PendingBillingStatusPending, domain.PendingBillingStatusRetrying:
+				pendingCount++
+				pendingAmount += pb.Amount
+			case domain.PendingBillingStatusResolved:
+				resolvedCount++
+			case domain.PendingBillingStatusFailed:
+				failedCount++
+			}
+		}
+	}
 
 	// 4. 计算净额
 	creditAmount := stats[domain.WalletKindCredit]

@@ -34,11 +34,44 @@ type WalletApplyParams struct {
 }
 
 // WalletTransactionFilter 用于历史流水分页查询。
+// Deprecated: 使用 WalletTransactionFilterOptions 替代。
 type WalletTransactionFilter struct {
 	OrganizationID string
 	Kinds          []string
 	Limit          int
 	Offset         int
+}
+
+// WalletTransactionFilterOptions 用于带日期范围的流水查询。
+type WalletTransactionFilterOptions struct {
+	OrganizationID string
+	StartTime      time.Time
+	EndTime        time.Time
+	Kind           string // 单个 Kind（可选）
+	Limit          int
+	Offset         int
+}
+
+// Validate 校验过滤选项的合法性。
+func (opts *WalletTransactionFilterOptions) Validate() error {
+	if opts.OrganizationID == "" {
+		return errors.New("wallet filter: organization_id is required")
+	}
+	if opts.StartTime.After(opts.EndTime) {
+		return errors.New("wallet filter: start_time must be <= end_time")
+	}
+	// 检查时间范围不超过 90 天
+	if opts.EndTime.Sub(opts.StartTime) > 90*24*time.Hour {
+		return errors.New("wallet filter: date range must not exceed 90 days")
+	}
+	// 检查 Limit 在合理范围内
+	if opts.Limit < 1 || opts.Limit > 1000 {
+		return errors.New("wallet filter: limit must be between 1 and 1000")
+	}
+	if opts.Offset < 0 {
+		return errors.New("wallet filter: offset must be >= 0")
+	}
+	return nil
 }
 
 // WalletTransactionPage 是流水分页结果。
@@ -54,6 +87,8 @@ type WalletRepository interface {
 	ApplyTransaction(ctx context.Context, params WalletApplyParams) (domain.Wallet, domain.WalletTransaction, error)
 	ListTransactions(ctx context.Context, filter WalletTransactionFilter) (WalletTransactionPage, error)
 	GetTransactionByRef(ctx context.Context, organizationID, refType, refID string) (*domain.WalletTransaction, error)
+	// List 列出指定时间范围内的交易（新方法）。
+	List(ctx context.Context, opts WalletTransactionFilterOptions) (WalletTransactionPage, error)
 }
 
 // MemoryWalletRepository 提供进程内实现。
@@ -151,6 +186,50 @@ func (r *MemoryWalletRepository) ListTransactions(
 		return WalletTransactionPage{Transactions: []domain.WalletTransaction{}}, nil
 	}
 	end := offset + limit
+	hasMore := false
+	if end < len(matched) {
+		hasMore = true
+	} else {
+		end = len(matched)
+	}
+	return WalletTransactionPage{
+		Transactions: append([]domain.WalletTransaction(nil), matched[offset:end]...),
+		HasMore:      hasMore,
+	}, nil
+}
+
+// List 列出指定时间范围内的交易。
+func (r *MemoryWalletRepository) List(
+	_ context.Context,
+	opts WalletTransactionFilterOptions,
+) (WalletTransactionPage, error) {
+	if err := opts.Validate(); err != nil {
+		return WalletTransactionPage{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	matched := make([]domain.WalletTransaction, 0)
+	for _, tx := range r.txs {
+		if tx.OrganizationID != opts.OrganizationID {
+			continue
+		}
+		if tx.CreatedAt.Before(opts.StartTime) || tx.CreatedAt.After(opts.EndTime) {
+			continue
+		}
+		if opts.Kind != "" && string(tx.Kind) != opts.Kind {
+			continue
+		}
+		matched = append(matched, tx)
+	}
+	sort.Slice(matched, func(i, j int) bool { return matched[i].CreatedAt.After(matched[j].CreatedAt) })
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	if offset >= len(matched) {
+		return WalletTransactionPage{Transactions: []domain.WalletTransaction{}}, nil
+	}
+	end := offset + opts.Limit
 	hasMore := false
 	if end < len(matched) {
 		hasMore = true
@@ -339,6 +418,88 @@ func (r *SQLiteWalletRepository) ListTransactions(
 	return WalletTransactionPage{Transactions: out, HasMore: hasMore}, nil
 }
 
+// List 列出指定时间范围内的交易（SQLite 实现）。
+func (r *SQLiteWalletRepository) List(
+	ctx context.Context,
+	opts WalletTransactionFilterOptions,
+) (WalletTransactionPage, error) {
+	if err := opts.Validate(); err != nil {
+		return WalletTransactionPage{}, err
+	}
+	var (
+		conds []string
+		args  []any
+	)
+	if opts.OrganizationID != "" {
+		conds = append(conds, "organization_id = ?")
+		args = append(args, opts.OrganizationID)
+	}
+	if !opts.StartTime.IsZero() {
+		conds = append(conds, "created_at >= ?")
+		args = append(args, opts.StartTime.UTC().Format("2006-01-02T15:04:05.000Z"))
+	}
+	if !opts.EndTime.IsZero() {
+		conds = append(conds, "created_at <= ?")
+		args = append(args, opts.EndTime.UTC().Format("2006-01-02T15:04:05.000Z"))
+	}
+	if opts.Kind != "" {
+		conds = append(conds, "kind = ?")
+		args = append(args, opts.Kind)
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = "WHERE " + strings.Join(conds, " AND ")
+	}
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, opts.Limit+1, offset)
+	q := fmt.Sprintf(`SELECT id, organization_id, kind, direction, amount, reason, ref_type, ref_id, balance_after, actor_user_id, created_at
+		FROM wallet_transactions %s ORDER BY created_at DESC LIMIT ? OFFSET ?`, where)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return WalletTransactionPage{}, fmt.Errorf("list wallet tx with filter: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.WalletTransaction
+	for rows.Next() {
+		var (
+			tx        domain.WalletTransaction
+			reason    sql.NullString
+			refType   sql.NullString
+			refID     sql.NullString
+			actor     sql.NullString
+			createdAt string
+			kind      string
+		)
+		if err := rows.Scan(&tx.ID, &tx.OrganizationID, &kind, &tx.Direction, &tx.Amount,
+			&reason, &refType, &refID, &tx.BalanceAfter, &actor, &createdAt); err != nil {
+			return WalletTransactionPage{}, fmt.Errorf("scan wallet tx with filter: %w", err)
+		}
+		tx.Kind = domain.WalletTransactionKind(kind)
+		tx.Reason = reason.String
+		tx.RefType = refType.String
+		tx.RefID = refID.String
+		tx.ActorUserID = actor.String
+		if t, err := time.Parse("2006-01-02T15:04:05.000Z", createdAt); err == nil {
+			tx.CreatedAt = t
+		} else if t, err := time.Parse(time.RFC3339Nano, createdAt); err == nil {
+			tx.CreatedAt = t
+		}
+		out = append(out, tx)
+	}
+	if err := rows.Err(); err != nil {
+		return WalletTransactionPage{}, fmt.Errorf("iterate wallet tx with filter: %w", err)
+	}
+	hasMore := false
+	if len(out) > opts.Limit {
+		hasMore = true
+		out = out[:opts.Limit]
+	}
+	return WalletTransactionPage{Transactions: out, HasMore: hasMore}, nil
+}
+
 // PostgresWalletRepository 提供 Postgres 后端实现，使用 SELECT ... FOR UPDATE 串行化余额变动。
 type PostgresWalletRepository struct {
 	pool *pgxpool.Pool
@@ -498,6 +659,83 @@ func (r *PostgresWalletRepository) ListTransactions(
 	if len(out) > limit {
 		hasMore = true
 		out = out[:limit]
+	}
+	return WalletTransactionPage{Transactions: out, HasMore: hasMore}, nil
+}
+
+// List 列出指定时间范围内的交易（PostgreSQL 实现）。
+func (r *PostgresWalletRepository) List(
+	ctx context.Context,
+	opts WalletTransactionFilterOptions,
+) (WalletTransactionPage, error) {
+	if err := opts.Validate(); err != nil {
+		return WalletTransactionPage{}, err
+	}
+	var (
+		conds []string
+		args  []any
+		i     = 1
+	)
+	if opts.OrganizationID != "" {
+		conds = append(conds, fmt.Sprintf("organization_id = $%d", i))
+		args = append(args, opts.OrganizationID)
+		i++
+	}
+	if !opts.StartTime.IsZero() {
+		conds = append(conds, fmt.Sprintf("created_at >= $%d", i))
+		args = append(args, opts.StartTime.UTC())
+		i++
+	}
+	if !opts.EndTime.IsZero() {
+		conds = append(conds, fmt.Sprintf("created_at <= $%d", i))
+		args = append(args, opts.EndTime.UTC())
+		i++
+	}
+	if opts.Kind != "" {
+		conds = append(conds, fmt.Sprintf("kind = $%d", i))
+		args = append(args, opts.Kind)
+		i++
+	}
+	where := ""
+	if len(conds) > 0 {
+		where = "WHERE " + strings.Join(conds, " AND ")
+	}
+	offset := opts.Offset
+	if offset < 0 {
+		offset = 0
+	}
+	args = append(args, opts.Limit+1, offset)
+	q := fmt.Sprintf(`SELECT id, organization_id, kind, direction, amount,
+		COALESCE(reason,''), COALESCE(ref_type,''), COALESCE(ref_id,''),
+		balance_after, COALESCE(actor_user_id,''), created_at
+		FROM wallet_transactions %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, where, i, i+1)
+	rows, err := r.pool.Query(ctx, q, args...)
+	if err != nil {
+		return WalletTransactionPage{}, fmt.Errorf("list wallet tx pg with filter: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.WalletTransaction
+	for rows.Next() {
+		var (
+			tx   domain.WalletTransaction
+			kind string
+			at   time.Time
+		)
+		if err := rows.Scan(&tx.ID, &tx.OrganizationID, &kind, &tx.Direction, &tx.Amount,
+			&tx.Reason, &tx.RefType, &tx.RefID, &tx.BalanceAfter, &tx.ActorUserID, &at); err != nil {
+			return WalletTransactionPage{}, fmt.Errorf("scan wallet tx pg with filter: %w", err)
+		}
+		tx.Kind = domain.WalletTransactionKind(kind)
+		tx.CreatedAt = at.UTC()
+		out = append(out, tx)
+	}
+	if err := rows.Err(); err != nil {
+		return WalletTransactionPage{}, fmt.Errorf("iterate wallet tx pg with filter: %w", err)
+	}
+	hasMore := false
+	if len(out) > opts.Limit {
+		hasMore = true
+		out = out[:opts.Limit]
 	}
 	return WalletTransactionPage{Transactions: out, HasMore: hasMore}, nil
 }

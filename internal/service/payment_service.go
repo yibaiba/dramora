@@ -85,13 +85,6 @@ func (s *PaymentService) ProcessWebhook(ctx context.Context, payload payment.Web
 		return fmt.Errorf("failed to get payment order: %w", err)
 	}
 
-	// 为 webhook 处理注入系统认证上下文（确保有组织隔离）
-	authCtx := WithRequestAuthContext(ctx, RequestAuthContext{
-		UserID:         "system_payment",
-		OrganizationID: order.OrganizationID,
-		Role:           "system",
-	})
-
 	now := time.Now()
 	if payload.Status == "success" {
 		// 更新订单状态为成功
@@ -100,8 +93,8 @@ func (s *PaymentService) ProcessWebhook(ctx context.Context, payload payment.Web
 			return fmt.Errorf("failed to update payment order: %w", err)
 		}
 
-		// 向钱包充值（使用注入了组织上下文的 authCtx）
-		txn, err := s.walletService.Credit(authCtx, CreditParams{
+		// 向钱包充值（使用 InternalCredit 方法）
+		txn, err := s.walletService.InternalCredit(ctx, order.OrganizationID, CreditParams{
 			Amount:  payload.Amount,
 			Reason:  fmt.Sprintf("Payment charge - Order %s", order.ID),
 			RefType: "payment_order",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,6 +15,47 @@ import (
 
 // ErrNotFound 表示记录未找到。
 var ErrNotFound = errors.New("not found")
+
+// PendingBillingFilterOptions 用于待结算记录的过滤查询。
+type PendingBillingFilterOptions struct {
+	OrganizationID string
+	Status         string // pending/processing/success/failed（可选）
+	StartTime      time.Time
+	EndTime        time.Time
+	Limit          int
+	Offset         int
+}
+
+// Validate 校验过滤选项的合法性。
+func (opts *PendingBillingFilterOptions) Validate() error {
+	if opts.OrganizationID == "" {
+		return errors.New("pending billing filter: organization_id is required")
+	}
+	if opts.Status != "" {
+		validStatuses := map[string]bool{
+			string(domain.PendingBillingStatusPending):  true,
+			string(domain.PendingBillingStatusRetrying): true,
+			string(domain.PendingBillingStatusResolved): true,
+			string(domain.PendingBillingStatusFailed):   true,
+		}
+		if !validStatuses[opts.Status] {
+			return fmt.Errorf("pending billing filter: invalid status %q", opts.Status)
+		}
+	}
+	if !opts.StartTime.IsZero() && !opts.EndTime.IsZero() && opts.StartTime.After(opts.EndTime) {
+		return errors.New("pending billing filter: start_time must be <= end_time")
+	}
+	if !opts.StartTime.IsZero() && !opts.EndTime.IsZero() && opts.EndTime.Sub(opts.StartTime) > 90*24*time.Hour {
+		return errors.New("pending billing filter: date range must not exceed 90 days")
+	}
+	if opts.Limit < 1 || opts.Limit > 1000 {
+		return errors.New("pending billing filter: limit must be between 1 and 1000")
+	}
+	if opts.Offset < 0 {
+		return errors.New("pending billing filter: offset must be >= 0")
+	}
+	return nil
+}
 
 // PendingBillingRepository 定义待结算记录的仓库接口。
 type PendingBillingRepository interface {
@@ -31,6 +73,9 @@ type PendingBillingRepository interface {
 
 	// GetByRef 根据 ref_type 和 ref_id 查询是否存在待结算记录。
 	GetByRef(ctx context.Context, orgID, refType, refID string) (*domain.PendingBilling, error)
+
+	// List 列出符合条件的待结算记录（支持过滤）。
+	List(ctx context.Context, opts PendingBillingFilterOptions) ([]*domain.PendingBilling, error)
 }
 
 // MemoryPendingBillingRepository 内存实现（用于测试）。
@@ -109,6 +154,51 @@ func (r *MemoryPendingBillingRepository) GetByRef(ctx context.Context, orgID, re
 		}
 	}
 	return nil, ErrNotFound
+}
+
+// List 列出符合条件的待结算记录（Memory 实现）。
+func (r *MemoryPendingBillingRepository) List(ctx context.Context, opts PendingBillingFilterOptions) ([]*domain.PendingBilling, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
+	var result []*domain.PendingBilling
+	for _, pb := range r.pbs {
+		if pb.OrganizationID != opts.OrganizationID {
+			continue
+		}
+		if opts.Status != "" && string(pb.Status) != opts.Status {
+			continue
+		}
+		if !opts.StartTime.IsZero() && time.Unix(pb.CreatedAt, 0).Before(opts.StartTime) {
+			continue
+		}
+		if !opts.EndTime.IsZero() && time.Unix(pb.CreatedAt, 0).After(opts.EndTime) {
+			continue
+		}
+		result = append(result, pb)
+	}
+
+	// Sort by created_at DESC
+	for i := 0; i < len(result)-1; i++ {
+		for j := i + 1; j < len(result); j++ {
+			if result[i].CreatedAt < result[j].CreatedAt {
+				result[i], result[j] = result[j], result[i]
+			}
+		}
+	}
+
+	// Apply offset and limit
+	if opts.Offset >= len(result) {
+		return []*domain.PendingBilling{}, nil
+	}
+	end := opts.Offset + opts.Limit
+	if end > len(result) {
+		end = len(result)
+	}
+	return result[opts.Offset:end], nil
 }
 
 // PostgresPendingBillingRepository PostgreSQL 实现。
@@ -235,6 +325,72 @@ func (r *PostgresPendingBillingRepository) GetByRef(ctx context.Context, orgID, 
 		return nil, err
 	}
 	return pb, nil
+}
+
+// List 列出符合条件的待结算记录（PostgreSQL 实现）。
+func (r *PostgresPendingBillingRepository) List(ctx context.Context, opts PendingBillingFilterOptions) ([]*domain.PendingBilling, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+	var (
+		conds []string
+		args  []interface{}
+		i     = 1
+	)
+	conds = append(conds, fmt.Sprintf("organization_id = $%d", i))
+	args = append(args, opts.OrganizationID)
+	i++
+
+	if opts.Status != "" {
+		conds = append(conds, fmt.Sprintf("status = $%d", i))
+		args = append(args, opts.Status)
+		i++
+	}
+	if !opts.StartTime.IsZero() {
+		conds = append(conds, fmt.Sprintf("created_at >= $%d", i))
+		args = append(args, opts.StartTime.Unix())
+		i++
+	}
+	if !opts.EndTime.IsZero() {
+		conds = append(conds, fmt.Sprintf("created_at <= $%d", i))
+		args = append(args, opts.EndTime.Unix())
+		i++
+	}
+	where := "WHERE " + conds[0]
+	for _, c := range conds[1:] {
+		where += " AND " + c
+	}
+
+	args = append(args, opts.Limit, opts.Offset)
+	query := fmt.Sprintf(`
+		SELECT id, organization_id, operation_type, ref_type, ref_id, amount, status, retry_count, max_retries, last_error_msg, created_at, updated_at
+		FROM pending_billings
+		%s
+		ORDER BY created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, where, i, i+1)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pbs []*domain.PendingBilling
+	for rows.Next() {
+		pb := &domain.PendingBilling{}
+		err := rows.Scan(
+			&pb.ID, &pb.OrganizationID, &pb.OperationType, &pb.RefType, &pb.RefID,
+			&pb.Amount, &pb.Status, &pb.RetryCount, &pb.MaxRetries, &pb.LastErrorMsg,
+			&pb.CreatedAt, &pb.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		pbs = append(pbs, pb)
+	}
+
+	return pbs, rows.Err()
 }
 
 // SQLitePendingBillingRepository SQLite 实现（本地开发）。
@@ -366,4 +522,65 @@ func (r *SQLitePendingBillingRepository) GetByRef(ctx context.Context, orgID, re
 		return nil, err
 	}
 	return pb, nil
+}
+
+// List 列出符合条件的待结算记录（SQLite 实现）。
+func (r *SQLitePendingBillingRepository) List(ctx context.Context, opts PendingBillingFilterOptions) ([]*domain.PendingBilling, error) {
+	if err := opts.Validate(); err != nil {
+		return nil, err
+	}
+	var (
+		conds []string
+		args  []interface{}
+	)
+	conds = append(conds, "organization_id = ?")
+	args = append(args, opts.OrganizationID)
+
+	if opts.Status != "" {
+		conds = append(conds, "status = ?")
+		args = append(args, opts.Status)
+	}
+	if !opts.StartTime.IsZero() {
+		conds = append(conds, "created_at >= ?")
+		args = append(args, opts.StartTime.Unix())
+	}
+	if !opts.EndTime.IsZero() {
+		conds = append(conds, "created_at <= ?")
+		args = append(args, opts.EndTime.Unix())
+	}
+	where := "WHERE " + conds[0]
+	for _, c := range conds[1:] {
+		where += " AND " + c
+	}
+
+	args = append(args, opts.Limit, opts.Offset)
+	query := fmt.Sprintf(`
+		SELECT id, organization_id, operation_type, ref_type, ref_id, amount, status, retry_count, max_retries, last_error_msg, created_at, updated_at
+		FROM pending_billings
+		%s
+		ORDER BY created_at DESC
+		LIMIT ? OFFSET ?
+	`, where)
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var pbs []*domain.PendingBilling
+	for rows.Next() {
+		pb := &domain.PendingBilling{}
+		err := rows.Scan(
+			&pb.ID, &pb.OrganizationID, &pb.OperationType, &pb.RefType, &pb.RefID,
+			&pb.Amount, &pb.Status, &pb.RetryCount, &pb.MaxRetries, &pb.LastErrorMsg,
+			&pb.CreatedAt, &pb.UpdatedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		pbs = append(pbs, pb)
+	}
+
+	return pbs, rows.Err()
 }

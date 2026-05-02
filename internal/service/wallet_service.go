@@ -164,6 +164,36 @@ func (s *WalletService) Debit(ctx context.Context, p CreditParams) (domain.Walle
 	return s.apply(ctx, p, domain.WalletKindDebit, -1)
 }
 
+// InternalCredit 用于系统内部调用（webhook、worker）进行充值操作。
+// 直接传递 organizationID，无需从 context 中提取。
+// 用于需要 system 身份的操作（例如支付网关回调）。
+func (s *WalletService) InternalCredit(ctx context.Context, orgID string, p CreditParams) (domain.WalletTransaction, error) {
+	if orgID == "" {
+		return domain.WalletTransaction{}, errors.New("wallet: organization_id is required")
+	}
+	authCtx := WithRequestAuthContext(ctx, RequestAuthContext{
+		UserID:         "system:wallet-operation",
+		OrganizationID: orgID,
+		Role:           "system",
+	})
+	return s.apply(authCtx, p, domain.WalletKindCredit, +1)
+}
+
+// InternalDebit 用于系统内部调用（worker）进行扣费操作。
+// 直接传递 organizationID，无需从 context 中提取。
+// 用于待结算 worker 自动重试时的扣费。
+func (s *WalletService) InternalDebit(ctx context.Context, orgID string, p CreditParams) (domain.WalletTransaction, error) {
+	if orgID == "" {
+		return domain.WalletTransaction{}, errors.New("wallet: organization_id is required")
+	}
+	authCtx := WithRequestAuthContext(ctx, RequestAuthContext{
+		UserID:         "system:wallet-operation",
+		OrganizationID: orgID,
+		Role:           "system",
+	})
+	return s.apply(authCtx, p, domain.WalletKindDebit, -1)
+}
+
 // DebitOperation 根据操作类型自动扣费，支持幂等性。
 // 若同一操作已扣费（根据 refType + refID），返回 ErrAlreadyDebited。
 // 若操作类型未知，返回错误。

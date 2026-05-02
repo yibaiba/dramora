@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -80,11 +81,14 @@ func (w *PendingBillingWorker) processPendingBilling(ctx context.Context, pb *do
 		return w.markFailed(ctx, pb, "max retries exceeded")
 	}
 
-	// 使用工作者上下文进行扣费
-	workerCtx := w.createWorkerContext(ctx, pb.OrganizationID)
-
-	// 尝试扣费
-	_, err := w.walletSvc.DebitOperation(workerCtx, pb.OperationType, pb.RefType, pb.RefID)
+	// 尝试扣费（使用 InternalDebit）
+	params := CreditParams{
+		Amount:  pb.Amount,
+		Reason:  fmt.Sprintf("pending billing debit: %s", pb.OperationType),
+		RefType: pb.RefType,
+		RefID:   pb.RefID,
+	}
+	_, err := w.walletSvc.InternalDebit(ctx, pb.OrganizationID, params)
 	if err == nil {
 		// 成功，标记为 resolved
 		return w.markResolved(ctx, pb)
@@ -170,16 +174,4 @@ func (w *PendingBillingWorker) incrementRetry(ctx context.Context, pb *domain.Pe
 		return err
 	}
 	return nil
-}
-
-// createWorkerContext 为待结算创建一个带有组织隔离的工作者上下文。
-// 这允许 WalletService 在没有真实用户的情况下执行扣费。
-func (w *PendingBillingWorker) createWorkerContext(ctx context.Context, orgID string) context.Context {
-	// 创建一个虚拟的系统用户上下文，以供 DebitOperation 使用
-	auth := RequestAuthContext{
-		UserID:         "system:pending-billing-worker",
-		OrganizationID: orgID,
-		Role:           RoleWorker,
-	}
-	return WithRequestAuthContext(ctx, auth)
 }
