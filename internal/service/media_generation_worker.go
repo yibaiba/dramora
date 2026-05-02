@@ -101,6 +101,10 @@ func (s *ProductionService) processImageGenerationJob(ctx context.Context, gener
 	current = completed
 	if current.Status == domain.GenerationJobStatusPostprocessing {
 		_, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusSucceeded, "", "image worker completed generation job")
+		if err == nil {
+			// 成功完成后自动扣费
+			s.debitOperationAfterSuccess(ctx, current.ID, domain.OperationTypeImageGeneration)
+		}
 		return err
 	}
 	return nil

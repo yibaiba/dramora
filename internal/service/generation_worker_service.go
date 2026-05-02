@@ -296,6 +296,10 @@ func (s *ProductionService) completeSeedanceGenerationJob(
 	}
 	if current.Status == domain.GenerationJobStatusPostprocessing {
 		_, err := s.advanceGenerationJob(ctx, current, domain.GenerationJobStatusSucceeded, "", "seedance worker completed generation job")
+		if err == nil {
+			// 成功完成后自动扣费
+			s.debitOperationAfterSuccess(ctx, current.ID, domain.OperationTypeVideoGeneration)
+		}
 		return err
 	}
 	return nil

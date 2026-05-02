@@ -21,6 +21,7 @@ type ProductionService struct {
 	agentSvc     *AgentService
 	projectSvc   *ProjectService
 	providerSvc  *ProviderService
+	walletSvc    *WalletService
 	mediaStorage media.Storage
 	metrics      workerMetrics
 }
@@ -80,6 +81,10 @@ func (s *ProductionService) SetAgentService(agentSvc *AgentService) {
 
 func (s *ProductionService) SetProjectService(projectSvc *ProjectService) {
 	s.projectSvc = projectSvc
+}
+
+func (s *ProductionService) SetWalletService(walletSvc *WalletService) {
+	s.walletSvc = walletSvc
 }
 
 // SetMediaStorage 注入媒体二进制存储后端，audio worker 在收到非 URL（仅字节）

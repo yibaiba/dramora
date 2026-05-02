@@ -46,6 +46,10 @@ func (s *ProductionService) completeGeneratedStoryAnalysis(
 	if err != nil {
 		return domain.StoryAnalysis{}, err
 	}
+
+	// 成功完成后自动扣费（walletSvc 未注入时静默跳过）
+	s.debitOperationAfterSuccess(ctx, generationJob.ID, domain.OperationTypeStoryAnalysis)
+
 	return completion.StoryAnalysis, nil
 }
 
@@ -268,4 +272,18 @@ func storyAnalysisAgentOutputsFromRuns(runs map[string]*workflow.NodeRun) []doma
 		agentOutputs = append(agentOutputs, output)
 	}
 	return agentOutputs
+}
+
+// debitOperationAfterSuccess 成功完成后自动扣费（幂等性通过 generationJobID 实现）。
+// 若 walletSvc 未注入或扣费失败，仅记录日志，不中断主流程。
+func (s *ProductionService) debitOperationAfterSuccess(
+	ctx context.Context,
+	generationJobID string,
+	opType domain.OperationType,
+) {
+	if s == nil || s.walletSvc == nil {
+		return
+	}
+	// 静默扣费，失败不影响主流程
+	_, _ = s.walletSvc.DebitOperation(ctx, opType, "generation_job_id", generationJobID)
 }
