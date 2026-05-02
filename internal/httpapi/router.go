@@ -26,6 +26,7 @@ type RouterConfig struct {
 	AgentService        *service.AgentService
 	WalletService       *service.WalletService
 	NotificationService *service.NotificationService
+	PaymentService      *service.PaymentService
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -39,6 +40,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	router.Get("/healthz", api.health)
 	router.Get("/readyz", api.readiness)
 	router.Get("/metrics", api.prometheusMetrics)
+	router.Post("/webhook/payment", api.handlePaymentWebhook)
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Use(authContextMiddleware(cfg.AuthService))
@@ -98,6 +100,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/wallet", api.getWallet)
 		r.Get("/wallet/transactions", api.listWalletTransactions)
 		r.Post("/wallet:charge", api.handleChargeWallet)
+		r.Post("/wallet:charge:initiate", api.initiateChargeWallet)
 		r.Get("/operation-costs", api.getOperationCosts)
 		r.Get("/notifications", api.listNotifications)
 
@@ -137,6 +140,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 type api struct {
 	readinessChecker    Readiness
+	logger              *slog.Logger
 	authService         *service.AuthService
 	projectService      *service.ProjectService
 	productionService   *service.ProductionService
@@ -144,11 +148,13 @@ type api struct {
 	agentService        *service.AgentService
 	walletService       *service.WalletService
 	notificationService *service.NotificationService
+	paymentService      *service.PaymentService
 }
 
 func newAPI(cfg RouterConfig) *api {
 	return &api{
 		readinessChecker:    cfg.Readiness,
+		logger:              cfg.Logger,
 		authService:         cfg.AuthService,
 		projectService:      cfg.ProjectService,
 		productionService:   cfg.ProductionService,
@@ -156,5 +162,6 @@ func newAPI(cfg RouterConfig) *api {
 		agentService:        cfg.AgentService,
 		walletService:       cfg.WalletService,
 		notificationService: cfg.NotificationService,
+		paymentService:      cfg.PaymentService,
 	}
 }

@@ -21,6 +21,12 @@ type Config struct {
 	JWTSecret         string
 	InlineWorker      bool
 	WorkerQueues      []string
+	// Payment gateway configuration
+	PaymentProvider      string // "stripe" (default) / "alipay" / "wechat"
+	StripeSecretKey      string
+	StripeWebhookSecret  string
+	StripeSuccessURL     string
+	StripeCancelURL      string
 }
 
 func LoadConfig() (Config, error) {
@@ -51,6 +57,12 @@ func LoadConfig() (Config, error) {
 		JWTSecret:         envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
 		InlineWorker:      inlineWorker,
 		WorkerQueues:      envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
+		// Payment gateway
+		PaymentProvider:      envString("MANMU_PAYMENT_PROVIDER", "stripe"),
+		StripeSecretKey:      os.Getenv("MANMU_STRIPE_SECRET_KEY"),
+		StripeWebhookSecret:  os.Getenv("MANMU_STRIPE_WEBHOOK_SECRET"),
+		StripeSuccessURL:     envString("MANMU_STRIPE_SUCCESS_URL", "http://localhost:5173/wallet?status=success"),
+		StripeCancelURL:      envString("MANMU_STRIPE_CANCEL_URL", "http://localhost:5173/wallet?status=cancel"),
 	}, nil
 }
 

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/yibaiba/dramora/internal/media"
+	"github.com/yibaiba/dramora/internal/provider/payment"
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
@@ -23,6 +24,7 @@ type Container struct {
 	AgentService         *service.AgentService
 	WalletService        *service.WalletService
 	NotificationService  *service.NotificationService
+	PaymentService       *service.PaymentService
 	PendingBillingWorker *service.PendingBillingWorker
 }
 
@@ -44,6 +46,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var walletRepo repo.WalletRepository = repo.NewMemoryWalletRepository()
 	var notificationRepo repo.NotificationRepository = repo.NewMemoryNotificationRepository()
 	var pendingBillingRepo repo.PendingBillingRepository = repo.NewMemoryPendingBillingRepository()
+	var paymentOrderRepo repo.PaymentOrderRepository = repo.NewMemoryPaymentOrderRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -60,6 +63,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		walletRepo = repo.NewPostgresWalletRepository(openedDB.Pool)
 		notificationRepo = repo.NewPostgresNotificationRepository(openedDB.Pool)
 		pendingBillingRepo = repo.NewPostgresPendingBillingRepository(openedDB.Pool)
+		paymentOrderRepo = repo.NewPaymentOrderRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -78,6 +82,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		walletRepo = repo.NewSQLiteWalletRepository(openedDB.DB)
 		notificationRepo = repo.NewSQLiteNotificationRepository(openedDB.DB)
 		pendingBillingRepo = repo.NewSQLitePendingBillingRepository(openedDB.DB)
+		paymentOrderRepo = repo.NewMemoryPaymentOrderRepository()
 		logger.Info("using SQLite", "path", dbPath)
 	}
 
@@ -129,6 +134,15 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	pendingBillingWorker := service.NewPendingBillingWorker(logger, pendingBillingRepo, walletSvc)
 
+	// 初始化支付提供商（Stripe）
+	stripeProvider := payment.NewStripeProvider(
+		cfg.StripeSecretKey,
+		cfg.StripeWebhookSecret,
+		cfg.StripeSuccessURL,
+		cfg.StripeCancelURL,
+	)
+	paymentSvc := service.NewPaymentService(paymentOrderRepo, walletSvc, stripeProvider, logger)
+
 	return &Container{
 		cfg:                  cfg,
 		ctx:                  ctx,
@@ -142,6 +156,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		AgentService:         agentSvc,
 		WalletService:        walletSvc,
 		NotificationService:  notificationSvc,
+		PaymentService:       paymentSvc,
 		PendingBillingWorker: pendingBillingWorker,
 	}, nil
 }
