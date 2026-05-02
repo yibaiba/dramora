@@ -17,20 +17,32 @@ var ErrAlreadyDebited = errors.New("wallet: operation already debited")
 
 // WalletService 围绕 WalletRepository 实现按组织上下文的钱包能力。
 type WalletService struct {
-	repo               repo.WalletRepository
-	notificationSvc    *NotificationService
-	pendingBillingRepo repo.PendingBillingRepository
+	repo                repo.WalletRepository
+	notificationSvc     *NotificationService
+	pendingBillingRepo  repo.PendingBillingRepository
+	operationCostRepo   repo.OperationCostRepository
 }
 
 // NewWalletService 构造 WalletService；repo 为 nil 时所有方法均返回 ErrUnauthorized。
 func NewWalletService(r repo.WalletRepository, notifSvc *NotificationService) *WalletService {
-	return &WalletService{repo: r, notificationSvc: notifSvc}
+	return &WalletService{
+		repo:              r,
+		notificationSvc:   notifSvc,
+		operationCostRepo: repo.NewMemoryOperationCostRepository(), // 默认使用内存仓库
+	}
 }
 
 // SetPendingBillingRepository 设置待结算仓库（用于扣费失败场景）。
 func (s *WalletService) SetPendingBillingRepository(pbr repo.PendingBillingRepository) {
 	if s != nil {
 		s.pendingBillingRepo = pbr
+	}
+}
+
+// SetOperationCostRepository 设置操作成本仓库。
+func (s *WalletService) SetOperationCostRepository(ocr repo.OperationCostRepository) {
+	if s != nil {
+		s.operationCostRepo = ocr
 	}
 }
 
@@ -49,6 +61,28 @@ func (s *WalletService) requireAuth(ctx context.Context) (RequestAuthContext, er
 		return RequestAuthContext{}, ErrUnauthorized
 	}
 	return auth, nil
+}
+
+// getOperationCostFromDB 获取操作成本，优先查询数据库，回退到常量。
+// 支持组织隔离定价。
+func (s *WalletService) getOperationCostFromDB(ctx context.Context, orgID string, opType domain.OperationType) (int64, error) {
+	if s.operationCostRepo == nil {
+		// 回退到常量
+		return domain.GetOperationCost(opType)
+	}
+
+	row, err := s.operationCostRepo.GetCost(ctx, orgID, opType)
+	if err != nil {
+		// 查询出错，回退到常量
+		return domain.GetOperationCost(opType)
+	}
+
+	if row == nil {
+		// 未找到，回退到常量
+		return domain.GetOperationCost(opType)
+	}
+
+	return row.CreditsCost, nil
 }
 
 // GetWallet 返回当前组织的余额与最近 10 条流水。
@@ -137,8 +171,8 @@ func (s *WalletService) DebitOperation(
 		return domain.WalletTransaction{}, err
 	}
 
-	// 获取操作成本
-	cost, err := domain.GetOperationCost(opType)
+	// 获取操作成本（先查数据库，回退到常量）
+	cost, err := s.getOperationCostFromDB(ctx, auth.OrganizationID, opType)
 	if err != nil {
 		return domain.WalletTransaction{}, err
 	}

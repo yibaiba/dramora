@@ -88,3 +88,31 @@ type PendingBilling struct {
 	CreatedAt      int64 // Unix timestamp
 	UpdatedAt      int64 // Unix timestamp
 }
+
+// OperationCostRow 表示数据库中的操作成本记录。
+type OperationCostRow struct {
+	ID             int32
+	OperationType  OperationType
+	OrganizationID string
+	CreditsCost    int64
+	EffectiveAt    int64 // Unix timestamp
+	ExpiresAt      *int64
+	Notes          *string
+	CreatedAt      int64
+	CreatedBy      *string
+	UpdatedAt      int64
+	UpdatedBy      *string
+}
+
+// OperationCostHistoryRow 表示成本变更历史。
+type OperationCostHistoryRow struct {
+	ID             int32
+	OperationType  OperationType
+	OrganizationID string
+	OldCost        *int64
+	NewCost        int64
+	EffectiveAt    int64
+	Reason         *string
+	ChangedBy      string
+	ChangedAt      int64
+}
