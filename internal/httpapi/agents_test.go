@@ -71,17 +71,22 @@ func TestStreamAgentRunEmitsDeltaAndDone(t *testing.T) {
 	providerSvc := service.NewProviderService(stub)
 	agentSvc := service.NewAgentService(providerSvc)
 
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	authService := service.NewAuthService(repo.NewMemoryIdentityRepository(), "test-secret", nil)
+
 	router := NewRouter(RouterConfig{
-		Logger:       slog.New(slog.NewTextHandler(io.Discard, nil)),
+		Logger:       logger,
 		Version:      "test",
 		AgentService: agentSvc,
+		AuthService:  authService,
 	})
+	authenticatedRouter := newAuthenticatedTestRouter(router, authService)
 
 	body := strings.NewReader(`{"role":"story_analyst","source_text":"小镇里的雨夜"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/agents/stream", body)
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
-	router.ServeHTTP(rec, req)
+	authenticatedRouter.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

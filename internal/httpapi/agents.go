@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+
+	"github.com/yibaiba/dramora/internal/service"
 )
 
 type streamAgentRunRequest struct {
 	Role       string            `json:"role"`
 	SourceText string            `json:"source_text"`
 	Context    map[string]string `json:"context,omitempty"`
+	EpisodeID  string            `json:"episode_id,omitempty"`
 }
 
 type streamAgentDoneFrame struct {
@@ -47,6 +50,24 @@ func (a *api) streamAgentRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 组织隔离验证：
+	// - 如果指定了 episodeID，验证用户可以访问该 episode（自动检查组织隔离）
+	// - 如果没有指定，则此端点仅允许 admin 使用（诊断/演示目的）
+	ctx := r.Context()
+	if req.EpisodeID != "" {
+		if _, err := a.projectService.GetEpisode(ctx, req.EpisodeID); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+	} else {
+		// 无 episode context 时需要 admin/owner 权限
+		auth, ok := service.RequestAuthFromContext(ctx)
+		if !ok || (auth.Role != "admin" && auth.Role != "owner") {
+			writeError(w, http.StatusForbidden, "permission_denied", "admin/owner role required for unrestricted agent stream")
+			return
+		}
+	}
+
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -65,7 +86,6 @@ func (a *api) streamAgentRun(w http.ResponseWriter, r *http.Request) {
 		return nil
 	}
 
-	ctx := r.Context()
 	result, runErr := a.agentService.RunSingleAgentStream(ctx, req.Role, req.SourceText, req.Context, func(delta string) error {
 		if err := ctx.Err(); err != nil {
 			return err
