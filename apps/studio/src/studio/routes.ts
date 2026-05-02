@@ -1,5 +1,6 @@
 import {
   Activity,
+  Bell,
   BookOpenText,
   Boxes,
   Coins,
@@ -17,6 +18,7 @@ export const studioRoutePaths = {
   assetsGraph: '/assets-graph',
   home: '/',
   mySessions: '/account/sessions',
+  notifications: '/notifications',
   organizationInvitations: '/admin/invitations',
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
@@ -97,6 +99,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'wallet',
     label: 'Wallet',
     path: studioRoutePaths.wallet,
+  },
+  {
+    description: '查看系统通知：钱包操作、邀请、配置变更。',
+    icon: Bell,
+    key: 'notifications',
+    label: 'Notifications',
+    path: studioRoutePaths.notifications,
   },
   {
     description: '查看 worker 组织上下文跳过指标（owner / admin）。',
