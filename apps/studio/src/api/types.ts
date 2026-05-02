@@ -771,3 +771,14 @@ export type ChargeWalletRequest = {
   description?: string
   payment_method?: string
 }
+
+export type ChargeInitiateRequest = {
+  amount: number
+  currency: string
+}
+
+export type ChargeInitiateResponse = {
+  sessionId: string
+  url: string
+  orderId: string
+}

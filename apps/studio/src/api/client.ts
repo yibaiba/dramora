@@ -52,6 +52,8 @@ import type {
   ChatMessageRequest,
   ChatResponse,
   ChargeWalletRequest,
+  ChargeInitiateRequest,
+  ChargeInitiateResponse,
 } from './types'
 
 
@@ -789,6 +791,15 @@ export async function chargeWallet(
   req: ChargeWalletRequest
 ): Promise<{ transaction: WalletTransaction; charge_id: string }> {
   return fetchJSON(`/api/v1/wallet:charge`, {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function initiateChargeWallet(
+  req: ChargeInitiateRequest
+): Promise<ChargeInitiateResponse> {
+  return fetchJSON(`/api/v1/wallet:charge:initiate`, {
     body: JSON.stringify(req),
     method: 'POST',
   })

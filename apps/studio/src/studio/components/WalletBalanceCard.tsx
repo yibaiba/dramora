@@ -5,10 +5,9 @@ import ChargeWalletDialog from './ChargeWalletDialog'
 
 interface WalletBalanceCardProps {
   wallet?: WalletSnapshot
-  onChargeSuccess?: () => void
 }
 
-export default function WalletBalanceCard({ wallet, onChargeSuccess }: WalletBalanceCardProps) {
+export default function WalletBalanceCard({ wallet }: WalletBalanceCardProps) {
   const [isChargeDialogOpen, setIsChargeDialogOpen] = useState(false)
   const balance = wallet?.wallet?.balance ?? 0
   const lastUpdated = wallet?.wallet?.updated_at ? new Date(wallet.wallet.updated_at).toLocaleString() : 'Never'
@@ -66,9 +65,6 @@ export default function WalletBalanceCard({ wallet, onChargeSuccess }: WalletBal
       <ChargeWalletDialog
         isOpen={isChargeDialogOpen}
         onClose={() => setIsChargeDialogOpen(false)}
-        onSuccess={() => {
-          onChargeSuccess?.()
-        }}
       />
     </>
   )

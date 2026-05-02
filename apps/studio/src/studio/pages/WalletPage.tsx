@@ -4,7 +4,7 @@ import WalletBalanceCard from '../components/WalletBalanceCard'
 import OperationCostsTable from '../components/OperationCostsTable'
 
 export default function WalletPage() {
-  const { data: wallet, isLoading: walletLoading, refetch: refetchWallet } = useWallet()
+  const { data: wallet, isLoading: walletLoading } = useWallet()
   const { data: costs, isLoading: costsLoading } = useOperationCosts()
 
   if (walletLoading || costsLoading) {
@@ -25,7 +25,7 @@ export default function WalletPage() {
 
       {/* Balance Card */}
       <div className="mb-12">
-        <WalletBalanceCard wallet={wallet} onChargeSuccess={() => refetchWallet()} />
+        <WalletBalanceCard wallet={wallet} />
       </div>
 
       {/* Operation Costs Table */}
