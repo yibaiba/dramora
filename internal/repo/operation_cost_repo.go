@@ -24,6 +24,9 @@ type OperationCostRepository interface {
 
 	// UpdateCost 更新操作成本（新建记录，不修改现有记录）。
 	UpdateCost(ctx context.Context, oldCost, newCost *domain.OperationCostRow, reason string, changedBy string) error
+
+	// GetCostHistory 获取指定操作类型的修改历史。
+	GetCostHistory(ctx context.Context, orgID string, opType domain.OperationType) ([]*domain.OperationCostHistoryRow, error)
 }
 
 // MemoryOperationCostRepository 内存实现（MVP 和测试）。
@@ -146,6 +149,12 @@ func (r *MemoryOperationCostRepository) UpdateCost(ctx context.Context, oldCost,
 	r.costs[key] = newCost
 	// 内存实现不记录历史，但实际应记录
 	return nil
+}
+
+func (r *MemoryOperationCostRepository) GetCostHistory(ctx context.Context, orgID string, opType domain.OperationType) ([]*domain.OperationCostHistoryRow, error) {
+	// 内存实现不提供历史记录；PostgreSQL 实现会提供
+	// 返回空列表而不是错误，避免中断 admin 查询流程
+	return []*domain.OperationCostHistoryRow{}, nil
 }
 
 // PostgresOperationCostRepository PostgreSQL 实现。
@@ -271,4 +280,38 @@ func (r *PostgresOperationCostRepository) UpdateCost(ctx context.Context, oldCos
 		newCost.EffectiveAt, reason, changedBy,
 	)
 	return err
+}
+
+func (r *PostgresOperationCostRepository) GetCostHistory(ctx context.Context, orgID string, opType domain.OperationType) ([]*domain.OperationCostHistoryRow, error) {
+	query := `
+		SELECT 
+			id, operation_type, organization_id, old_cost, new_cost,
+			effective_at, reason, changed_by, changed_at
+		FROM operation_cost_history
+		WHERE operation_type = $1 
+			AND organization_id = $2
+		ORDER BY changed_at DESC
+		LIMIT 100
+	`
+
+	rows, err := r.pool.Query(ctx, query, opType, orgID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var history []*domain.OperationCostHistoryRow
+	for rows.Next() {
+		h := &domain.OperationCostHistoryRow{}
+		err := rows.Scan(
+			&h.ID, &h.OperationType, &h.OrganizationID, &h.OldCost, &h.NewCost,
+			&h.EffectiveAt, &h.Reason, &h.ChangedBy, &h.ChangedAt,
+		)
+		if err != nil {
+			return nil, err
+		}
+		history = append(history, h)
+	}
+
+	return history, rows.Err()
 }

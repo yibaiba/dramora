@@ -46,6 +46,14 @@ func (s *WalletService) SetOperationCostRepository(ocr repo.OperationCostReposit
 	}
 }
 
+// GetOperationCostRepository 返回操作成本仓库（供 Admin handlers 使用）。
+func (s *WalletService) GetOperationCostRepository() repo.OperationCostRepository {
+	if s != nil {
+		return s.operationCostRepo
+	}
+	return nil
+}
+
 // WalletSnapshot 是 GET /wallet 的统一读模型。
 type WalletSnapshot struct {
 	Wallet             domain.Wallet
