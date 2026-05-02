@@ -8,6 +8,7 @@ import {
   useStoryAnalyses,
   useWorkflowRun,
 } from '../../api/hooks'
+import { generateFCPXML } from '../../lib/fcpxml-generator'
 import { TimelineWorkspace } from '../components/TimelineWorkspace'
 import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import { useStudioSelection } from '../hooks/useStudioSelection'
@@ -52,6 +53,29 @@ export function TimelineExportPage() {
     | { fromStoryboard?: boolean; selectedShotCode?: string; shotsCount?: number }
     | null
 
+  const handleExportFCPXML = () => {
+    if (!timeline) {
+      console.warn('Timeline not available for FCPXML export')
+      return
+    }
+
+    try {
+      const assetsMap = new Map()
+      const fcpxmlContent = generateFCPXML(timeline, assetsMap)
+      const blob = new Blob([fcpxmlContent], { type: 'application/xml' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `episode-${activeEpisode?.id}-timeline-${Date.now()}.fcpxml`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('FCPXML 导出失败:', error)
+    }
+  }
+
   return (
     <section className="studio-page timeline-page" aria-labelledby="timeline-export-title">
       <div className="board-header">
@@ -60,6 +84,15 @@ export function TimelineExportPage() {
           <span>汇总镜头到剪辑时间线，保存版本并发起导出。</span>
         </div>
         <div className="board-actions">
+          <button
+            onClick={handleExportFCPXML}
+            disabled={!timeline}
+            className="hero-secondary-action"
+            title={!timeline ? '请先保存时间线' : '导出为 FCPXML 格式'}
+          >
+            <Download aria-hidden="true" />
+            导出 FCPXML
+          </button>
           <Link className="hero-secondary-action" to={studioRoutePaths.storyboard}>
             <Boxes aria-hidden="true" />
             回到分镜台
