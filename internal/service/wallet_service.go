@@ -181,6 +181,68 @@ func (s *WalletService) DebitOperation(
 	return tx, nil
 }
 
+// DebitChatOperation 基于 token 数为对话操作扣费。
+// 成本计算：(inputTokens + outputTokens) / 1000 * TokenCostPerThousand
+// 参数：
+// - inputTokens: 模型输入 tokens 数
+// - outputTokens: 模型输出 tokens 数
+// - refID: 对话消息 ID（用于幂等性检查）
+func (s *WalletService) DebitChatOperation(
+	ctx context.Context,
+	inputTokens int64,
+	outputTokens int64,
+	refID string,
+) (domain.WalletTransaction, error) {
+	auth, err := s.requireAuth(ctx)
+	if err != nil {
+		return domain.WalletTransaction{}, err
+	}
+
+	// 计算成本
+	cost := domain.CalculateChatCost(inputTokens, outputTokens)
+	if cost == 0 {
+		// 不产生成本的对话，不需要扣费
+		return domain.WalletTransaction{}, nil
+	}
+
+	// 检查幂等性（是否已扣费）
+	existingTx, err := s.repo.GetTransactionByRef(ctx, auth.OrganizationID, string(domain.OperationTypeChat), refID)
+	if err == nil && existingTx != nil {
+		// 已存在相同 ref 的交易，返回已扣费
+		return *existingTx, ErrAlreadyDebited
+	}
+
+	// 尝试扣费
+	params := CreditParams{
+		Amount:  cost,
+		Reason:  fmt.Sprintf("chat: %d input + %d output tokens", inputTokens, outputTokens),
+		RefType: string(domain.OperationTypeChat),
+		RefID:   refID,
+	}
+
+	tx, err := s.apply(ctx, params, domain.WalletKindDebit, -1)
+	if err != nil {
+		if errors.Is(err, ErrInsufficientBalance) {
+			// 余额不足，创建待结算记录
+			if s.pendingBillingRepo != nil {
+				pb := &domain.PendingBilling{
+					OrganizationID: auth.OrganizationID,
+					OperationType:  domain.OperationTypeChat,
+					RefType:        string(domain.OperationTypeChat),
+					RefID:          refID,
+					Amount:         cost,
+					Status:         domain.PendingBillingStatusPending,
+					MaxRetries:     5,
+				}
+				_ = s.pendingBillingRepo.Create(ctx, pb)
+			}
+		}
+		return domain.WalletTransaction{}, err
+	}
+
+	return tx, nil
+}
+
 func (s *WalletService) apply(
 	ctx context.Context,
 	p CreditParams,

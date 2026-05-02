@@ -228,11 +228,12 @@ func TestDebitOperationWithDifferentOperationTypes(t *testing.T) {
 	walletSvc.SetPendingBillingRepository(pendingBillingRepo)
 
 	// 测试各种操作类型的扣费
+	// 注：OperationTypeChat 不再用 DebitOperation，使用 DebitChatOperation（基于 token）
 	tests := []struct {
 		opType   domain.OperationType
 		expected int64
 	}{
-		{domain.OperationTypeChat, 1},
+		// {domain.OperationTypeChat, 1}, // Chat 使用 token 计费，见下方
 		{domain.OperationTypeImageGeneration, 100},
 		{domain.OperationTypeVideoGeneration, 200},
 		{domain.OperationTypeStoryboardEdit, 5},
@@ -248,6 +249,14 @@ func TestDebitOperationWithDifferentOperationTypes(t *testing.T) {
 
 		initialBalance -= tc.expected
 	}
+
+	// 测试 chat 操作（基于 token）
+	// 1000 tokens = 10 积分；(500 + 600 + 999) / 1000 * 10 = 2 * 10 = 20
+	_, err = walletSvc.DebitChatOperation(ctx, 500, 600, "chat-msg-1")
+	if err != nil {
+		t.Fatalf("failed to debit chat: %v", err)
+	}
+	initialBalance -= 20
 
 	// 验证最终余额
 	snap, err := walletSvc.GetWallet(ctx)

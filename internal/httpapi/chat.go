@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/provider"
 )
 
@@ -69,10 +68,16 @@ func (a *api) handleChatMessage(w http.ResponseWriter, r *http.Request) {
 	// 生成响应 ID
 	chatResponseID := fmt.Sprintf("chat-%d", time.Now().UnixNano())
 
-	// 扣费 1 积分（chat operation）
+	// 扣费（基于 token 数）
 	// 遵循 Phase 2 的幂等性策略：以 (refType, refId) 唯一标识
-	// refType = "chat_message", refId = chatResponseID
-	_, _ = a.walletService.DebitOperation(ctx, domain.OperationTypeChat, "chat_message", chatResponseID)
+	// refType = "chat", refId = chatResponseID
+	inputTokens := int64(0)
+	outputTokens := int64(0)
+	if llmResp.TokenCount > 0 {
+		// 注：当前实现只返回 output tokens，input tokens 需要后续改进
+		outputTokens = int64(llmResp.TokenCount)
+	}
+	_, _ = a.walletService.DebitChatOperation(ctx, inputTokens, outputTokens, chatResponseID)
 	// 扣费失败不阻塞响应（silent swallow）
 	// PendingBillingWorker 会后续重试
 

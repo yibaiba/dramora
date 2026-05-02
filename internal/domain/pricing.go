@@ -22,8 +22,9 @@ const (
 
 // OperationCosts 定义所有操作类型的成本（积分）。
 // MVP 使用常量；后续可迁移到配置或数据库。
+// 对于 OperationTypeChat，使用基于 token 的计费：每 1000 tokens = TokenCostPerThousand 积分
 var OperationCosts = map[OperationType]int64{
-	OperationTypeChat:            1,
+	OperationTypeChat:            0, // Chat 成本基于 token 计算，单位见 TokenCostPerThousand
 	OperationTypeStoryAnalysis:   50,
 	OperationTypeImageGeneration: 100,
 	OperationTypeVideoGeneration: 200,
@@ -32,7 +33,23 @@ var OperationCosts = map[OperationType]int64{
 	OperationTypeSceneEdit:       5,
 }
 
+// TokenCostPerThousand 定义每 1000 tokens 的成本（积分）。
+// 例如：1000 tokens = 10 积分，则 TokenCostPerThousand = 10。
+const TokenCostPerThousand int64 = 10
+
+// CalculateChatCost 基于 input 和 output tokens 计算对话成本（积分）。
+func CalculateChatCost(inputTokens, outputTokens int64) int64 {
+	if inputTokens <= 0 && outputTokens <= 0 {
+		return 0
+	}
+	totalTokens := inputTokens + outputTokens
+	// 向上取整：确保即使少于 1000 tokens 也至少收费基础成本
+	cost := (totalTokens + 999) / 1000 * TokenCostPerThousand
+	return cost
+}
+
 // GetOperationCost 返回指定操作类型的成本。
+// 若操作类型为 chat，返回 0（需使用 CalculateChatCost 计算）。
 // 若操作类型未知，返回 0 和 error。
 func GetOperationCost(opType OperationType) (int64, error) {
 	if cost, ok := OperationCosts[opType]; ok {
