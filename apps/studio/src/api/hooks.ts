@@ -72,6 +72,10 @@ import {
 	getAdminOperationCosts,
 	updateAdminOperationCosts,
 	getAdminOperationCostHistory,
+	getAdminBillingReports,
+	generateAdminBillingReport,
+	getAdminBillingReportByID,
+	getAdminBillingReportSummary,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -93,6 +97,7 @@ import type {
   ChatMessageRequest,
   ChargeWalletRequest,
   ChargeInitiateRequest,
+  GenerateBillingReportRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -814,6 +819,41 @@ export function useAdminOperationCostHistory(operationType: string, enabled = fa
     enabled,
     queryFn: () => getAdminOperationCostHistory(operationType),
     queryKey: ['admin', 'operation-costs', operationType, 'history'],
+  })
+}
+
+// Phase 10: Billing Reports Hooks
+export function useAdminBillingReports(params: { limit?: number; offset?: number } = {}, enabled = false) {
+  return useQuery({
+    enabled,
+    queryFn: () => getAdminBillingReports(params),
+    queryKey: ['admin', 'billing-reports', params.limit, params.offset],
+  })
+}
+
+export function useGenerateAdminBillingReport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: GenerateBillingReportRequest) => generateAdminBillingReport(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'billing-reports'] })
+    },
+  })
+}
+
+export function useAdminBillingReportByID(reportID: string, enabled = false) {
+  return useQuery({
+    enabled,
+    queryFn: () => getAdminBillingReportByID(reportID),
+    queryKey: ['admin', 'billing-reports', reportID],
+  })
+}
+
+export function useAdminBillingReportSummary(reportID: string, enabled = false) {
+  return useQuery({
+    enabled,
+    queryFn: () => getAdminBillingReportSummary(reportID),
+    queryKey: ['admin', 'billing-reports', reportID, 'summary'],
   })
 }
 

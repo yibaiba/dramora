@@ -57,6 +57,9 @@ import type {
   OperationCostAdminDTO,
   OperationCostHistoryDTO,
   UpdateOperationCostsRequest,
+  BillingReport,
+  BillingReportDetail,
+  GenerateBillingReportRequest,
 } from './types'
 
 
@@ -825,4 +828,48 @@ export async function getAdminOperationCostHistory(
   operationType: string
 ): Promise<{ history: OperationCostHistoryDTO[] }> {
   return fetchJSON(`/api/v1/admin/operation-costs/${encodeURIComponent(operationType)}/history`)
+}
+
+// Phase 10: Billing Reports API Client
+export async function getAdminBillingReports(params: {
+  limit?: number
+  offset?: number
+} = {}): Promise<{ reports: BillingReport[]; total: number; limit: number; offset: number }> {
+  const search = new URLSearchParams()
+  if (params.limit !== undefined) search.set('limit', String(params.limit))
+  if (params.offset !== undefined) search.set('offset', String(params.offset))
+  const qs = search.toString()
+  return fetchJSON(`/api/v1/admin/billing-reports${qs ? `?${qs}` : ''}`)
+}
+
+export async function generateAdminBillingReport(
+  req: GenerateBillingReportRequest
+): Promise<BillingReport> {
+  return fetchJSON('/api/v1/admin/billing-reports:generate', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function getAdminBillingReportByID(reportID: string): Promise<BillingReportDetail> {
+  return fetchJSON(`/api/v1/admin/billing-reports/${encodeURIComponent(reportID)}`)
+}
+
+export async function getAdminBillingReportSummary(
+  reportID: string
+): Promise<{
+  id: string
+  period_start: number
+  period_end: number
+  total_debit_amount: number
+  total_credit_amount: number
+  total_refund_amount: number
+  net_amount: number
+  pending_billing_count: number
+  resolved_billing_count: number
+  failed_billing_count: number
+  status: string
+  generated_at: number
+}> {
+  return fetchJSON(`/api/v1/admin/billing-reports/${encodeURIComponent(reportID)}/summary`)
 }

@@ -13,12 +13,12 @@ import (
 
 // operationCostAdminResponse 对应单条操作成本记录的 DTO。
 type operationCostAdminResponse struct {
-	ID             int32     `json:"id"`
-	OperationType  string    `json:"operation_type"`
-	OrganizationID string    `json:"organization_id"`
-	CreditsCost    int64     `json:"credits_cost"`
-	EffectiveAt    int64     `json:"effective_at"`
-	UpdatedAt      int64     `json:"updated_at"`
+	ID             int32  `json:"id"`
+	OperationType  string `json:"operation_type"`
+	OrganizationID string `json:"organization_id"`
+	CreditsCost    int64  `json:"credits_cost"`
+	EffectiveAt    int64  `json:"effective_at"`
+	UpdatedAt      int64  `json:"updated_at"`
 }
 
 func operationCostAdminDTO(row *domain.OperationCostRow) operationCostAdminResponse {
@@ -40,15 +40,15 @@ type updateOperationCostRequest struct {
 
 // operationCostHistoryResponse 对应单条审计日志记录的 DTO。
 type operationCostHistoryResponse struct {
-	ID             int32     `json:"id"`
-	OperationType  string    `json:"operation_type"`
-	OrganizationID string    `json:"organization_id"`
-	OldCost        *int64    `json:"old_cost"`
-	NewCost        int64     `json:"new_cost"`
-	EffectiveAt    int64     `json:"effective_at"`
-	Reason         *string   `json:"reason"`
-	ChangedBy      string    `json:"changed_by"`
-	ChangedAt      int64     `json:"changed_at"`
+	ID             int32   `json:"id"`
+	OperationType  string  `json:"operation_type"`
+	OrganizationID string  `json:"organization_id"`
+	OldCost        *int64  `json:"old_cost"`
+	NewCost        int64   `json:"new_cost"`
+	EffectiveAt    int64   `json:"effective_at"`
+	Reason         *string `json:"reason"`
+	ChangedBy      string  `json:"changed_by"`
+	ChangedAt      int64   `json:"changed_at"`
 }
 
 func operationCostHistoryDTO(row *domain.OperationCostHistoryRow) operationCostHistoryResponse {

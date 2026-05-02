@@ -116,3 +116,43 @@ type OperationCostHistoryRow struct {
 	ChangedBy      string
 	ChangedAt      int64
 }
+
+// ReportStatus 表示清算报表的状态。
+type ReportStatus string
+
+const (
+	// ReportStatusDraft 草稿状态（未最终确认）。
+	ReportStatusDraft ReportStatus = "draft"
+	// ReportStatusFinalized 已最终确认状态。
+	ReportStatusFinalized ReportStatus = "finalized"
+)
+
+// BillingReport 代表一个清算周期的财务报表。
+type BillingReport struct {
+	ID                   string
+	OrganizationID       string
+	PeriodStart          int64 // Unix timestamp
+	PeriodEnd            int64 // Unix timestamp
+	TotalDebitAmount     int64 // 总扣费积分
+	TotalCreditAmount    int64 // 总充值积分
+	TotalRefundAmount    int64 // 总退款积分
+	TotalAdjustAmount    int64 // 总调账积分
+	NetAmount            int64 // 净额 (credit+refund+adjust - debit)
+	PendingBillingCount  int
+	PendingBillingAmount int64
+	ResolvedBillingCount int
+	FailedBillingCount   int
+	Status               ReportStatus
+	GeneratedAt          int64
+	GeneratedBy          string
+	CreatedAt            int64
+	UpdatedAt            int64
+}
+
+// BillingBreakdown 按操作类型细分的成本明细。
+type BillingBreakdown struct {
+	OperationType    OperationType
+	UnitCost         int64 // 该周期的单位成本
+	UsageCount       int64 // 操作次数
+	TotalDebitAmount int64 // 该操作类型总扣费
+}

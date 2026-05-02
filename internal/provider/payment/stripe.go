@@ -14,10 +14,10 @@ import (
 
 // StripeProvider 实现 Stripe 支付网关适配
 type StripeProvider struct {
-	secretKey      string
-	webhookSecret  string
-	successURL     string
-	cancelURL      string
+	secretKey     string
+	webhookSecret string
+	successURL    string
+	cancelURL     string
 }
 
 // NewStripeProvider 创建 Stripe provider
@@ -74,10 +74,10 @@ func (p *StripeProvider) VerifyWebhook(r *http.Request) (WebhookPayload, error) 
 	// 仅处理 checkout.session.completed 和 charge.failed 事件
 	if event.Type == "checkout.session.completed" {
 		var checkoutSession struct {
-			ID         string `json:"id"`
-			AmountTotal int64  `json:"amount_total"`
-			Created    int64  `json:"created"`
-			Metadata   map[string]string `json:"metadata"`
+			ID          string            `json:"id"`
+			AmountTotal int64             `json:"amount_total"`
+			Created     int64             `json:"created"`
+			Metadata    map[string]string `json:"metadata"`
 		}
 		err = json.Unmarshal(event.Data.Raw, &checkoutSession)
 		if err != nil {
@@ -99,10 +99,10 @@ func (p *StripeProvider) VerifyWebhook(r *http.Request) (WebhookPayload, error) 
 
 	if event.Type == "charge.failed" {
 		var charge struct {
-			ID              string `json:"id"`
-			Amount          int64  `json:"amount"`
-			Created         int64  `json:"created"`
-			PaymentIntentID string `json:"payment_intent"`
+			ID              string            `json:"id"`
+			Amount          int64             `json:"amount"`
+			Created         int64             `json:"created"`
+			PaymentIntentID string            `json:"payment_intent"`
 			Metadata        map[string]string `json:"metadata"`
 		}
 		err = json.Unmarshal(event.Data.Raw, &charge)

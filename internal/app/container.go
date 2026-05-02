@@ -26,6 +26,7 @@ type Container struct {
 	NotificationService  *service.NotificationService
 	PaymentService       *service.PaymentService
 	PendingBillingWorker *service.PendingBillingWorker
+	ReportService        *service.ReportService
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -47,6 +48,8 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var notificationRepo repo.NotificationRepository = repo.NewMemoryNotificationRepository()
 	var pendingBillingRepo repo.PendingBillingRepository = repo.NewMemoryPendingBillingRepository()
 	var paymentOrderRepo repo.PaymentOrderRepository = repo.NewMemoryPaymentOrderRepository()
+	var billingReportRepo repo.BillingReportRepository = repo.NewMemoryBillingReportRepository()
+	var operationCostRepo repo.OperationCostRepository = repo.NewMemoryOperationCostRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -64,6 +67,8 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		notificationRepo = repo.NewPostgresNotificationRepository(openedDB.Pool)
 		pendingBillingRepo = repo.NewPostgresPendingBillingRepository(openedDB.Pool)
 		paymentOrderRepo = repo.NewPaymentOrderRepository(openedDB.Pool)
+		billingReportRepo = repo.NewPostgresBillingReportRepository(openedDB.Pool)
+		operationCostRepo = repo.NewPostgresOperationCostRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -131,6 +136,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	walletSvc := service.NewWalletService(walletRepo, notificationSvc)
 	walletSvc.SetPendingBillingRepository(pendingBillingRepo)
+	walletSvc.SetOperationCostRepository(operationCostRepo)
 
 	pendingBillingWorker := service.NewPendingBillingWorker(logger, pendingBillingRepo, walletSvc)
 
@@ -142,6 +148,9 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		cfg.StripeCancelURL,
 	)
 	paymentSvc := service.NewPaymentService(paymentOrderRepo, walletSvc, stripeProvider, logger)
+
+	// 初始化报表服务
+	reportSvc := service.NewReportService(walletRepo, pendingBillingRepo, operationCostRepo, billingReportRepo)
 
 	return &Container{
 		cfg:                  cfg,
@@ -158,6 +167,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		NotificationService:  notificationSvc,
 		PaymentService:       paymentSvc,
 		PendingBillingWorker: pendingBillingWorker,
+		ReportService:        reportSvc,
 	}, nil
 }
 

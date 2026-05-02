@@ -813,3 +813,41 @@ export type UpdateOperationCostsRequest = {
   updates: UpdateOperationCostRequest[]
   reason?: string
 }
+
+// Phase 10: Billing Reports
+export type BillingReport = {
+  id: string
+  organization_id: string
+  period_start: number
+  period_end: number
+  total_debit_amount: number
+  total_credit_amount: number
+  total_refund_amount: number
+  total_adjust_amount: number
+  net_amount: number
+  pending_billing_count: number
+  pending_billing_amount: number
+  resolved_billing_count: number
+  failed_billing_count: number
+  status: 'draft' | 'finalized'
+  generated_at: number
+  generated_by: string
+  created_at: number
+}
+
+export type BillingBreakdown = {
+  operation_type: string
+  unit_cost: number
+  usage_count: number
+  total_debit_amount: number
+}
+
+export type BillingReportDetail = {
+  report: BillingReport
+  breakdowns: BillingBreakdown[]
+}
+
+export type GenerateBillingReportRequest = {
+  period_start: number
+  period_end: number
+}

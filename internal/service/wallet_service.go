@@ -17,10 +17,10 @@ var ErrAlreadyDebited = errors.New("wallet: operation already debited")
 
 // WalletService 围绕 WalletRepository 实现按组织上下文的钱包能力。
 type WalletService struct {
-	repo                repo.WalletRepository
-	notificationSvc     *NotificationService
-	pendingBillingRepo  repo.PendingBillingRepository
-	operationCostRepo   repo.OperationCostRepository
+	repo               repo.WalletRepository
+	notificationSvc    *NotificationService
+	pendingBillingRepo repo.PendingBillingRepository
+	operationCostRepo  repo.OperationCostRepository
 }
 
 // NewWalletService 构造 WalletService；repo 为 nil 时所有方法均返回 ErrUnauthorized。

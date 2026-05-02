@@ -42,6 +42,7 @@ func main() {
 		WalletService:       container.WalletService,
 		NotificationService: container.NotificationService,
 		PaymentService:      container.PaymentService,
+		ReportService:       container.ReportService,
 	})
 
 	server := &http.Server{

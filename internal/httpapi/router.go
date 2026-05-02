@@ -27,6 +27,7 @@ type RouterConfig struct {
 	WalletService       *service.WalletService
 	NotificationService *service.NotificationService
 	PaymentService      *service.PaymentService
+	ReportService       *service.ReportService
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -115,6 +116,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Get("/admin/operation-costs", api.getAdminOperationCosts)
 			admin.Post("/admin/operation-costs:update", api.updateAdminOperationCosts)
 			admin.Get("/admin/operation-costs/{operationType}/history", api.getAdminOperationCostHistory)
+			admin.Get("/admin/billing-reports", api.getAdminBillingReports)
+			admin.Post("/admin/billing-reports:generate", api.generateAdminBillingReport)
+			admin.Get("/admin/billing-reports/{reportID}", api.getAdminBillingReportByID)
+			admin.Get("/admin/billing-reports/{reportID}/summary", api.getAdminBillingReportSummary)
 			admin.Post("/organizations/invitations", api.createInvitation)
 			admin.Get("/organizations/invitations", api.listInvitations)
 			admin.Get("/organizations/invitations/audit", api.listInvitationAudit)
@@ -152,6 +157,7 @@ type api struct {
 	walletService       *service.WalletService
 	notificationService *service.NotificationService
 	paymentService      *service.PaymentService
+	reportService       *service.ReportService
 }
 
 func newAPI(cfg RouterConfig) *api {
@@ -166,5 +172,6 @@ func newAPI(cfg RouterConfig) *api {
 		walletService:       cfg.WalletService,
 		notificationService: cfg.NotificationService,
 		paymentService:      cfg.PaymentService,
+		reportService:       cfg.ReportService,
 	}
 }
