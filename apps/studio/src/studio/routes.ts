@@ -7,6 +7,7 @@ import {
   Download,
   Home,
   History,
+  Image,
   KeyRound,
   Layers3,
   Mail,
@@ -17,6 +18,7 @@ import type { LucideIcon } from 'lucide-react'
 export const studioRoutePaths = {
   adminSettings: '/admin/settings',
   assetsGraph: '/assets-graph',
+  gallery: '/gallery',
   home: '/',
   mySessions: '/account/sessions',
   notifications: '/notifications',
@@ -66,6 +68,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'assetsGraph',
     label: 'Assets / Graph',
     path: studioRoutePaths.assetsGraph,
+  },
+  {
+    description: '网格视图浏览所有生成的素材，支持类型和状态筛选。',
+    icon: Image,
+    key: 'gallery',
+    label: 'Gallery',
+    path: studioRoutePaths.gallery,
   },
   {
     description: '编排时间线、保存剪辑并发起导出。',

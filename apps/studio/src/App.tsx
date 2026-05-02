@@ -7,6 +7,7 @@ import { StudioShell } from './studio/layout/StudioShell'
 import { AdminSettingsPage } from './studio/pages/AdminSettingsPage'
 import { AssetsGraphPage } from './studio/pages/AssetsGraphPage'
 import { AuthPage } from './studio/pages/AuthPage'
+import { GalleryPage } from './studio/pages/GalleryPage'
 import { HomePage } from './studio/pages/HomePage'
 import { InvitationsPage } from './studio/pages/InvitationsPage'
 import { SessionsPage } from './studio/pages/SessionsPage'
@@ -67,6 +68,7 @@ function App() {
         <Route path="story-analysis" element={<StoryAnalysisPage />} />
         <Route path="storyboard" element={<StoryboardPage />} />
         <Route path="assets-graph" element={<AssetsGraphPage />} />
+        <Route path="gallery" element={<GalleryPage />} />
         <Route path="timeline-export" element={<TimelineExportPage />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="admin/operation-costs" element={<OperationCostsAdminPage />} />
