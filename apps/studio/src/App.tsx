@@ -14,6 +14,7 @@ import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
 import { TimelineExportPage } from './studio/pages/TimelineExportPage'
 import WalletPage from './studio/pages/WalletPage'
+import { OperationCostsAdminPage } from './studio/pages/OperationCostsAdminPage'
 import TransactionHistoryPage from './studio/pages/TransactionHistoryPage'
 import { NotificationsPage } from './studio/pages/NotificationsPage'
 import { WorkerMetricsPage } from './studio/pages/WorkerMetricsPage'
@@ -67,6 +68,7 @@ function App() {
         <Route path="assets-graph" element={<AssetsGraphPage />} />
         <Route path="timeline-export" element={<TimelineExportPage />} />
         <Route path="wallet" element={<WalletPage />} />
+        <Route path="admin/operation-costs" element={<OperationCostsAdminPage />} />
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="admin/settings" element={<AdminSettingsPage />} />
