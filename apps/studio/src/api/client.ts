@@ -47,6 +47,7 @@ import type {
   WalletSnapshot,
   WalletTransaction,
   WalletTransactionPage,
+  OperationCost,
   NotificationsPage,
 } from './types'
 
@@ -737,6 +738,11 @@ export async function debitWallet(request: WalletMutationRequest): Promise<Walle
     method: 'POST',
   })
   return payload.transaction
+}
+
+export async function getOperationCosts(): Promise<OperationCost[]> {
+  const payload = await fetchJSON<{ costs: OperationCost[] }>('/api/v1/operation-costs')
+  return payload.costs ?? []
 }
 
 export async function fetchNotifications(params: {

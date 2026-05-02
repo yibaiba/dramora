@@ -719,6 +719,13 @@ export type WalletMutationRequest = {
   ref_id?: string
 }
 
+export type OperationType = 'chat' | 'story_analysis' | 'image_generation' | 'video_generation' | 'storyboard_edit' | 'character_edit' | 'scene_edit'
+
+export type OperationCost = {
+  type: OperationType
+  cost: number
+}
+
 export type NotificationKind = 'wallet_credit' | 'wallet_debit' | 'invitation_created' | 'invitation_resent' | 'provider_config_save'
 
 export type Notification = {

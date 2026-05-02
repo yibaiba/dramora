@@ -62,6 +62,7 @@ import {
 	fetchWalletTransactions,
 	creditWallet,
 	debitWallet,
+	getOperationCosts,
 	fetchNotifications,
 	markNotificationAsRead,
 	markAllNotificationsAsRead,
@@ -741,3 +742,12 @@ export function useMarkAllNotificationsAsRead() {
     },
   })
 }
+
+export function useOperationCosts(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: getOperationCosts,
+    queryKey: ['operation-costs'],
+  })
+}
+

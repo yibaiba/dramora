@@ -13,7 +13,7 @@ import { SessionsPage } from './studio/pages/SessionsPage'
 import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
 import { TimelineExportPage } from './studio/pages/TimelineExportPage'
-import { WalletPage } from './studio/pages/WalletPage'
+import WalletPage from './studio/pages/WalletPage'
 import { NotificationsPage } from './studio/pages/NotificationsPage'
 import { WorkerMetricsPage } from './studio/pages/WorkerMetricsPage'
 
