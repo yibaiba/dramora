@@ -61,7 +61,7 @@ export default function ChatDialog({ isOpen, onClose, episodeId }: ChatDialogPro
       const outputTokens = chatResponse.token_usage?.output_tokens ?? 0
       const cost = calculateChatCost(inputTokens, outputTokens)
       setTotalCost(totalCost + cost)
-    } catch (error: any) {
+    } catch (error) {
       console.error('Chat error:', error)
       // 移除用户消息（如果出错）
       setMessages(newMessages.slice(0, -1))

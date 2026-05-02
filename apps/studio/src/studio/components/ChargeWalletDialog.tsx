@@ -29,8 +29,9 @@ export default function ChargeWalletDialog({ isOpen, onClose }: ChargeWalletDial
       if (response.url) {
         window.location.href = response.url
       }
-    } catch (error: any) {
-      alert(`Charge failed: ${error.message || 'Unknown error'}`)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      alert(`Charge failed: ${errorMessage}`)
     }
   }
 
