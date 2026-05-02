@@ -67,6 +67,7 @@ import {
 	markNotificationAsRead,
 	markAllNotificationsAsRead,
 	sendChatMessage,
+	chargeWallet,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -85,6 +86,7 @@ import type {
   WalletKind,
   WalletMutationRequest,
   ChatMessageRequest,
+  ChargeWalletRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -761,6 +763,17 @@ export function useChat() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['wallet-snapshot'] })
       queryClient.invalidateQueries({ queryKey: ['operation-costs'] })
+    },
+  })
+}
+
+export function useChargeWallet() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: ChargeWalletRequest) => chargeWallet(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet-snapshot'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
     },
   })
 }

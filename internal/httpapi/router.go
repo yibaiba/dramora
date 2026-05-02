@@ -97,6 +97,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/agents/stream", api.streamAgentRun)
 		r.Get("/wallet", api.getWallet)
 		r.Get("/wallet/transactions", api.listWalletTransactions)
+		r.Post("/wallet:charge", api.handleChargeWallet)
 		r.Get("/operation-costs", api.getOperationCosts)
 		r.Get("/notifications", api.listNotifications)
 

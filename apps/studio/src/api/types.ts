@@ -765,3 +765,9 @@ export type ChatResponse = {
   }
   latency_ms: number
 }
+
+export type ChargeWalletRequest = {
+  amount: number
+  description?: string
+  payment_method?: string
+}

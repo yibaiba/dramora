@@ -209,6 +209,56 @@ func (a *api) applyWalletMutation(w http.ResponseWriter, r *http.Request, credit
 	writeJSON(w, http.StatusOK, Envelope{"transaction": walletTxToDTO(tx)})
 }
 
+type chargeWalletRequest struct {
+	Amount        int64  `json:"amount"`
+	Description   string `json:"description,omitempty"`
+	PaymentMethod string `json:"payment_method,omitempty"`
+}
+
+// handleChargeWallet 处理用户发起的充值请求。
+// MVP: 模拟支付成功，立即充值到钱包。
+func (a *api) handleChargeWallet(w http.ResponseWriter, r *http.Request) {
+	if a.walletService == nil {
+		writeError(w, http.StatusServiceUnavailable, "wallet_unavailable", "wallet service not configured")
+		return
+	}
+	var req chargeWalletRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	if req.Amount <= 0 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "amount must be positive")
+		return
+	}
+
+	// 生成充值交易 ID
+	chargeID, err := domain.NewID()
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	// MVP: 模拟支付成功，直接充值
+	params := service.CreditParams{
+		Amount:  req.Amount,
+		Reason:  "user charge: " + req.Description,
+		RefType: "user_charge",
+		RefID:   chargeID,
+	}
+
+	tx, err := a.walletService.Credit(r.Context(), params)
+	if err != nil {
+		writeWalletError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Envelope{
+		"transaction": walletTxToDTO(tx),
+		"charge_id":   chargeID,
+	})
+}
+
 func writeWalletError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrUnauthorized):
