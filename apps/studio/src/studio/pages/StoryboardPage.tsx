@@ -2,6 +2,7 @@ import {
   BookOpenText,
   Boxes,
   ChevronDown,
+  Copy,
   Layers3,
   Library,
   ListFilter,
@@ -9,9 +10,11 @@ import {
   Search,
   Sparkles,
   Subtitles,
+  Video,
+  X,
   Zap,
 } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import {
   useApproveApprovalGate,
@@ -130,6 +133,8 @@ export function StoryboardPage() {
   const [referenceCoverageFilter, setReferenceCoverageFilter] = useState<ReferenceCoverageFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedShotKey, setSelectedShotKey] = useState<string>()
+  const [selectedShotKeys, setSelectedShotKeys] = useState<Set<string>>(new Set())
+  const [isBatchMode, setIsBatchMode] = useState(false)
   const [shotDrafts, setShotDrafts] = useState<Record<string, ShotDraft>>({})
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const savePromptPack = useSaveShotPromptPack()
@@ -211,6 +216,65 @@ export function StoryboardPage() {
     const nextIndex = (currentIndex + offset + shotList.length) % shotList.length
     setSelectedShotKey(shotList[nextIndex].key)
   }
+
+  const handleShotClick = (shotKey: string, event: React.MouseEvent) => {
+    // Ctrl/Cmd + Click: toggle batch selection
+    if (event.ctrlKey || event.metaKey) {
+      setSelectedShotKeys((prev) => {
+        const next = new Set(prev)
+        if (next.has(shotKey)) {
+          next.delete(shotKey)
+        } else {
+          next.add(shotKey)
+        }
+        setIsBatchMode(next.size > 0)
+        return next
+      })
+      event.preventDefault()
+    }
+    // Shift + Click: range selection (future enhancement)
+    else if (event.shiftKey) {
+      setSelectedShotKeys((prev) => new Set(prev).add(shotKey))
+      setIsBatchMode(true)
+      event.preventDefault()
+    }
+    // Normal click: single select for detail panel
+    else {
+      setSelectedShotKey(shotKey)
+    }
+  }
+
+  const handleBatchSelectAll = useCallback(() => {
+    setSelectedShotKeys(new Set(filteredShots.map((shot) => shot.key)))
+    setIsBatchMode(true)
+  }, [filteredShots])
+
+  const handleBatchClearSelection = useCallback(() => {
+    setSelectedShotKeys(new Set())
+    setIsBatchMode(false)
+  }, [])
+
+  // Keyboard shortcuts for batch operations
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent) => {
+      // Escape: clear batch selection
+      if (event.key === 'Escape' && isBatchMode) {
+        handleBatchClearSelection()
+        return
+      }
+      // Ctrl/Cmd + A: select all (only in batch mode)
+      if ((event.ctrlKey || event.metaKey) && event.key === 'a' && isBatchMode) {
+        event.preventDefault()
+        handleBatchSelectAll()
+      }
+    },
+    [isBatchMode, handleBatchClearSelection, handleBatchSelectAll],
+  )
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleKeyDown])
 
   const addLocalShot = () => {
     const shot = createLocalShot(displayShots.length + 1)
@@ -426,10 +490,13 @@ export function StoryboardPage() {
           <ShotGrid
             displayShots={filteredShots}
             onAddLocalShot={addLocalShot}
-            onSelectShot={setSelectedShotKey}
+            onSelectShot={handleShotClick}
             referenceSelections={shotReferenceSelections}
             selectedShotKey={selectedShot.key}
             viewMode={viewMode}
+            isMultiSelectMode={isBatchMode}
+            selectedShotKeys={selectedShotKeys}
+            onBatchClearSelection={handleBatchClearSelection}
           />
 
           <WorkflowRecoveryTimeline workflowRun={workflowRun} />
@@ -682,33 +749,49 @@ function ShotGrid({
   referenceSelections,
   selectedShotKey,
   viewMode,
+  isMultiSelectMode,
+  selectedShotKeys,
+  onBatchClearSelection,
 }: {
   displayShots: StudioShot[]
   onAddLocalShot: () => void
-  onSelectShot: (shotKey: string) => void
+  onSelectShot: (shotKey: string, event: React.MouseEvent) => void
   referenceSelections: Map<string, StoryboardCharacterReferenceSelection>
   selectedShotKey: string
   viewMode: ViewMode
+  isMultiSelectMode: boolean
+  selectedShotKeys: Set<string>
+  onBatchClearSelection: () => void
 }) {
   return (
-    <div className={viewMode === 'compact' ? 'shot-grid compact' : 'shot-grid'} aria-label="分镜镜头卡片">
-      {displayShots.map((shot) => (
-        <ShotCard
-          key={shot.key}
-          onSelect={() => onSelectShot(shot.key)}
-          referenceSelection={
-            referenceSelections.get(shot.key) ?? emptyReferenceSelection
-          }
-          selected={shot.key === selectedShotKey}
-          shot={shot}
+    <>
+      {isMultiSelectMode && selectedShotKeys.size > 0 && (
+        <BatchOperationsToolbar
+          selectedCount={selectedShotKeys.size}
+          onClearSelection={onBatchClearSelection}
         />
-      ))}
-      <button className="add-shot-card" onClick={onAddLocalShot} type="button">
-        <Plus aria-hidden="true" />
-        <span>添加草稿镜头</span>
-        <kbd>⌘ N</kbd>
-      </button>
-    </div>
+      )}
+      <div className={viewMode === 'compact' ? 'shot-grid compact' : 'shot-grid'} aria-label="分镜镜头卡片">
+        {displayShots.map((shot) => (
+          <ShotCard
+            key={shot.key}
+            onSelect={(event) => onSelectShot(shot.key, event)}
+            referenceSelection={
+              referenceSelections.get(shot.key) ?? emptyReferenceSelection
+            }
+            selected={shot.key === selectedShotKey}
+            shot={shot}
+            isMultiSelectMode={isMultiSelectMode}
+            isSelectedInBatch={selectedShotKeys.has(shot.key)}
+          />
+        ))}
+        <button className="add-shot-card" onClick={onAddLocalShot} type="button">
+          <Plus aria-hidden="true" />
+          <span>添加草稿镜头</span>
+          <kbd>⌘ N</kbd>
+        </button>
+      </div>
+    </>
   )
 }
 
@@ -717,17 +800,29 @@ function ShotCard({
   referenceSelection,
   selected,
   shot,
+  isMultiSelectMode,
+  isSelectedInBatch,
 }: {
-  onSelect: () => void
+  onSelect: (event: React.MouseEvent) => void
   referenceSelection: StoryboardCharacterReferenceSelection
   selected: boolean
   shot: StudioShot
+  isMultiSelectMode: boolean
+  isSelectedInBatch: boolean
 }) {
   const generatePromptPack = useGenerateShotPromptPack()
   const canGeneratePack = Boolean(shot.id)
 
+  const cardClasses = [
+    'shot-card',
+    selected && 'selected',
+    isMultiSelectMode && isSelectedInBatch && 'batch-selected',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   return (
-    <article className={selected ? 'shot-card selected' : 'shot-card'}>
+    <article className={cardClasses}>
       <button className="shot-select-button" onClick={onSelect} type="button">
         <span className="sr-only">选中第 {shot.code} 镜</span>
       </button>
@@ -1865,6 +1960,50 @@ function InspectorActions({
       >
         {saveTimeline.isPending ? '送入中...' : '送入 Timeline'}
       </button>
+    </div>
+  )
+}
+
+function BatchOperationsToolbar({
+  selectedCount,
+  onClearSelection,
+}: {
+  selectedCount: number
+  onClearSelection: () => void
+}) {
+  return (
+    <div className="batch-operations-toolbar" aria-label="批量操作工具栏">
+      <div className="batch-toolbar-content">
+        <span className="batch-selection-info">已选 {selectedCount} 个分镜</span>
+        <div className="batch-toolbar-actions">
+          <button
+            className="batch-action-button"
+            disabled
+            title="后端 API 待实现"
+            type="button"
+          >
+            <Copy aria-hidden="true" />
+            批量生成图像
+          </button>
+          <button
+            className="batch-action-button"
+            disabled
+            title="后端 API 待实现"
+            type="button"
+          >
+            <Video aria-hidden="true" />
+            批量生成视频
+          </button>
+          <button
+            className="batch-toolbar-close"
+            onClick={onClearSelection}
+            type="button"
+            aria-label="清空选择"
+          >
+            <X aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

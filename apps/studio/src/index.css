@@ -2070,6 +2070,110 @@ p {
     0 24px 70px rgba(91, 33, 182, 0.24);
 }
 
+.shot-card.batch-selected {
+  border-color: rgba(59, 130, 246, 0.7);
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.4),
+    inset 0 0 0 1px rgba(59, 130, 246, 0.3);
+  background-color: rgba(59, 130, 246, 0.08);
+}
+
+.batch-operations-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 0.9rem;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(34, 197, 94, 0.04)),
+    rgba(255, 255, 255, 0.02);
+  box-shadow: 0 8px 32px rgba(59, 130, 246, 0.12);
+}
+
+.batch-toolbar-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 1rem;
+}
+
+.batch-selection-info {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  white-space: nowrap;
+}
+
+.batch-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto;
+}
+
+.batch-action-button {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1rem;
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 0.7rem;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.15), rgba(99, 102, 241, 0.08)),
+    rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 200ms ease;
+}
+
+.batch-action-button:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.6);
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(99, 102, 241, 0.15)),
+    rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 1);
+}
+
+.batch-action-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-action-button svg {
+  width: 1rem;
+  height: 1rem;
+  opacity: 0.85;
+}
+
+.batch-toolbar-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.batch-toolbar-close:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.batch-toolbar-close svg {
+  width: 1rem;
+  height: 1rem;
+}
+
 .shot-thumbnail,
 .reference-thumb,
 .clip-thumb {
