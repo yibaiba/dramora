@@ -161,11 +161,11 @@ export function useCreateEpisode(projectId?: string) {
   })
 }
 
-export function useGenerationJobs() {
+export function useGenerationJobs(options?: { refetchInterval?: number }) {
   return useQuery({
     queryFn: listGenerationJobs,
     queryKey: ['generation-jobs'],
-    refetchInterval: 10_000,
+    refetchInterval: options?.refetchInterval ?? 10_000,
   })
 }
 

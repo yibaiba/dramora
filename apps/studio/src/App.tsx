@@ -10,6 +10,7 @@ import { AuthPage } from './studio/pages/AuthPage'
 import { GalleryPage } from './studio/pages/GalleryPage'
 import { HomePage } from './studio/pages/HomePage'
 import { InvitationsPage } from './studio/pages/InvitationsPage'
+import { QueuePage } from './studio/pages/QueuePage'
 import { SessionsPage } from './studio/pages/SessionsPage'
 import { StoryAnalysisPage } from './studio/pages/StoryAnalysisPage'
 import { StoryboardPage } from './studio/pages/StoryboardPage'
@@ -69,6 +70,7 @@ function App() {
         <Route path="storyboard" element={<StoryboardPage />} />
         <Route path="assets-graph" element={<AssetsGraphPage />} />
         <Route path="gallery" element={<GalleryPage />} />
+        <Route path="queue" element={<QueuePage />} />
         <Route path="timeline-export" element={<TimelineExportPage />} />
         <Route path="wallet" element={<WalletPage />} />
         <Route path="admin/operation-costs" element={<OperationCostsAdminPage />} />

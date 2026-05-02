@@ -23,6 +23,7 @@ export const studioRoutePaths = {
   mySessions: '/account/sessions',
   notifications: '/notifications',
   organizationInvitations: '/admin/invitations',
+  queue: '/queue',
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
@@ -75,6 +76,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'gallery',
     label: 'Gallery',
     path: studioRoutePaths.gallery,
+  },
+  {
+    description: '实时监控所有生成任务的进度和状态。',
+    icon: Activity,
+    key: 'queue',
+    label: 'Queue',
+    path: studioRoutePaths.queue,
   },
   {
     description: '编排时间线、保存剪辑并发起导出。',
