@@ -53,6 +53,7 @@ type WalletRepository interface {
 	GetWallet(ctx context.Context, organizationID string) (domain.Wallet, error)
 	ApplyTransaction(ctx context.Context, params WalletApplyParams) (domain.Wallet, domain.WalletTransaction, error)
 	ListTransactions(ctx context.Context, filter WalletTransactionFilter) (WalletTransactionPage, error)
+	GetTransactionByRef(ctx context.Context, organizationID, refType, refID string) (*domain.WalletTransaction, error)
 }
 
 // MemoryWalletRepository 提供进程内实现。
@@ -499,4 +500,67 @@ func (r *PostgresWalletRepository) ListTransactions(
 		out = out[:limit]
 	}
 	return WalletTransactionPage{Transactions: out, HasMore: hasMore}, nil
+}
+
+// GetTransactionByRef 根据 ref_type 和 ref_id 查询是否已有同类型交易。
+// 用于检查幂等性，避免重复扣费。
+func (r *MemoryWalletRepository) GetTransactionByRef(ctx context.Context, organizationID, refType, refID string) (*domain.WalletTransaction, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for i := range r.txs {
+		tx := &r.txs[i]
+		if tx.OrganizationID == organizationID && tx.RefType == refType && tx.RefID == refID {
+			return tx, nil
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// GetTransactionByRef SQLite 实现。
+func (r *SQLiteWalletRepository) GetTransactionByRef(ctx context.Context, organizationID, refType, refID string) (*domain.WalletTransaction, error) {
+	const query = `
+SELECT id, organization_id, kind, direction, amount, reason, ref_type, ref_id, balance_after, actor_user_id, created_at
+FROM wallet_transactions
+WHERE organization_id = ? AND ref_type = ? AND ref_id = ?
+LIMIT 1
+`
+
+	tx := &domain.WalletTransaction{}
+	err := r.db.QueryRowContext(ctx, query, organizationID, refType, refID).Scan(
+		&tx.ID, &tx.OrganizationID, &tx.Kind, &tx.Direction, &tx.Amount, &tx.Reason,
+		&tx.RefType, &tx.RefID, &tx.BalanceAfter, &tx.ActorUserID, &tx.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
+}
+
+// GetTransactionByRef PostgreSQL 实现。
+func (r *PostgresWalletRepository) GetTransactionByRef(ctx context.Context, organizationID, refType, refID string) (*domain.WalletTransaction, error) {
+	const query = `
+SELECT id, organization_id, kind, direction, amount, reason, ref_type, ref_id, balance_after, actor_user_id, created_at
+FROM wallet_transactions
+WHERE organization_id = $1 AND ref_type = $2 AND ref_id = $3
+LIMIT 1
+`
+
+	tx := &domain.WalletTransaction{}
+	err := r.pool.QueryRow(ctx, query, organizationID, refType, refID).Scan(
+		&tx.ID, &tx.OrganizationID, &tx.Kind, &tx.Direction, &tx.Amount, &tx.Reason,
+		&tx.RefType, &tx.RefID, &tx.BalanceAfter, &tx.ActorUserID, &tx.CreatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return tx, nil
 }

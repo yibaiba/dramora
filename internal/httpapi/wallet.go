@@ -114,12 +114,63 @@ type walletMutationRequest struct {
 	RefID   string `json:"ref_id"`
 }
 
+type operationCostDTO struct {
+	Operation string `json:"operation"`
+	Cost      int64  `json:"cost"`
+}
+
+type previewCostRequest struct {
+	OperationType string `json:"operation_type"`
+}
+
+type previewCostResponse struct {
+	OperationType string `json:"operation_type"`
+	Cost          int64  `json:"cost"`
+}
+
 func (a *api) creditWallet(w http.ResponseWriter, r *http.Request) {
 	a.applyWalletMutation(w, r, true)
 }
 
 func (a *api) debitWallet(w http.ResponseWriter, r *http.Request) {
 	a.applyWalletMutation(w, r, false)
+}
+
+func (a *api) getOperationCosts(w http.ResponseWriter, r *http.Request) {
+	if a.walletService == nil {
+		writeError(w, http.StatusServiceUnavailable, "wallet_unavailable", "wallet service not configured")
+		return
+	}
+	costs := make([]operationCostDTO, 0, len(domain.OperationCosts))
+	for op, cost := range domain.OperationCosts {
+		costs = append(costs, operationCostDTO{
+			Operation: string(op),
+			Cost:      cost,
+		})
+	}
+	writeJSON(w, http.StatusOK, Envelope{"costs": costs})
+}
+
+func (a *api) previewWalletCost(w http.ResponseWriter, r *http.Request) {
+	if a.walletService == nil {
+		writeError(w, http.StatusServiceUnavailable, "wallet_unavailable", "wallet service not configured")
+		return
+	}
+	var req previewCostRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+	opType := domain.OperationType(req.OperationType)
+	cost, err := domain.GetOperationCost(opType)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, Envelope{"preview": previewCostResponse{
+		OperationType: string(opType),
+		Cost:          cost,
+	}})
 }
 
 func (a *api) applyWalletMutation(w http.ResponseWriter, r *http.Request, credit bool) {

@@ -1892,6 +1892,54 @@ paths:
           description: Forbidden
         "422":
           description: Insufficient balance
+  /api/v1/operation-costs:
+    get:
+      summary: Get all operation cost definitions
+      operationId: getOperationCosts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Operation costs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  costs:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OperationCost"
+        "503":
+          description: Wallet service unavailable
+  "/api/v1/wallet/preview-cost":
+    post:
+      summary: Preview the cost for a specific operation (owner/admin)
+      operationId: previewWalletCost
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewCostRequest"
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Cost preview
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  preview:
+                    $ref: "#/components/schemas/PreviewCostResponse"
+        "400":
+          description: Invalid operation type
+        "403":
+          description: Forbidden
+        "503":
+          description: Wallet service unavailable
   /api/v1/notifications:
     get:
       summary: List notifications for current user in current org
@@ -3306,3 +3354,18 @@ components:
         reason: { type: string }
         ref_type: { type: string }
         ref_id: { type: string }
+    OperationCost:
+      type: object
+      properties:
+        operation: { type: string }
+        cost: { type: integer, format: int64 }
+    PreviewCostRequest:
+      type: object
+      required: [operation_type]
+      properties:
+        operation_type: { type: string }
+    PreviewCostResponse:
+      type: object
+      properties:
+        operation_type: { type: string }
+        cost: { type: integer, format: int64 }

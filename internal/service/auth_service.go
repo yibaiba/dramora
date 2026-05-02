@@ -51,11 +51,11 @@ type LoginInput struct {
 }
 
 type AuthService struct {
-	identityRepo repo.IdentityRepository
-	refreshRepo  repo.RefreshTokenRepository
-	jwtSecret    []byte
-	accessTTL    time.Duration
-	refreshTTL   time.Duration
+	identityRepo    repo.IdentityRepository
+	refreshRepo     repo.RefreshTokenRepository
+	jwtSecret       []byte
+	accessTTL       time.Duration
+	refreshTTL      time.Duration
 	notificationSvc *NotificationService
 }
 
@@ -503,7 +503,7 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 	}); auditErr != nil {
 		return domain.OrganizationInvitation{}, fmt.Errorf("audit invitation created: %w", auditErr)
 	}
-	
+
 	// Create notification for invitation
 	if s.notificationSvc != nil {
 		_, _ = s.notificationSvc.CreateNotification(ctx, auth.OrganizationID, domain.NotificationKindInvitationCreated, fmt.Sprintf("新增邀请：%s", inv.Email), fmt.Sprintf("角色：%s，有效期 14 天", inv.Role), nil, map[string]interface{}{
@@ -513,7 +513,7 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 			"invited_by_user": auth.UserID,
 		})
 	}
-	
+
 	return inv, nil
 }
 

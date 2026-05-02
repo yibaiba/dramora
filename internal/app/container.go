@@ -11,15 +11,15 @@ import (
 )
 
 type Container struct {
-	cfg               Config
-	ctx               context.Context
-	db                *repo.DB
-	sqliteDB          *repo.SQLiteDB
-	Logger            *slog.Logger
-	AuthService       *service.AuthService
-	ProjectService    *service.ProjectService
-	ProductionService *service.ProductionService
-	ProviderService   *service.ProviderService
+	cfg                 Config
+	ctx                 context.Context
+	db                  *repo.DB
+	sqliteDB            *repo.SQLiteDB
+	Logger              *slog.Logger
+	AuthService         *service.AuthService
+	ProjectService      *service.ProjectService
+	ProductionService   *service.ProductionService
+	ProviderService     *service.ProviderService
 	AgentService        *service.AgentService
 	WalletService       *service.WalletService
 	NotificationService *service.NotificationService
@@ -123,17 +123,17 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	walletSvc := service.NewWalletService(walletRepo, notificationSvc)
 
 	return &Container{
-		cfg:               cfg,
-		ctx:               ctx,
-		db:                db,
-		sqliteDB:          sqliteDB,
-		Logger:            logger.With("env", cfg.Env),
-		AuthService:       authService,
-		ProjectService:    projectSvc,
-		ProductionService: productionSvc,
-		ProviderService:   providerService,
-		AgentService:      agentSvc,
-		WalletService:     walletSvc,
+		cfg:                 cfg,
+		ctx:                 ctx,
+		db:                  db,
+		sqliteDB:            sqliteDB,
+		Logger:              logger.With("env", cfg.Env),
+		AuthService:         authService,
+		ProjectService:      projectSvc,
+		ProductionService:   productionSvc,
+		ProviderService:     providerService,
+		AgentService:        agentSvc,
+		WalletService:       walletSvc,
 		NotificationService: notificationSvc,
 	}, nil
 }

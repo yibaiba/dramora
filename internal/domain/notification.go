@@ -5,10 +5,10 @@ import "time"
 type NotificationKind string
 
 const (
-	NotificationKindWalletCredit      NotificationKind = "wallet_credit"
-	NotificationKindWalletDebit       NotificationKind = "wallet_debit"
-	NotificationKindInvitationCreated NotificationKind = "invitation_created"
-	NotificationKindInvitationResent  NotificationKind = "invitation_resent"
+	NotificationKindWalletCredit       NotificationKind = "wallet_credit"
+	NotificationKindWalletDebit        NotificationKind = "wallet_debit"
+	NotificationKindInvitationCreated  NotificationKind = "invitation_created"
+	NotificationKindInvitationResent   NotificationKind = "invitation_resent"
 	NotificationKindProviderConfigSave NotificationKind = "provider_config_save"
 )
 
@@ -25,8 +25,8 @@ type Notification struct {
 }
 
 type NotificationFilter struct {
-	Limit    int
-	Offset   int
+	Limit      int
+	Offset     int
 	UnreadOnly bool
 }
 

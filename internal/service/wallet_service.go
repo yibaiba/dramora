@@ -13,16 +13,25 @@ import (
 
 // ErrInsufficientBalance 暴露给 HTTP 层用于映射 422 / 自定义提示。
 var ErrInsufficientBalance = repo.ErrInsufficientBalance
+var ErrAlreadyDebited = errors.New("wallet: operation already debited")
 
 // WalletService 围绕 WalletRepository 实现按组织上下文的钱包能力。
 type WalletService struct {
-	repo repo.WalletRepository
-	notificationSvc *NotificationService
+	repo               repo.WalletRepository
+	notificationSvc    *NotificationService
+	pendingBillingRepo repo.PendingBillingRepository
 }
 
 // NewWalletService 构造 WalletService；repo 为 nil 时所有方法均返回 ErrUnauthorized。
 func NewWalletService(r repo.WalletRepository, notifSvc *NotificationService) *WalletService {
 	return &WalletService{repo: r, notificationSvc: notifSvc}
+}
+
+// SetPendingBillingRepository 设置待结算仓库（用于扣费失败场景）。
+func (s *WalletService) SetPendingBillingRepository(pbr repo.PendingBillingRepository) {
+	if s != nil {
+		s.pendingBillingRepo = pbr
+	}
 }
 
 // WalletSnapshot 是 GET /wallet 的统一读模型。
@@ -113,6 +122,65 @@ func (s *WalletService) Debit(ctx context.Context, p CreditParams) (domain.Walle
 	return s.apply(ctx, p, domain.WalletKindDebit, -1)
 }
 
+// DebitOperation 根据操作类型自动扣费，支持幂等性。
+// 若同一操作已扣费（根据 refType + refID），返回 ErrAlreadyDebited。
+// 若操作类型未知，返回错误。
+// 若余额不足，创建 pending_billing 记录，返回 ErrInsufficientBalance。
+func (s *WalletService) DebitOperation(
+	ctx context.Context,
+	opType domain.OperationType,
+	refType string,
+	refID string,
+) (domain.WalletTransaction, error) {
+	auth, err := s.requireAuth(ctx)
+	if err != nil {
+		return domain.WalletTransaction{}, err
+	}
+
+	// 获取操作成本
+	cost, err := domain.GetOperationCost(opType)
+	if err != nil {
+		return domain.WalletTransaction{}, err
+	}
+
+	// 检查幂等性（是否已扣费）
+	existingTx, err := s.repo.GetTransactionByRef(ctx, auth.OrganizationID, string(opType), refID)
+	if err == nil && existingTx != nil {
+		// 已存在相同 ref 的交易，返回已扣费
+		return *existingTx, ErrAlreadyDebited
+	}
+
+	// 尝试扣费
+	params := CreditParams{
+		Amount:  cost,
+		Reason:  fmt.Sprintf("operation: %s", opType),
+		RefType: string(opType),
+		RefID:   refID,
+	}
+
+	tx, err := s.apply(ctx, params, domain.WalletKindDebit, -1)
+	if err != nil {
+		if errors.Is(err, ErrInsufficientBalance) {
+			// 余额不足，创建待结算记录
+			if s.pendingBillingRepo != nil {
+				pb := &domain.PendingBilling{
+					OrganizationID: auth.OrganizationID,
+					OperationType:  opType,
+					RefType:        string(opType),
+					RefID:          refID,
+					Amount:         cost,
+					Status:         domain.PendingBillingStatusPending,
+					MaxRetries:     5,
+				}
+				_ = s.pendingBillingRepo.Create(ctx, pb)
+			}
+		}
+		return domain.WalletTransaction{}, err
+	}
+
+	return tx, nil
+}
+
 func (s *WalletService) apply(
 	ctx context.Context,
 	p CreditParams,
@@ -145,26 +213,26 @@ func (s *WalletService) apply(
 	if err != nil {
 		return domain.WalletTransaction{}, err
 	}
-	
+
 	// Create notification for wallet events
 	if s.notificationSvc != nil {
 		notifKind := domain.NotificationKindWalletCredit
 		title := "钱包充值"
 		body := fmt.Sprintf("增加 %d 积分", p.Amount)
-		
+
 		if kind == domain.WalletKindDebit {
 			notifKind = domain.NotificationKindWalletDebit
 			title = "钱包扣费"
 			body = fmt.Sprintf("扣除 %d 积分", p.Amount)
 		}
-		
+
 		_, _ = s.notificationSvc.CreateNotification(ctx, auth.OrganizationID, notifKind, title, body, &auth.UserID, map[string]interface{}{
-			"amount":           p.Amount,
-			"reason":           p.Reason,
-			"transaction_id":   id,
-			"balance_after":    tx.BalanceAfter,
+			"amount":         p.Amount,
+			"reason":         p.Reason,
+			"transaction_id": id,
+			"balance_after":  tx.BalanceAfter,
 		})
 	}
-	
+
 	return tx, nil
 }

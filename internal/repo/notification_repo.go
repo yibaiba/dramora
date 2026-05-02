@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"encoding/json"
 	"errors"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
 	"time"
 
@@ -38,7 +38,7 @@ func (r *MemoryNotificationRepository) CreateNotification(ctx context.Context, n
 	defer r.mu.Unlock()
 	if n.ID == "" {
 		id, _ := domain.NewID()
-	n.ID = id
+		n.ID = id
 	}
 	if n.CreatedAt.IsZero() {
 		n.CreatedAt = time.Now()
@@ -162,7 +162,7 @@ func NewSQLiteNotificationRepository(db *sql.DB) *SQLiteNotificationRepository {
 func (r *SQLiteNotificationRepository) CreateNotification(ctx context.Context, n *domain.Notification) error {
 	if n.ID == "" {
 		id, _ := domain.NewID()
-	n.ID = id
+		n.ID = id
 	}
 	if n.CreatedAt.IsZero() {
 		n.CreatedAt = time.Now()
@@ -288,7 +288,7 @@ func NewPostgresNotificationRepository(pool *pgxpool.Pool) *PostgresNotification
 func (r *PostgresNotificationRepository) CreateNotification(ctx context.Context, n *domain.Notification) error {
 	if n.ID == "" {
 		id, _ := domain.NewID()
-	n.ID = id
+		n.ID = id
 	}
 	if n.CreatedAt.IsZero() {
 		n.CreatedAt = time.Now()

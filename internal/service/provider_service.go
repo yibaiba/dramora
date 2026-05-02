@@ -191,7 +191,7 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 		return cfg, err
 	}
 	s.recordAudit(ctx, domain.ProviderAuditActionSave, cfg.Capability, cfg.ResolvedProviderType(), cfg.Model, true, "")
-	
+
 	// Create notification for provider config save
 	auth, authOK := RequestAuthFromContext(ctx)
 	if authOK && auth.OrganizationID != "" && s.notificationSvc != nil {
@@ -204,7 +204,7 @@ func (s *ProviderService) SaveProviderConfig(ctx context.Context, input SaveProv
 			"credits_per_unit": cfg.CreditsPerUnit,
 		})
 	}
-	
+
 	return cfg, nil
 }
 

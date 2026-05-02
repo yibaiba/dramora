@@ -4,8 +4,8 @@ import "time"
 
 // ProviderAuditAction 枚举。
 const (
-	ProviderAuditActionSave  = "save"
-	ProviderAuditActionTest  = "test"
+	ProviderAuditActionSave        = "save"
+	ProviderAuditActionTest        = "test"
 	ProviderAuditActionSmoke       = "smoke"
 	ProviderAuditActionSmokeStream = "smoke_stream"
 )

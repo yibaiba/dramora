@@ -16,14 +16,14 @@ type Readiness interface {
 }
 
 type RouterConfig struct {
-	Logger            *slog.Logger
-	Version           string
-	Readiness         Readiness
-	AuthService       *service.AuthService
-	ProjectService    *service.ProjectService
-	ProductionService *service.ProductionService
-	ProviderService   *service.ProviderService
-	AgentService      *service.AgentService
+	Logger              *slog.Logger
+	Version             string
+	Readiness           Readiness
+	AuthService         *service.AuthService
+	ProjectService      *service.ProjectService
+	ProductionService   *service.ProductionService
+	ProviderService     *service.ProviderService
+	AgentService        *service.AgentService
 	WalletService       *service.WalletService
 	NotificationService *service.NotificationService
 }
@@ -96,6 +96,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/agents/stream", api.streamAgentRun)
 		r.Get("/wallet", api.getWallet)
 		r.Get("/wallet/transactions", api.listWalletTransactions)
+		r.Get("/operation-costs", api.getOperationCosts)
 		r.Get("/notifications", api.listNotifications)
 
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
@@ -114,6 +115,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/organizations/invitations/{invitationId}:resend", api.resendInvitation)
 			admin.Post("/wallet:credit", api.creditWallet)
 			admin.Post("/wallet:debit", api.debitWallet)
+			admin.Post("/wallet/preview-cost", api.previewWalletCost)
 			admin.Post("/notifications/{id}:read", api.markNotificationAsRead)
 			admin.Post("/notifications:read-all", api.markAllNotificationsAsRead)
 
@@ -132,11 +134,11 @@ func NewRouter(cfg RouterConfig) http.Handler {
 }
 
 type api struct {
-	readinessChecker  Readiness
-	authService       *service.AuthService
-	projectService    *service.ProjectService
-	productionService *service.ProductionService
-	providerService   *service.ProviderService
+	readinessChecker    Readiness
+	authService         *service.AuthService
+	projectService      *service.ProjectService
+	productionService   *service.ProductionService
+	providerService     *service.ProviderService
 	agentService        *service.AgentService
 	walletService       *service.WalletService
 	notificationService *service.NotificationService
@@ -144,13 +146,13 @@ type api struct {
 
 func newAPI(cfg RouterConfig) *api {
 	return &api{
-		readinessChecker:  cfg.Readiness,
-		authService:       cfg.AuthService,
-		projectService:    cfg.ProjectService,
-		productionService: cfg.ProductionService,
-		providerService:   cfg.ProviderService,
-		agentService:      cfg.AgentService,
-		walletService:     cfg.WalletService,
+		readinessChecker:    cfg.Readiness,
+		authService:         cfg.AuthService,
+		projectService:      cfg.ProjectService,
+		productionService:   cfg.ProductionService,
+		providerService:     cfg.ProviderService,
+		agentService:        cfg.AgentService,
+		walletService:       cfg.WalletService,
 		notificationService: cfg.NotificationService,
 	}
 }
