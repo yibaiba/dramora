@@ -60,6 +60,8 @@ import type {
   BillingReport,
   BillingReportDetail,
   GenerateBillingReportRequest,
+  BatchGenerateShotsRequest,
+  BatchGenerateShotsResponse,
 } from './types'
 
 
@@ -872,4 +874,18 @@ export async function getAdminBillingReportSummary(
   generated_at: number
 }> {
   return fetchJSON(`/api/v1/admin/billing-reports/${encodeURIComponent(reportID)}/summary`)
+}
+
+// Batch Generation API
+export async function batchGenerateShots(
+  episodeId: string,
+  request: BatchGenerateShotsRequest
+): Promise<BatchGenerateShotsResponse> {
+  return fetchJSON(
+    `/api/v1/episodes/${encodeURIComponent(episodeId)}/batch-generate`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    }
+  )
 }

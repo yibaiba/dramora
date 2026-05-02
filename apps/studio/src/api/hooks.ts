@@ -76,6 +76,7 @@ import {
 	generateAdminBillingReport,
 	getAdminBillingReportByID,
 	getAdminBillingReportSummary,
+	batchGenerateShots,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -98,6 +99,7 @@ import type {
   ChargeWalletRequest,
   ChargeInitiateRequest,
   GenerateBillingReportRequest,
+  BatchGenerateShotsRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -857,3 +859,20 @@ export function useAdminBillingReportSummary(reportID: string, enabled = false) 
   })
 }
 
+
+export function useBatchGenerateShots() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      episodeId,
+      request,
+    }: {
+      episodeId: string
+      request: BatchGenerateShotsRequest
+    }) => batchGenerateShots(episodeId, request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace'] })
+    },
+  })
+}

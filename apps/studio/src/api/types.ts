@@ -851,3 +851,12 @@ export type GenerateBillingReportRequest = {
   period_start: number
   period_end: number
 }
+
+export type BatchGenerateShotsRequest = {
+  shot_ids: string[]
+  operation: 'image_generation' | 'video_generation'
+}
+
+export type BatchGenerateShotsResponse = {
+  job_ids: string[]
+}

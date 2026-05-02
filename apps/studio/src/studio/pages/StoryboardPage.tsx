@@ -13,6 +13,7 @@ import {
   Video,
   X,
   Zap,
+  Loader2,
 } from 'lucide-react'
 import { useMemo, useRef, useState, useEffect, useCallback } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -38,6 +39,7 @@ import {
   useStoryboardWorkspace,
   useUpdateStoryboardShot,
   useWorkflowRun,
+  useBatchGenerateShots,
 } from '../../api/hooks'
 import type {
   ApprovalGate,
@@ -139,6 +141,8 @@ export function StoryboardPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const savePromptPack = useSaveShotPromptPack()
   const updateStoryboardShot = useUpdateStoryboardShot()
+  const batchGenerate = useBatchGenerateShots()
+  const navigate = useNavigate()
   const approvalOverview = useMemo(() => summarizeApprovalGates(gates), [gates])
   const displayShots = useMemo(
     () => [...mapWorkspaceDisplayShots(storyboardShots), ...localShots],
@@ -253,6 +257,44 @@ export function StoryboardPage() {
     setSelectedShotKeys(new Set())
     setIsBatchMode(false)
   }, [])
+
+  const handleBatchGenerate = useCallback(
+    (operation: 'image_generation' | 'video_generation') => {
+      if (!activeEpisode || selectedShotKeys.size === 0) return
+
+      const shotIds = Array.from(selectedShotKeys)
+        .map((key) => {
+          const shot = displayShots.find((s) => s.key === key)
+          return shot?.id
+        })
+        .filter(Boolean) as string[]
+
+      if (shotIds.length === 0) {
+        console.warn('无可用的 shot IDs 进行生成')
+        return
+      }
+
+      batchGenerate.mutate(
+        {
+          episodeId: activeEpisode.id,
+          request: {
+            shot_ids: shotIds,
+            operation,
+          },
+        },
+        {
+          onSuccess: () => {
+            handleBatchClearSelection()
+            navigate('/queue')
+          },
+          onError: (error) => {
+            console.error('批量生成失败:', error)
+          },
+        }
+      )
+    },
+    [activeEpisode, selectedShotKeys, displayShots, batchGenerate, handleBatchClearSelection, navigate]
+  )
 
   // Keyboard shortcuts for batch operations
   const handleKeyDown = useCallback(
@@ -497,6 +539,8 @@ export function StoryboardPage() {
             isMultiSelectMode={isBatchMode}
             selectedShotKeys={selectedShotKeys}
             onBatchClearSelection={handleBatchClearSelection}
+            onBatchGenerate={handleBatchGenerate}
+            isBatchGenerating={batchGenerate.isPending}
           />
 
           <WorkflowRecoveryTimeline workflowRun={workflowRun} />
@@ -752,6 +796,8 @@ function ShotGrid({
   isMultiSelectMode,
   selectedShotKeys,
   onBatchClearSelection,
+  onBatchGenerate,
+  isBatchGenerating,
 }: {
   displayShots: StudioShot[]
   onAddLocalShot: () => void
@@ -762,6 +808,8 @@ function ShotGrid({
   isMultiSelectMode: boolean
   selectedShotKeys: Set<string>
   onBatchClearSelection: () => void
+  onBatchGenerate: (operation: 'image_generation' | 'video_generation') => void
+  isBatchGenerating: boolean
 }) {
   return (
     <>
@@ -769,6 +817,8 @@ function ShotGrid({
         <BatchOperationsToolbar
           selectedCount={selectedShotKeys.size}
           onClearSelection={onBatchClearSelection}
+          onBatchGenerate={onBatchGenerate}
+          isLoading={isBatchGenerating}
         />
       )}
       <div className={viewMode === 'compact' ? 'shot-grid compact' : 'shot-grid'} aria-label="分镜镜头卡片">
@@ -1967,9 +2017,13 @@ function InspectorActions({
 function BatchOperationsToolbar({
   selectedCount,
   onClearSelection,
+  onBatchGenerate,
+  isLoading,
 }: {
   selectedCount: number
   onClearSelection: () => void
+  onBatchGenerate: (operation: 'image_generation' | 'video_generation') => void
+  isLoading: boolean
 }) {
   return (
     <div className="batch-operations-toolbar" aria-label="批量操作工具栏">
@@ -1978,21 +2032,23 @@ function BatchOperationsToolbar({
         <div className="batch-toolbar-actions">
           <button
             className="batch-action-button"
-            disabled
-            title="后端 API 待实现"
+            disabled={isLoading}
+            onClick={() => onBatchGenerate('image_generation')}
+            title={isLoading ? '生成中...' : '批量生成所选分镜的图像'}
             type="button"
           >
-            <Copy aria-hidden="true" />
-            批量生成图像
+            {isLoading ? <Loader2 size={16} aria-hidden="true" style={{ animation: 'spin 1s linear infinite' }} /> : <Copy size={16} aria-hidden="true" />}
+            {isLoading ? '生成中...' : '批量生成图像'}
           </button>
           <button
             className="batch-action-button"
-            disabled
-            title="后端 API 待实现"
+            disabled={isLoading}
+            onClick={() => onBatchGenerate('video_generation')}
+            title={isLoading ? '生成中...' : '批量生成所选分镜的视频'}
             type="button"
           >
-            <Video aria-hidden="true" />
-            批量生成视频
+            {isLoading ? <Loader2 size={16} aria-hidden="true" style={{ animation: 'spin 1s linear infinite' }} /> : <Video size={16} aria-hidden="true" />}
+            {isLoading ? '生成中...' : '批量生成视频'}
           </button>
           <button
             className="batch-toolbar-close"
