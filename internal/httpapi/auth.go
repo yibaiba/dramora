@@ -238,6 +238,34 @@ func (a *api) createInvitation(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, err)
 		return
 	}
+
+	// Send notification to the invitation creator
+	if a.notificationService != nil {
+		auth, ok := service.RequestAuthFromContext(r.Context())
+		if ok && auth.UserID != "" {
+			_, _ = a.notificationService.CreateNotification(
+				r.Context(),
+				auth.OrganizationID,
+				domain.NotificationKindInvitationCreated,
+				"邀请已发送",
+				"您已邀请 "+request.Email+" 加入组织",
+				&auth.UserID,
+				map[string]interface{}{"invited_email": request.Email},
+			)
+
+			// Broadcast notification to all organization members
+			_, _ = a.notificationService.CreateNotification(
+				r.Context(),
+				auth.OrganizationID,
+				domain.NotificationKindInvitationCreated,
+				"新邀请待验证",
+				"新邀请已发送至 "+request.Email+"，等待接受",
+				nil, // nil means broadcast to all members
+				map[string]interface{}{"invited_email": request.Email},
+			)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]invitationResponse{"invitation": invitationDTO(inv)})
 }
 
@@ -282,6 +310,23 @@ func (a *api) resendInvitation(w http.ResponseWriter, r *http.Request) {
 		writeAuthError(w, err)
 		return
 	}
+
+	// Send notification about the resent invitation
+	if a.notificationService != nil {
+		auth, ok := service.RequestAuthFromContext(r.Context())
+		if ok && auth.UserID != "" {
+			_, _ = a.notificationService.CreateNotification(
+				r.Context(),
+				auth.OrganizationID,
+				domain.NotificationKindInvitationResent,
+				"邀请已重新发送",
+				"已将邀请重新发送至 "+inv.Email,
+				&auth.UserID,
+				map[string]interface{}{"invited_email": inv.Email},
+			)
+		}
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]invitationResponse{"invitation": invitationDTO(inv)})
 }
 

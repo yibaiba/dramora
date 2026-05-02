@@ -108,6 +108,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
 			admin.Use(requireRole("owner", "admin"))
+			admin.Post("/notifications", api.createNotification)
 			admin.Get("/admin/providers", api.listProviderConfigs)
 			admin.Get("/admin/worker-metrics", api.getAdminWorkerMetrics)
 			admin.Get("/admin/llm-telemetry", api.getAdminLLMTelemetry)

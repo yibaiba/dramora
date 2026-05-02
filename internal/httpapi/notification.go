@@ -45,6 +45,65 @@ func toNotificationDTO(n domain.Notification) NotificationDTO {
 	}
 }
 
+type CreateNotificationRequest struct {
+	RecipientUserID *string                `json:"recipient_user_id"`
+	Title           string                 `json:"title"`
+	Body            string                 `json:"body"`
+	Kind            string                 `json:"kind"`
+	Metadata        map[string]interface{} `json:"metadata,omitempty"`
+}
+
+func (api *api) createNotification(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	auth, ok := service.RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		writeError(w, http.StatusUnauthorized, "unauthorized", "authentication required")
+		return
+	}
+
+	// 检查权限：需要系统或管理员身份
+	if auth.Role != "system" && auth.Role != "owner" && auth.Role != "admin" {
+		writeError(w, http.StatusForbidden, "forbidden", "insufficient permissions to create notifications")
+		return
+	}
+
+	var request CreateNotificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid JSON body")
+		return
+	}
+
+	// 验证必需字段
+	if request.Title == "" || request.Body == "" || request.Kind == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "title, body, and kind are required")
+		return
+	}
+
+	// 验证 Kind 是否有效
+	if !domain.IsValidNotificationKind(request.Kind) {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid notification kind")
+		return
+	}
+
+	notification, err := api.notificationService.CreateNotification(
+		ctx,
+		auth.OrganizationID,
+		domain.NotificationKind(request.Kind),
+		request.Title,
+		request.Body,
+		request.RecipientUserID,
+		request.Metadata,
+	)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "internal_error", err.Error())
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(map[string]NotificationDTO{"notification": toNotificationDTO(*notification)})
+}
+
 func (api *api) listNotifications(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	auth, ok := service.RequestAuthFromContext(ctx)
