@@ -11,18 +11,19 @@ import (
 )
 
 type Container struct {
-	cfg                 Config
-	ctx                 context.Context
-	db                  *repo.DB
-	sqliteDB            *repo.SQLiteDB
-	Logger              *slog.Logger
-	AuthService         *service.AuthService
-	ProjectService      *service.ProjectService
-	ProductionService   *service.ProductionService
-	ProviderService     *service.ProviderService
-	AgentService        *service.AgentService
-	WalletService       *service.WalletService
-	NotificationService *service.NotificationService
+	cfg                  Config
+	ctx                  context.Context
+	db                   *repo.DB
+	sqliteDB             *repo.SQLiteDB
+	Logger               *slog.Logger
+	AuthService          *service.AuthService
+	ProjectService       *service.ProjectService
+	ProductionService    *service.ProductionService
+	ProviderService      *service.ProviderService
+	AgentService         *service.AgentService
+	WalletService        *service.WalletService
+	NotificationService  *service.NotificationService
+	PendingBillingWorker *service.PendingBillingWorker
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -42,6 +43,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var llmTelemetryRepo repo.LLMTelemetryRepository
 	var walletRepo repo.WalletRepository = repo.NewMemoryWalletRepository()
 	var notificationRepo repo.NotificationRepository = repo.NewMemoryNotificationRepository()
+	var pendingBillingRepo repo.PendingBillingRepository = repo.NewMemoryPendingBillingRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -57,6 +59,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		llmTelemetryRepo = repo.NewPostgresLLMTelemetryRepository(openedDB.Pool)
 		walletRepo = repo.NewPostgresWalletRepository(openedDB.Pool)
 		notificationRepo = repo.NewPostgresNotificationRepository(openedDB.Pool)
+		pendingBillingRepo = repo.NewPostgresPendingBillingRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -74,6 +77,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		llmTelemetryRepo = repo.NewSQLiteLLMTelemetryRepository(openedDB.DB)
 		walletRepo = repo.NewSQLiteWalletRepository(openedDB.DB)
 		notificationRepo = repo.NewSQLiteNotificationRepository(openedDB.DB)
+		pendingBillingRepo = repo.NewSQLitePendingBillingRepository(openedDB.DB)
 		logger.Info("using SQLite", "path", dbPath)
 	}
 
@@ -121,20 +125,24 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	authService.SetRefreshTokenRepository(refreshRepo)
 
 	walletSvc := service.NewWalletService(walletRepo, notificationSvc)
+	walletSvc.SetPendingBillingRepository(pendingBillingRepo)
+
+	pendingBillingWorker := service.NewPendingBillingWorker(logger, pendingBillingRepo, walletSvc)
 
 	return &Container{
-		cfg:                 cfg,
-		ctx:                 ctx,
-		db:                  db,
-		sqliteDB:            sqliteDB,
-		Logger:              logger.With("env", cfg.Env),
-		AuthService:         authService,
-		ProjectService:      projectSvc,
-		ProductionService:   productionSvc,
-		ProviderService:     providerService,
-		AgentService:        agentSvc,
-		WalletService:       walletSvc,
-		NotificationService: notificationSvc,
+		cfg:                  cfg,
+		ctx:                  ctx,
+		db:                   db,
+		sqliteDB:             sqliteDB,
+		Logger:               logger.With("env", cfg.Env),
+		AuthService:          authService,
+		ProjectService:       projectSvc,
+		ProductionService:    productionSvc,
+		ProviderService:      providerService,
+		AgentService:         agentSvc,
+		WalletService:        walletSvc,
+		NotificationService:  notificationSvc,
+		PendingBillingWorker: pendingBillingWorker,
 	}, nil
 }
 
