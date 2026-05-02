@@ -5,11 +5,12 @@ import {
   Clapperboard,
   Home,
   Layers3,
+  MessageCircle,
   Radio,
   Sparkles,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   useEpisodeApprovalGates,
@@ -28,6 +29,7 @@ import { AnalysisResultCard } from '../components/StoryAnalysisPanel'
 import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
 import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
 import { ReviewSummaryChips } from '../components/ReviewSummaryChips'
+import ChatDialog from '../components/ChatDialog'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { buildStoryAnalysisReviewSnapshot } from '../reviewPersistence'
 import { studioNavItems, studioRoutePaths } from '../routes'
@@ -43,6 +45,7 @@ import {
 
 export function HomePage() {
   const { activeEpisode, selectedProject } = useStudioSelection()
+  const [isChatOpen, setIsChatOpen] = useState(false)
   const startStoryAnalysis = useStartStoryAnalysis()
   const seedProduction = useSeedEpisodeProduction()
   const { data: analyses = [] } = useStoryAnalyses(activeEpisode?.id)
@@ -126,6 +129,7 @@ export function HomePage() {
         nextHint={nextHint}
         onSeedProduction={() => activeEpisode && seedProduction.mutate(activeEpisode.id)}
         onStartAnalysis={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)}
+        onOpenChat={() => setIsChatOpen(true)}
         project={selectedProject}
         productionPending={seedProduction.isPending}
         shotsCount={shotsCount}
@@ -147,6 +151,12 @@ export function HomePage() {
       <WorkflowRecoverySummaryCard workflowRun={workflowRun} />
 
       <WorkflowRecoveryTimeline workflowRun={workflowRun} />
+
+      <ChatDialog 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        episodeId={activeEpisode?.id || ''}
+      />
 
       <div className="dashboard-grid">
         <article className="surface-card">
@@ -262,6 +272,7 @@ function WorkspaceHero({
   nextHint,
   onSeedProduction,
   onStartAnalysis,
+  onOpenChat,
   project,
   productionPending,
   shotsCount,
@@ -279,6 +290,7 @@ function WorkspaceHero({
   nextHint: string
   onSeedProduction: () => void
   onStartAnalysis: () => void
+  onOpenChat: () => void
   project?: Project
   productionPending: boolean
   shotsCount: number
@@ -387,6 +399,15 @@ function WorkspaceHero({
           >
             <BookOpenText aria-hidden="true" />
             {startAnalysisPending ? '解析中...' : '启动故事解析'}
+          </button>
+          <button
+            className="hero-secondary-action"
+            onClick={onOpenChat}
+            type="button"
+            title="打开 Chat 对话框"
+          >
+            <MessageCircle aria-hidden="true" />
+            Ask AI
           </button>
           <Link className="hero-link-action" to={studioRoutePaths.timelineExport}>
             <Activity aria-hidden="true" />
