@@ -69,6 +69,9 @@ import {
 	sendChatMessage,
 	chargeWallet,
 	initiateChargeWallet,
+	getAdminOperationCosts,
+	updateAdminOperationCosts,
+	getAdminOperationCostHistory,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -78,6 +81,7 @@ import type {
   CreateInvitationRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
+  UpdateOperationCostsRequest,
   Export,
   SaveProviderConfigRequest,
   SaveCharacterBibleRequest,
@@ -783,6 +787,33 @@ export function useChargeWallet() {
 export function useInitiateChargeWallet() {
   return useMutation({
     mutationFn: (request: ChargeInitiateRequest) => initiateChargeWallet(request),
+  })
+}
+
+export function useAdminOperationCosts(enabled = false) {
+  return useQuery({
+    enabled,
+    queryFn: getAdminOperationCosts,
+    queryKey: ['admin', 'operation-costs'],
+  })
+}
+
+export function useUpdateAdminOperationCosts() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: UpdateOperationCostsRequest) => updateAdminOperationCosts(request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin', 'operation-costs'] })
+      queryClient.invalidateQueries({ queryKey: ['operation-costs'] })
+    },
+  })
+}
+
+export function useAdminOperationCostHistory(operationType: string, enabled = false) {
+  return useQuery({
+    enabled,
+    queryFn: () => getAdminOperationCostHistory(operationType),
+    queryKey: ['admin', 'operation-costs', operationType, 'history'],
   })
 }
 

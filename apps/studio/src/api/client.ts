@@ -54,6 +54,9 @@ import type {
   ChargeWalletRequest,
   ChargeInitiateRequest,
   ChargeInitiateResponse,
+  OperationCostAdminDTO,
+  OperationCostHistoryDTO,
+  UpdateOperationCostsRequest,
 } from './types'
 
 
@@ -803,4 +806,23 @@ export async function initiateChargeWallet(
     body: JSON.stringify(req),
     method: 'POST',
   })
+}
+
+export async function getAdminOperationCosts(): Promise<{ operation_costs: OperationCostAdminDTO[] }> {
+  return fetchJSON('/api/v1/admin/operation-costs')
+}
+
+export async function updateAdminOperationCosts(
+  req: UpdateOperationCostsRequest
+): Promise<{ operation_costs: OperationCostAdminDTO[] }> {
+  return fetchJSON('/api/v1/admin/operation-costs:update', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function getAdminOperationCostHistory(
+  operationType: string
+): Promise<{ history: OperationCostHistoryDTO[] }> {
+  return fetchJSON(`/api/v1/admin/operation-costs/${encodeURIComponent(operationType)}/history`)
 }

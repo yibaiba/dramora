@@ -782,3 +782,34 @@ export type ChargeInitiateResponse = {
   url: string
   orderId: string
 }
+
+export type OperationCostAdminDTO = {
+  id: number
+  operation_type: string
+  organization_id: string
+  credits_cost: number
+  effective_at: number
+  updated_at: number
+}
+
+export type OperationCostHistoryDTO = {
+  id: number
+  operation_type: string
+  organization_id: string
+  old_cost: number | null
+  new_cost: number
+  effective_at: number
+  reason: string | null
+  changed_by: string
+  changed_at: number
+}
+
+export type UpdateOperationCostRequest = {
+  operation_type: string
+  credits_cost: number
+}
+
+export type UpdateOperationCostsRequest = {
+  updates: UpdateOperationCostRequest[]
+  reason?: string
+}
