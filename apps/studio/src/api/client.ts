@@ -49,6 +49,8 @@ import type {
   WalletTransactionPage,
   OperationCost,
   NotificationsPage,
+  ChatMessageRequest,
+  ChatResponse,
 } from './types'
 
 
@@ -768,6 +770,16 @@ export async function markNotificationAsRead(notificationId: string): Promise<{ 
 export async function markAllNotificationsAsRead(): Promise<{ status: string }> {
   return fetchJSON(`/api/v1/notifications:read-all`, {
     body: JSON.stringify({}),
+    method: 'POST',
+  })
+}
+
+export async function sendChatMessage(
+  episodeId: string,
+  req: ChatMessageRequest
+): Promise<{ chat_response: ChatResponse }> {
+  return fetchJSON(`/api/v1/episodes/${episodeId}/chat`, {
+    body: JSON.stringify(req),
     method: 'POST',
   })
 }

@@ -1091,6 +1091,44 @@ paths:
                       $ref: "#/components/schemas/Asset"
         "404":
           $ref: "#/components/responses/NotFound"
+  /api/v1/episodes/{episodeId}/chat:
+    post:
+      summary: Send a chat message and get a response from LLM provider
+      parameters:
+        - $ref: "#/components/parameters/EpisodeID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - messages
+              properties:
+                messages:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ChatMessage"
+                  description: Chat message history
+                provider:
+                  type: string
+                  description: Optional provider selection
+      responses:
+        "200":
+          description: Chat response received
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  chat_response:
+                    $ref: "#/components/schemas/ChatResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
   /api/v1/assets/{assetId}:lock:
     post:
       summary: Lock an asset candidate as ready reference material
@@ -3369,3 +3407,24 @@ components:
       properties:
         operation_type: { type: string }
         cost: { type: integer, format: int64 }
+    ChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum: [system, user, assistant]
+        content: { type: string }
+    ChatResponse:
+      type: object
+      properties:
+        id: { type: string }
+        content: { type: string }
+        token_usage:
+          type: object
+          properties:
+            input_tokens: { type: integer, format: int64 }
+            output_tokens: { type: integer, format: int64 }
+        latency_ms: { type: integer, format: int64 }

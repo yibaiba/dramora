@@ -56,6 +56,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/projects/{projectId}/episodes", api.listEpisodes)
 		r.Post("/projects/{projectId}/episodes", api.createEpisode)
 		r.Get("/episodes/{episodeId}", api.getEpisode)
+		r.Post("/episodes/{episodeId}/chat", api.handleChatMessage)
 		r.Get("/episodes/{episodeId}/story-sources", api.listStorySources)
 		r.Post("/episodes/{episodeId}/story-sources", api.createStorySource)
 		r.Post("/episodes/{episodeId}/story-analysis/start", api.startStoryAnalysis)

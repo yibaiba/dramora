@@ -66,6 +66,7 @@ import {
 	fetchNotifications,
 	markNotificationAsRead,
 	markAllNotificationsAsRead,
+	sendChatMessage,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -83,6 +84,7 @@ import type {
   UpdateStoryboardShotRequest,
   WalletKind,
   WalletMutationRequest,
+  ChatMessageRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -748,6 +750,18 @@ export function useOperationCosts(enabled = true) {
     enabled,
     queryFn: getOperationCosts,
     queryKey: ['operation-costs'],
+  })
+}
+
+export function useChat() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (variables: { episodeId: string; request: ChatMessageRequest }) =>
+      sendChatMessage(variables.episodeId, variables.request),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet-snapshot'] })
+      queryClient.invalidateQueries({ queryKey: ['operation-costs'] })
+    },
   })
 }
 

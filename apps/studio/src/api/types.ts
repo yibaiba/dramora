@@ -745,3 +745,23 @@ export type NotificationsPage = {
   has_more: boolean
   unread_count: number
 }
+
+export type ChatMessage = {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+export type ChatMessageRequest = {
+  messages: ChatMessage[]
+  provider?: string
+}
+
+export type ChatResponse = {
+  id: string
+  content: string
+  token_usage?: {
+    input_tokens?: number
+    output_tokens?: number
+  }
+  latency_ms: number
+}
