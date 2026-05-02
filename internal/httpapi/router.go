@@ -83,6 +83,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/episodes/{episodeId}/assets:seed", api.seedEpisodeAssets)
 		r.Post("/episodes/{episodeId}/timeline", api.saveEpisodeTimeline)
 		r.Post("/episodes/{episodeId}/exports", api.startEpisodeExport)
+		r.Post("/episodes/{episodeId}/batch-generate", api.batchGenerateShots)
 		r.Post("/assets/{assetId}:lock", api.lockAsset)
 		r.Get("/assets/{assetId}/recovery", api.getAssetRecovery)
 		r.Post("/approval-gates/{gateId}:approve", api.approveApprovalGate)

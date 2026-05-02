@@ -461,3 +461,75 @@ func exportRecoveryNextHint(status domain.ExportStatus) string {
 	}
 	return ""
 }
+
+func (s *ProductionService) BatchGenerateShots(
+	ctx context.Context,
+	episodeID string,
+	shotIDs []string,
+	operation string,
+) ([]string, error) {
+	if strings.TrimSpace(episodeID) == "" {
+		return nil, fmt.Errorf("%w: episode id is required", domain.ErrInvalidInput)
+	}
+	if len(shotIDs) == 0 {
+		return nil, fmt.Errorf("%w: shot_ids cannot be empty", domain.ErrInvalidInput)
+	}
+	if operation != "image_generation" && operation != "video_generation" {
+		return nil, fmt.Errorf("%w: operation must be 'image_generation' or 'video_generation'", domain.ErrInvalidInput)
+	}
+
+	jobIDs := make([]string, 0, len(shotIDs))
+
+	for _, shotID := range shotIDs {
+		pack, err := s.production.GetShotPromptPack(ctx, shotID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get prompt pack for shot %s: %w", shotID, err)
+		}
+
+		jobID, err := domain.NewID()
+		if err != nil {
+			return nil, err
+		}
+
+		// Determine task type based on operation
+		taskType := pack.TaskType
+		if operation == "image_generation" {
+			taskType = string(provider.TaskTypeImage)
+		}
+
+		job, err := s.production.CreateGenerationJob(ctx, repo.CreateGenerationJobParams{
+			ID:           jobID,
+			ProjectID:    pack.ProjectID,
+			EpisodeID:    pack.EpisodeID,
+			RequestKey:   "batch:" + operation + ":" + pack.ShotID + ":" + pack.Preset,
+			Provider:     pack.Provider,
+			Model:        pack.Model,
+			TaskType:     taskType,
+			Status:       domain.GenerationJobStatusQueued,
+			Prompt:       pack.DirectPrompt,
+			Params:       generationJobParamsFromPromptPack(pack),
+			EventMessage: "batch generation job queued",
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to create generation job for shot %s: %w", shotID, err)
+		}
+
+		if job.ID == jobID {
+			if err := s.jobClient.Enqueue(ctx, jobs.Job{
+				ID:   job.ID,
+				Kind: jobs.JobKindGenerationSubmit,
+				Payload: map[string]any{
+					"generation_job_id": job.ID,
+					"prompt_pack_id":    pack.ID,
+					"shot_id":           pack.ShotID,
+				},
+			}); err != nil {
+				return nil, fmt.Errorf("failed to enqueue job for shot %s: %w", shotID, err)
+			}
+		}
+
+		jobIDs = append(jobIDs, job.ID)
+	}
+
+	return jobIDs, nil
+}
