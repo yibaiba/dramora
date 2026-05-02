@@ -6,6 +6,7 @@ import {
   Coins,
   Download,
   Home,
+  History,
   KeyRound,
   Layers3,
   Mail,
@@ -24,6 +25,7 @@ export const studioRoutePaths = {
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
   wallet: '/wallet',
+  transactions: '/transactions',
   workerMetrics: '/admin/worker-metrics',
 } as const
 
@@ -99,6 +101,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'wallet',
     label: 'Wallet',
     path: studioRoutePaths.wallet,
+  },
+  {
+    description: '查看完整的交易历史和流水明细。',
+    icon: History,
+    key: 'transactions',
+    label: 'Transactions',
+    path: studioRoutePaths.transactions,
   },
   {
     description: '查看系统通知：钱包操作、邀请、配置变更。',
