@@ -553,7 +553,9 @@ func (r *SQLiteProductionRepository) SaveShotPromptPack(ctx context.Context, par
 	_, err = r.db.ExecContext(ctx, sqliteUpsertShotPromptPackSQL,
 		params.ID, params.ProjectID, params.EpisodeID, params.ShotID,
 		params.Provider, params.Model, params.Preset, params.TaskType,
-		params.DirectPrompt, params.NegativePrompt, string(timeSlices), string(refs), string(prms),
+		params.DirectPrompt, params.NegativePrompt,
+		params.IPAdapterStrength, params.LoRAWeight, params.LoRACombinationWeight,
+		string(timeSlices), string(refs), string(prms),
 	)
 	if err != nil {
 		return domain.ShotPromptPack{}, sqliteMapFK(err)

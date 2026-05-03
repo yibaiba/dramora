@@ -29,7 +29,9 @@ func (r *PostgresProductionRepository) SaveShotPromptPack(
 	pack, err := scanShotPromptPack(r.pool.QueryRow(ctx, upsertShotPromptPackSQL,
 		params.ID, params.ProjectID, params.EpisodeID, params.ShotID,
 		params.Provider, params.Model, params.Preset, params.TaskType,
-		params.DirectPrompt, params.NegativePrompt, timeSlices, references, promptParams,
+		params.DirectPrompt, params.NegativePrompt,
+		params.IPAdapterStrength, params.LoRAWeight, params.LoRACombinationWeight,
+		timeSlices, references, promptParams,
 	))
 	return pack, mapForeignKeyViolation(err)
 }

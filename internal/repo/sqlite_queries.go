@@ -370,15 +370,19 @@ WHERE id = ?
 const sqliteUpsertShotPromptPackSQL = `
 INSERT INTO shot_prompt_packs (
     id, project_id, episode_id, shot_id, provider, model, preset, task_type,
-    direct_prompt, negative_prompt, time_slices, reference_bindings, params
+    direct_prompt, negative_prompt, ip_adapter_strength, lora_weight, lora_combination_weight,
+    time_slices, reference_bindings, params
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (shot_id, preset) DO UPDATE
 SET provider = excluded.provider,
     model = excluded.model,
     task_type = excluded.task_type,
     direct_prompt = excluded.direct_prompt,
     negative_prompt = excluded.negative_prompt,
+    ip_adapter_strength = excluded.ip_adapter_strength,
+    lora_weight = excluded.lora_weight,
+    lora_combination_weight = excluded.lora_combination_weight,
     time_slices = excluded.time_slices,
     reference_bindings = excluded.reference_bindings,
     params = excluded.params,
@@ -387,7 +391,8 @@ SET provider = excluded.provider,
 
 const sqliteGetShotPromptPackSQL = `
 SELECT id, project_id, episode_id, shot_id, provider, model, preset, task_type,
-    direct_prompt, negative_prompt, time_slices, reference_bindings, params, created_at, updated_at
+    direct_prompt, negative_prompt, ip_adapter_strength, lora_weight, lora_combination_weight,
+    time_slices, reference_bindings, params, created_at, updated_at
 FROM shot_prompt_packs
 WHERE shot_id = ?
 ORDER BY updated_at DESC

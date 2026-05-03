@@ -327,7 +327,8 @@ func scanShotPromptPack(row rowScanner) (domain.ShotPromptPack, error) {
 	err := row.Scan(
 		&item.ID, &item.ProjectID, &item.EpisodeID, &item.ShotID, &item.Provider,
 		&item.Model, &item.Preset, &item.TaskType, &item.DirectPrompt,
-		&item.NegativePrompt, &timeSlices, &referenceBindings, &params,
+		&item.NegativePrompt, &item.IPAdapterStrength, &item.LoRAWeight, &item.LoRACombinationWeight,
+		&timeSlices, &referenceBindings, &params,
 		&item.CreatedAt, &item.UpdatedAt,
 	)
 	if err != nil {

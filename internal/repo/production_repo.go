@@ -218,19 +218,22 @@ type CreateAssetParams struct {
 }
 
 type SaveShotPromptPackParams struct {
-	ID                string
-	ProjectID         string
-	EpisodeID         string
-	ShotID            string
-	Provider          string
-	Model             string
-	Preset            string
-	TaskType          string
-	DirectPrompt      string
-	NegativePrompt    string
-	TimeSlices        []domain.PromptTimeSlice
-	ReferenceBindings []domain.PromptReferenceBinding
-	Params            map[string]any
+	ID                    string
+	ProjectID             string
+	EpisodeID             string
+	ShotID                string
+	Provider              string
+	Model                 string
+	Preset                string
+	TaskType              string
+	DirectPrompt          string
+	NegativePrompt        string
+	IPAdapterStrength     float64
+	LoRAWeight            float64
+	LoRACombinationWeight float64
+	TimeSlices            []domain.PromptTimeSlice
+	ReferenceBindings     []domain.PromptReferenceBinding
+	Params                map[string]any
 }
 
 type SaveEpisodeTimelineParams struct {

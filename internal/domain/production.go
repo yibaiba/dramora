@@ -225,21 +225,24 @@ type PromptReferenceBinding struct {
 }
 
 type ShotPromptPack struct {
-	ID                string
-	ProjectID         string
-	EpisodeID         string
-	ShotID            string
-	Provider          string
-	Model             string
-	Preset            string
-	TaskType          string
-	DirectPrompt      string
-	NegativePrompt    string
-	TimeSlices        []PromptTimeSlice
-	ReferenceBindings []PromptReferenceBinding
-	Params            map[string]any
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                    string
+	ProjectID             string
+	EpisodeID             string
+	ShotID                string
+	Provider              string
+	Model                 string
+	Preset                string
+	TaskType              string
+	DirectPrompt          string
+	NegativePrompt        string
+	IPAdapterStrength     float64
+	LoRAWeight            float64
+	LoRACombinationWeight float64
+	TimeSlices            []PromptTimeSlice
+	ReferenceBindings     []PromptReferenceBinding
+	Params                map[string]any
+	CreatedAt             time.Time
+	UpdatedAt             time.Time
 }
 
 type TimelineTrack struct {
@@ -273,4 +276,43 @@ type Export struct {
 	Format     string
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
+}
+
+// Validation constants for IP-Adapter and LoRA parameters
+const (
+	MinIPAdapterStrength     = 0.0
+	MaxIPAdapterStrength     = 1.0
+	DefaultIPAdapterStrength = 0.5
+
+	MinLoRAWeight     = 0.0
+	MaxLoRAWeight     = 1.0
+	DefaultLoRAWeight = 0.5
+
+	MinLoRACombinationWeight     = 0.0
+	MaxLoRACombinationWeight     = 1.0
+	DefaultLoRACombinationWeight = 1.0
+)
+
+// ValidateIPAdapterStrength validates IP-Adapter strength parameter (0-1.0 range)
+func ValidateIPAdapterStrength(strength float64) error {
+	if strength < MinIPAdapterStrength || strength > MaxIPAdapterStrength {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+// ValidateLoRAWeight validates LoRA weight parameter (0-1.0 range)
+func ValidateLoRAWeight(weight float64) error {
+	if weight < MinLoRAWeight || weight > MaxLoRAWeight {
+		return ErrInvalidInput
+	}
+	return nil
+}
+
+// ValidateLoRACombinationWeight validates LoRA combination weight parameter (0-1.0 range)
+func ValidateLoRACombinationWeight(weight float64) error {
+	if weight < MinLoRACombinationWeight || weight > MaxLoRACombinationWeight {
+		return ErrInvalidInput
+	}
+	return nil
 }
