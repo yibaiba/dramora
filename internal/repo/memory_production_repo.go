@@ -1023,3 +1023,28 @@ func (r *MemoryProductionRepository) AdvanceExportStatus(
 	r.exports[export.ID] = export
 	return export, nil
 }
+
+// Batch generation feature stub implementations
+func (r *MemoryProductionRepository) RetryJob(_ context.Context, _ string) (domain.GenerationJob, error) {
+	return domain.GenerationJob{}, nil
+}
+
+func (r *MemoryProductionRepository) UpdateJobPriority(_ context.Context, _ string, _ int) error {
+	return nil
+}
+
+func (r *MemoryProductionRepository) ListJobsByPriority(_ context.Context, _ string, _ domain.GenerationJobStatus) ([]domain.GenerationJob, error) {
+	return []domain.GenerationJob{}, nil
+}
+
+func (r *MemoryProductionRepository) PauseEpisodeQueue(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *MemoryProductionRepository) ResumeEpisodeQueue(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *MemoryProductionRepository) IsEpisodeQueuePaused(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}

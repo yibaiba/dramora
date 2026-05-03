@@ -9,9 +9,11 @@ const (
 	DefaultExecutionLimit = 10
 	DefaultPollInterval   = 5
 
-	JobKindWorkflowSchedule JobKind = "workflow.schedule"
-	JobKindGenerationSubmit JobKind = "generation.submit"
-	JobKindExportRender     JobKind = "export.render"
+	JobKindWorkflowSchedule   JobKind = "workflow.schedule"
+	JobKindGenerationSubmit   JobKind = "generation.submit"
+	JobKindGenerationPollTick JobKind = "generation.poll_tick"
+	JobKindRetryGeneration    JobKind = "generation.retry"
+	JobKindExportRender       JobKind = "export.render"
 )
 
 type Job struct {

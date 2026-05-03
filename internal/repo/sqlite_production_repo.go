@@ -825,3 +825,28 @@ func storyMapEpisodeID(params SaveStoryMapParams) string {
 	}
 	return ""
 }
+
+// Batch generation feature stub implementations for SQLite
+func (r *SQLiteProductionRepository) RetryJob(_ context.Context, _ string) (domain.GenerationJob, error) {
+	return domain.GenerationJob{}, nil
+}
+
+func (r *SQLiteProductionRepository) UpdateJobPriority(_ context.Context, _ string, _ int) error {
+	return nil
+}
+
+func (r *SQLiteProductionRepository) ListJobsByPriority(_ context.Context, _ string, _ domain.GenerationJobStatus) ([]domain.GenerationJob, error) {
+	return []domain.GenerationJob{}, nil
+}
+
+func (r *SQLiteProductionRepository) PauseEpisodeQueue(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *SQLiteProductionRepository) ResumeEpisodeQueue(_ context.Context, _ string) error {
+	return nil
+}
+
+func (r *SQLiteProductionRepository) IsEpisodeQueuePaused(_ context.Context, _ string) (bool, error) {
+	return false, nil
+}

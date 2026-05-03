@@ -24,6 +24,9 @@ type GenerationJob struct {
 	Params         map[string]any
 	ProviderTaskID string
 	ResultAssetID  string
+	Priority       int
+	RetryCount     int
+	ParentJobID    *string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 }

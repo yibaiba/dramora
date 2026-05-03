@@ -25,6 +25,12 @@ type ProductionRepository interface {
 	AdvanceGenerationJobStatus(ctx context.Context, params AdvanceGenerationJobStatusParams) (domain.GenerationJob, error)
 	CompleteGenerationJobWithResult(ctx context.Context, params CompleteGenerationJobWithResultParams) (domain.GenerationJob, domain.Asset, error)
 	ListGenerationJobEvents(ctx context.Context, generationJobID string, limit int) ([]domain.GenerationJobEvent, error)
+	RetryJob(ctx context.Context, originalJobID string) (domain.GenerationJob, error)
+	UpdateJobPriority(ctx context.Context, jobID string, priority int) error
+	ListJobsByPriority(ctx context.Context, episodeID string, status domain.GenerationJobStatus) ([]domain.GenerationJob, error)
+	PauseEpisodeQueue(ctx context.Context, episodeID string) error
+	ResumeEpisodeQueue(ctx context.Context, episodeID string) error
+	IsEpisodeQueuePaused(ctx context.Context, episodeID string) (bool, error)
 	ListApprovalGates(ctx context.Context, episodeID string) ([]domain.ApprovalGate, error)
 	GetApprovalGate(ctx context.Context, gateID string) (domain.ApprovalGate, error)
 	SaveApprovalGate(ctx context.Context, params SaveApprovalGateParams) (domain.ApprovalGate, error)

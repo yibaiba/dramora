@@ -36,6 +36,7 @@ func scanGenerationJobs(rows rowsScanner) ([]domain.GenerationJob, error) {
 func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 	var job domain.GenerationJob
 	var paramsPayload []byte
+	var parentJobID *string
 	if err := row.Scan(
 		&job.ID,
 		&job.ProjectID,
@@ -49,6 +50,9 @@ func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 		&paramsPayload,
 		&job.ProviderTaskID,
 		&job.ResultAssetID,
+		&job.Priority,
+		&job.RetryCount,
+		&parentJobID,
 		&job.CreatedAt,
 		&job.UpdatedAt,
 	); err != nil {
@@ -62,6 +66,7 @@ func scanGenerationJob(row rowScanner) (domain.GenerationJob, error) {
 	if job.Params == nil {
 		job.Params = map[string]any{}
 	}
+	job.ParentJobID = parentJobID
 	return job, nil
 }
 

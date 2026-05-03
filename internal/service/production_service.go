@@ -533,3 +533,116 @@ func (s *ProductionService) BatchGenerateShots(
 
 	return jobIDs, nil
 }
+
+// RetryGenerationJob creates a new job from a failed job
+func (s *ProductionService) RetryGenerationJob(ctx context.Context, jobID string) (string, error) {
+	// Get original job
+	job, err := s.production.GetGenerationJob(ctx, jobID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get generation job: %w", err)
+	}
+
+	// Check authorization
+	if err := s.authorizeScopedResource(ctx, job.ProjectID, job.EpisodeID); err != nil {
+		return "", err
+	}
+
+	// Check job is failed
+	if job.Status != domain.GenerationJobStatusFailed && job.Status != domain.GenerationJobStatusTimedOut {
+		return "", fmt.Errorf("%w: job must be in failed or timed_out status", domain.ErrJobNotFailed)
+	}
+
+	// Check if can retry
+	if !job.CanRetry() {
+		return "", domain.ErrMaxRetriesExceeded
+	}
+
+	// Create retry job
+	newJob, err := s.production.RetryJob(ctx, jobID)
+	if err != nil {
+		return "", fmt.Errorf("failed to create retry job: %w", err)
+	}
+
+	// Enqueue the retry job
+	if err := s.jobClient.Enqueue(ctx, jobs.Job{
+		ID:   newJob.ID,
+		Kind: jobs.JobKindGenerationSubmit,
+		Payload: map[string]any{
+			"generation_job_id": newJob.ID,
+		},
+	}); err != nil {
+		return "", fmt.Errorf("failed to enqueue retry job: %w", err)
+	}
+
+	return newJob.ID, nil
+}
+
+// UpdateGenerationJobPriority updates job priority
+func (s *ProductionService) UpdateGenerationJobPriority(ctx context.Context, jobID string, priority int) error {
+	// Get job to check authorization
+	job, err := s.production.GetGenerationJob(ctx, jobID)
+	if err != nil {
+		return fmt.Errorf("failed to get generation job: %w", err)
+	}
+
+	if err := s.authorizeScopedResource(ctx, job.ProjectID, job.EpisodeID); err != nil {
+		return err
+	}
+
+	// Validate priority
+	if err := domain.ValidatePriority(priority); err != nil {
+		return fmt.Errorf("%w: priority must be between %d and %d", err, domain.MinPriority, domain.MaxPriority)
+	}
+
+	// Update priority
+	if err := s.production.UpdateJobPriority(ctx, jobID, priority); err != nil {
+		return fmt.Errorf("failed to update job priority: %w", err)
+	}
+
+	return nil
+}
+
+// PauseEpisodeQueue pauses job processing for an episode
+func (s *ProductionService) PauseEpisodeQueue(ctx context.Context, episodeID string) error {
+	// Verify episode exists and check authorization
+	episode, err := s.projectSvc.GetEpisode(ctx, episodeID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.authorizeScopedResource(ctx, episode.ProjectID, episodeID); err != nil {
+		return err
+	}
+
+	return s.production.PauseEpisodeQueue(ctx, episodeID)
+}
+
+// ResumeEpisodeQueue resumes job processing for an episode
+func (s *ProductionService) ResumeEpisodeQueue(ctx context.Context, episodeID string) error {
+	// Verify episode exists and check authorization
+	episode, err := s.projectSvc.GetEpisode(ctx, episodeID)
+	if err != nil {
+		return err
+	}
+
+	if err := s.authorizeScopedResource(ctx, episode.ProjectID, episodeID); err != nil {
+		return err
+	}
+
+	return s.production.ResumeEpisodeQueue(ctx, episodeID)
+}
+
+// GetQueueStatus returns pause status for an episode
+func (s *ProductionService) GetQueueStatus(ctx context.Context, episodeID string) (bool, error) {
+	// Verify episode exists and check authorization
+	episode, err := s.projectSvc.GetEpisode(ctx, episodeID)
+	if err != nil {
+		return false, err
+	}
+
+	if err := s.authorizeScopedResource(ctx, episode.ProjectID, episodeID); err != nil {
+		return false, err
+	}
+
+	return s.production.IsEpisodeQueuePaused(ctx, episodeID)
+}

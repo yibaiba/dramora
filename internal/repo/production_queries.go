@@ -59,6 +59,7 @@ VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5, $6, $7, $8, $9, $10)
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 `
 
@@ -78,6 +79,7 @@ const listGenerationJobsSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 FROM generation_jobs
 ORDER BY created_at DESC, id
@@ -88,6 +90,7 @@ const getGenerationJobSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 FROM generation_jobs
 WHERE id = $1::uuid
@@ -103,6 +106,7 @@ SET updated_at = now()
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 `
 
@@ -110,6 +114,7 @@ const listGenerationJobsByStatusSQL = `
 SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 FROM generation_jobs
 WHERE status = $1
@@ -128,6 +133,7 @@ WHERE id = $1::uuid
 RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
        provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
        COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
        created_at, updated_at
 `
 
@@ -474,4 +480,56 @@ SET status = $3,
 WHERE id = $1::uuid
   AND status = $2
 RETURNING id::text, timeline_id::text, status, format, created_at, updated_at
+`
+
+// Batch generation feature queries
+const retryGenerationJobSQL = `
+INSERT INTO generation_jobs (
+    id, project_id, episode_id, workflow_run_id, request_key, provider, model, task_type, status, prompt, params, priority, retry_count, parent_job_id
+)
+SELECT 
+    $1::uuid, project_id, episode_id, workflow_run_id, $2::text, provider, model, task_type, 'queued'::text, prompt, params, priority, retry_count + 1, $3::uuid
+FROM generation_jobs
+WHERE id = $3::uuid
+RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
+       provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
+       created_at, updated_at
+`
+
+const updateGenerationJobPrioritySQL = `
+UPDATE generation_jobs
+SET priority = $2, updated_at = now()
+WHERE id = $1::uuid
+RETURNING id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
+       provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
+       created_at, updated_at
+`
+
+const listGenerationJobsByPrioritySQL = `
+SELECT id::text, project_id::text, COALESCE(episode_id::text, ''), COALESCE(workflow_run_id::text, ''),
+       provider, model, task_type, status, prompt, params, COALESCE(provider_task_id, ''),
+       COALESCE(result_asset_id::text, ''),
+       priority, retry_count, COALESCE(parent_job_id::text, NULL),
+       created_at, updated_at
+FROM generation_jobs
+WHERE episode_id = $1::uuid AND status = $2
+ORDER BY priority DESC, created_at, id
+`
+
+const getQueueStatusSQL = `
+SELECT episode_id::text, paused, COALESCE(paused_at, '0001-01-01T00:00:00Z'::timestamptz), updated_at
+FROM queue_status
+WHERE episode_id = $1::uuid
+`
+
+const upsertQueueStatusSQL = `
+INSERT INTO queue_status (episode_id, paused, paused_at, updated_at)
+VALUES ($1::uuid, $2, CASE WHEN $2 = true THEN now() ELSE NULL END, now())
+ON CONFLICT (episode_id) DO UPDATE
+SET paused = $2, paused_at = CASE WHEN $2 = true THEN now() ELSE NULL END, updated_at = now()
+RETURNING episode_id::text, paused, COALESCE(paused_at, '0001-01-01T00:00:00Z'::timestamptz), updated_at
 `

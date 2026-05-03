@@ -42,6 +42,23 @@ func (s *ProductionService) ProcessQueuedGenerationJobs(ctx context.Context, lim
 		if !shouldProcessGenerationJob(generationJob) {
 			continue
 		}
+
+		// Check if episode queue is paused
+		isPaused, err := s.production.IsEpisodeQueuePaused(ctx, generationJob.EpisodeID)
+		if err != nil {
+			s.metrics.recordGenerationSkip("queue pause check failed")
+			slog.Default().Warn("worker skipped generation job: queue pause check failed",
+				"job_id", generationJob.ID,
+				"episode_id", generationJob.EpisodeID,
+				"error", err,
+			)
+			continue
+		}
+		if isPaused {
+			s.metrics.recordGenerationSkip("queue paused")
+			continue
+		}
+
 		jobCtx, ctxErr := s.workerJobAuthContextForProject(ctx, generationJob.ProjectID)
 		if ctxErr != nil {
 			s.metrics.recordGenerationSkip(ctxErr.Error())
