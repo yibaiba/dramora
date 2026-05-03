@@ -29,7 +29,10 @@ export async function initFFmpeg(): Promise<void> {
     isInitialized = true
   } catch (error) {
     isInitialized = false
-    throw new Error(`FFmpeg initialization failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `FFmpeg initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
   }
 }
 
@@ -87,7 +90,10 @@ export async function processVideo(
 
     return outputBlob
   } catch (error) {
-    throw new Error(`Video processing failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `Video processing failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
   }
 }
 
@@ -172,7 +178,10 @@ export async function encodeToMP4(
 
     return outputBlob
   } catch (error) {
-    throw new Error(`MP4 encoding failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `MP4 encoding failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
   }
 }
 
@@ -250,7 +259,10 @@ export async function trimAndEncodeClip(
 
     return outputBlob
   } catch (error) {
-    throw new Error(`Trim and encode failed: ${error instanceof Error ? error.message : String(error)}`)
+    throw new Error(
+      `Trim and encode failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    )
   }
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import type { Timeline } from '../../lib/editor/types'
 import { initFFmpeg, unloadFFmpeg } from '../../lib/editor/ffmpeg-worker'
@@ -32,22 +32,20 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
   const [isExporting, setIsExporting] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
-  const [estimatedTime, setEstimatedTime] = useState(0)
+
+  const estimatedTime = useMemo(() => {
+    if (!isOpen) return 0
+    return format === 'mp4' ? estimateExportDuration(timeline, quality) : 2
+  }, [isOpen, format, quality, timeline])
 
   useEffect(() => {
-    if (!isOpen) return
-    
-    const estimated = format === 'mp4' ? estimateExportDuration(timeline, quality) : 2
-    setEstimatedTime(estimated)
+    if (!isOpen || !isExporting) return
 
     // Cleanup on unmount or when dialog closes
     return () => {
-      if (isExporting) {
-        unloadFFmpeg()
-      }
+      unloadFFmpeg()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, format, quality, timeline.duration])
+  }, [isOpen, isExporting])
 
   if (!isOpen) return null
 
