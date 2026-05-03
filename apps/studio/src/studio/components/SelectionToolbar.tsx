@@ -1,5 +1,5 @@
 import { Trash2, Download, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useDeleteAsset } from '../../api/hooks'
 import type { Asset } from '../../api/types'
 import { useEpisodeAssets } from '../../api/hooks'
@@ -26,7 +26,11 @@ export function SelectionToolbar({
   const { data: assets = [] } = useEpisodeAssets(episodeId)
   const deleteAssetMutation = useDeleteAsset()
 
-  const selectedAssets = assets.filter((a: Asset) => selectedAssetIds.has(a.id))
+  // 使用 useMemo 缓存 selectedAssets，避免频繁重新计算
+  const selectedAssets = useMemo(
+    () => assets.filter((a: Asset) => selectedAssetIds.has(a.id)),
+    [assets, selectedAssetIds]
+  )
 
   const handleConfirmDelete = async () => {
     setShowDeleteConfirm(false)

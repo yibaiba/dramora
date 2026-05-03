@@ -218,12 +218,12 @@ export function GalleryPage() {
           />
         ) : (
           <>
-            {selectedAssetIds.size > 0 && (
+            {selectedAssetIds.size > 0 && activeEpisode?.id && (
               <SelectionToolbar
                 selectedCount={selectedAssetIds.size}
                 onClearSelection={handleClearSelection}
                 selectedAssetIds={selectedAssetIds}
-                episodeId={activeEpisode?.id ?? ''}
+                episodeId={activeEpisode.id}
                 onDeleteSuccess={() => {
                   setSelectedAssetIds(new Set())
                 }}

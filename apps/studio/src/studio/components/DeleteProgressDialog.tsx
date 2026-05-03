@@ -64,7 +64,8 @@ export function DeleteProgressDialog({
     }
 
     startDelete()
-  }, [selectedAssets, episodeId, deleteAssetMutation])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssets, episodeId])
 
   return (
     <div className="dialog-overlay" onClick={() => (state !== 'deleting' ? onClose() : null)}>

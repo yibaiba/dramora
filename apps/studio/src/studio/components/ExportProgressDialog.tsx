@@ -1,5 +1,5 @@
 import { X, CheckCircle2, AlertCircle } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import type { Asset } from '../../api/types'
 import { exportAssetsAsZip } from '../utils/export-utils'
 
@@ -18,11 +18,14 @@ export function ExportProgressDialog({
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
+  // 使用 useMemo 缓存 selectedAssets，避免 useEffect 频繁重新开始导出
+  const memoizedAssets = useMemo(() => selectedAssets, [selectedAssets])
+
   useEffect(() => {
     const startExport = async () => {
       try {
         setState('exporting')
-        await exportAssetsAsZip(selectedAssets, episodeId, (percent) => {
+        await exportAssetsAsZip(memoizedAssets, episodeId, (percent) => {
           setProgress(percent)
         })
         setState('success')
@@ -33,7 +36,7 @@ export function ExportProgressDialog({
     }
 
     startExport()
-  }, [selectedAssets, episodeId])
+  }, [memoizedAssets, episodeId])
 
   return (
     <div className="dialog-overlay" onClick={() => state === 'success' && onClose()}>

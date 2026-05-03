@@ -892,6 +892,11 @@ export async function batchGenerateShots(
 
 // Asset Management APIs
 export async function deleteAsset(assetId: string): Promise<void> {
+  const session = readStoredSession()
+  if (!session) {
+    throw new Error('未授权：用户未登录')
+  }
+
   await fetchJSON(`/api/v1/assets/${assetId}`, {
     method: 'DELETE',
   })
