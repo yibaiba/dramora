@@ -62,7 +62,10 @@ func (s *ProductionService) GetShotPromptPack(
 }
 
 type SaveShotPromptPackInput struct {
-	DirectPrompt string
+	DirectPrompt          string
+	IPAdapterStrength     *float64
+	LoRAWeight            *float64
+	LoRACombinationWeight *float64
 }
 
 func (s *ProductionService) SaveShotPromptPack(
@@ -77,6 +80,24 @@ func (s *ProductionService) SaveShotPromptPack(
 	if directPrompt == "" {
 		return domain.ShotPromptPack{}, fmt.Errorf("%w: direct prompt is required", domain.ErrInvalidInput)
 	}
+
+	// Validate LoRA parameters if provided
+	if input.IPAdapterStrength != nil {
+		if err := domain.ValidateIPAdapterStrength(*input.IPAdapterStrength); err != nil {
+			return domain.ShotPromptPack{}, fmt.Errorf("%w: invalid ip_adapter_strength", err)
+		}
+	}
+	if input.LoRAWeight != nil {
+		if err := domain.ValidateLoRAWeight(*input.LoRAWeight); err != nil {
+			return domain.ShotPromptPack{}, fmt.Errorf("%w: invalid lora_weight", err)
+		}
+	}
+	if input.LoRACombinationWeight != nil {
+		if err := domain.ValidateLoRACombinationWeight(*input.LoRACombinationWeight); err != nil {
+			return domain.ShotPromptPack{}, fmt.Errorf("%w: invalid lora_combination_weight", err)
+		}
+	}
+
 	pack, err := s.production.GetShotPromptPack(ctx, shotID)
 	if err != nil {
 		if !errors.Is(err, domain.ErrNotFound) {
@@ -94,25 +115,62 @@ func (s *ProductionService) SaveShotPromptPack(
 			return domain.ShotPromptPack{}, buildErr
 		}
 		packParams.DirectPrompt = directPrompt
+
+		// Set LoRA parameters with defaults
+		ipAdapterStrength := domain.DefaultIPAdapterStrength
+		if input.IPAdapterStrength != nil && *input.IPAdapterStrength >= 0 && *input.IPAdapterStrength <= 1 {
+			ipAdapterStrength = *input.IPAdapterStrength
+		}
+		packParams.IPAdapterStrength = ipAdapterStrength
+
+		loraWeight := domain.DefaultLoRAWeight
+		if input.LoRAWeight != nil && *input.LoRAWeight >= 0 && *input.LoRAWeight <= 1 {
+			loraWeight = *input.LoRAWeight
+		}
+		packParams.LoRAWeight = loraWeight
+
+		loraCombinationWeight := domain.DefaultLoRACombinationWeight
+		if input.LoRACombinationWeight != nil && *input.LoRACombinationWeight >= 0 && *input.LoRACombinationWeight <= 1 {
+			loraCombinationWeight = *input.LoRACombinationWeight
+		}
+		packParams.LoRACombinationWeight = loraCombinationWeight
 		return s.production.SaveShotPromptPack(ctx, packParams)
 	}
 	if err := s.authorizeScopedResource(ctx, pack.ProjectID, pack.EpisodeID); err != nil {
 		return domain.ShotPromptPack{}, err
 	}
+
+	// Merge new parameters with existing pack data
+	ipAdapterStrength := pack.IPAdapterStrength
+	if input.IPAdapterStrength != nil {
+		ipAdapterStrength = *input.IPAdapterStrength
+	}
+	loraWeight := pack.LoRAWeight
+	if input.LoRAWeight != nil {
+		loraWeight = *input.LoRAWeight
+	}
+	loraCombinationWeight := pack.LoRACombinationWeight
+	if input.LoRACombinationWeight != nil {
+		loraCombinationWeight = *input.LoRACombinationWeight
+	}
+
 	return s.production.SaveShotPromptPack(ctx, repo.SaveShotPromptPackParams{
-		ID:                pack.ID,
-		ProjectID:         pack.ProjectID,
-		EpisodeID:         pack.EpisodeID,
-		ShotID:            pack.ShotID,
-		Provider:          pack.Provider,
-		Model:             pack.Model,
-		Preset:            pack.Preset,
-		TaskType:          pack.TaskType,
-		DirectPrompt:      directPrompt,
-		NegativePrompt:    pack.NegativePrompt,
-		TimeSlices:        pack.TimeSlices,
-		ReferenceBindings: pack.ReferenceBindings,
-		Params:            pack.Params,
+		ID:                    pack.ID,
+		ProjectID:             pack.ProjectID,
+		EpisodeID:             pack.EpisodeID,
+		ShotID:                pack.ShotID,
+		Provider:              pack.Provider,
+		Model:                 pack.Model,
+		Preset:                pack.Preset,
+		TaskType:              pack.TaskType,
+		DirectPrompt:          directPrompt,
+		NegativePrompt:        pack.NegativePrompt,
+		IPAdapterStrength:     ipAdapterStrength,
+		LoRAWeight:            loraWeight,
+		LoRACombinationWeight: loraCombinationWeight,
+		TimeSlices:            pack.TimeSlices,
+		ReferenceBindings:     pack.ReferenceBindings,
+		Params:                pack.Params,
 	})
 }
 

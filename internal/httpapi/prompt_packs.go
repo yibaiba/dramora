@@ -27,7 +27,10 @@ func (api *api) getShotPromptPack(w http.ResponseWriter, r *http.Request) {
 }
 
 type saveShotPromptPackRequest struct {
-	DirectPrompt string `json:"direct_prompt"`
+	DirectPrompt          string   `json:"direct_prompt"`
+	IPAdapterStrength     *float64 `json:"ip_adapter_strength,omitempty"`
+	LoRAWeight            *float64 `json:"lora_weight,omitempty"`
+	LoRACombinationWeight *float64 `json:"lora_combination_weight,omitempty"`
 }
 
 func (api *api) saveShotPromptPack(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +42,12 @@ func (api *api) saveShotPromptPack(w http.ResponseWriter, r *http.Request) {
 	pack, err := api.productionService.SaveShotPromptPack(
 		r.Context(),
 		chi.URLParam(r, "shotId"),
-		service.SaveShotPromptPackInput{DirectPrompt: request.DirectPrompt},
+		service.SaveShotPromptPackInput{
+			DirectPrompt:          request.DirectPrompt,
+			IPAdapterStrength:     request.IPAdapterStrength,
+			LoRAWeight:            request.LoRAWeight,
+			LoRACombinationWeight: request.LoRACombinationWeight,
+		},
 	)
 	if err != nil {
 		writeServiceError(w, err)
