@@ -5,6 +5,7 @@ import type { Asset } from '../../api/types'
 import { useEpisodeAssets } from '../../api/hooks'
 import { ConfirmDeleteDialog } from './ConfirmDeleteDialog'
 import { ExportProgressDialog } from './ExportProgressDialog'
+import { DeleteProgressDialog } from './DeleteProgressDialog'
 
 export function SelectionToolbar({
   selectedCount,
@@ -20,6 +21,7 @@ export function SelectionToolbar({
   onDeleteSuccess: () => void
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showDeleteProgress, setShowDeleteProgress] = useState(false)
   const [showExportProgress, setShowExportProgress] = useState(false)
   const { data: assets = [] } = useEpisodeAssets(episodeId)
   const deleteAssetMutation = useDeleteAsset()
@@ -28,17 +30,7 @@ export function SelectionToolbar({
 
   const handleConfirmDelete = async () => {
     setShowDeleteConfirm(false)
-    try {
-      for (const asset of selectedAssets) {
-        await deleteAssetMutation.mutateAsync({
-          assetId: asset.id,
-          episodeId,
-        })
-      }
-      onDeleteSuccess()
-    } catch (error) {
-      console.error('Delete failed:', error)
-    }
+    setShowDeleteProgress(true)
   }
 
   const handleStartExport = () => {
@@ -88,7 +80,18 @@ export function SelectionToolbar({
           selectedCount={selectedCount}
           onConfirm={handleConfirmDelete}
           onCancel={() => setShowDeleteConfirm(false)}
-          isLoading={deleteAssetMutation.isPending}
+          isLoading={false}
+        />
+      )}
+
+      {showDeleteProgress && (
+        <DeleteProgressDialog
+          selectedAssets={selectedAssets}
+          episodeId={episodeId}
+          onClose={() => {
+            setShowDeleteProgress(false)
+            onDeleteSuccess()
+          }}
         />
       )}
 

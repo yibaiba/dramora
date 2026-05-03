@@ -7671,3 +7671,49 @@ p {
 .gallery-asset-card.selected {
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.5) inset;
 }
+
+/* Delete Failures List */
+.delete-failures {
+  margin-top: 12px;
+}
+
+.failures-list {
+  list-style: none;
+  padding: 8px 12px;
+  margin: 0;
+  border-radius: 6px;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.failure-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(239, 68, 68, 0.1);
+}
+
+.failure-item:last-child {
+  border-bottom: none;
+}
+
+.failure-name {
+  color: #fca5a5;
+  font-weight: 500;
+}
+
+.failure-reason {
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.failure-item-more {
+  padding: 6px 0;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
