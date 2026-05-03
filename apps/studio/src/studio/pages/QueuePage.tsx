@@ -1,8 +1,15 @@
-import { Clock, X, RotateCw } from 'lucide-react'
+import { Clock, X, RotateCw, Play, Pause, Zap } from 'lucide-react'
 import { useMemo, useState, useCallback } from 'react'
-import { useGenerationJobs } from '../../api/hooks'
+import {
+  useGenerationJobs,
+  useRetryGenerationJob,
+  useUpdateGenerationJobPriority,
+  usePauseEpisodeQueue,
+  useResumeEpisodeQueue,
+} from '../../api/hooks'
 import type { GenerationJob, GenerationJobStatus } from '../../api/types'
 import { StatePlaceholder } from '../components/StatePlaceholder'
+import '../styles/queue.css'
 
 type FilterStatus = 'all' | 'queued' | 'rendering' | 'succeeded' | 'failed'
 type TimeRangeFilter = 'all' | '1h' | '24h'
@@ -72,6 +79,14 @@ function isCancelable(status: GenerationJobStatus): boolean {
   return status === 'queued' || status === 'submitting' || status === 'submitted' || status === 'polling' || status === 'downloading' || status === 'postprocessing' || status === 'canceling'
 }
 
+function isFailed(status: GenerationJobStatus): boolean {
+  return status === 'failed' || status === 'timed_out' || status === 'blocked'
+}
+
+function canUpdatePriority(status: GenerationJobStatus): boolean {
+  return status === 'queued' || status === 'submitted'
+}
+
 function getUniqueTaskTypes(jobs: GenerationJob[]): string[] {
   const types = new Set(jobs.map((j) => j.task_type))
   return Array.from(types).sort()
@@ -98,6 +113,13 @@ export function QueuePage() {
   const [filterTimeRange, setFilterTimeRange] = useState<TimeRangeFilter>('all')
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [queuePaused, setQueuePaused] = useState(false)
+  const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null)
+
+  const retryMutation = useRetryGenerationJob()
+  const priorityMutation = useUpdateGenerationJobPriority()
+  const pauseMutation = usePauseEpisodeQueue()
+  const resumeMutation = useResumeEpisodeQueue()
 
   const uniqueTaskTypes = useMemo(() => getUniqueTaskTypes(jobs), [jobs])
 
@@ -143,6 +165,56 @@ export function QueuePage() {
     }
   }, [refetch])
 
+  const handlePauseQueue = useCallback(async () => {
+    try {
+      if (queuePaused) {
+        // Get the first job's episode ID or use a default
+        const episodeId = jobs[0]?.episode_id
+        if (!episodeId) {
+          setNotification({ message: '没有可用的 Episode ID', type: 'error' })
+          return
+        }
+        await resumeMutation.mutateAsync(episodeId)
+        setQueuePaused(false)
+        setNotification({ message: '队列已恢复', type: 'success' })
+      } else {
+        const episodeId = jobs[0]?.episode_id
+        if (!episodeId) {
+          setNotification({ message: '没有可用的 Episode ID', type: 'error' })
+          return
+        }
+        await pauseMutation.mutateAsync(episodeId)
+        setQueuePaused(true)
+        setNotification({ message: '队列已暂停', type: 'success' })
+      }
+    } catch {
+      setNotification({ message: '操作失败，请重试', type: 'error' })
+    }
+  }, [queuePaused, jobs, pauseMutation, resumeMutation])
+
+  const handleRetry = useCallback(
+    async (jobId: string) => {
+      try {
+        await retryMutation.mutateAsync(jobId)
+        setNotification({ message: '重试已提交', type: 'success' })
+      } catch {
+        setNotification({ message: '重试失败，请重试', type: 'error' })
+      }
+    },
+    [retryMutation]
+  )
+
+  const handleUpdatePriority = useCallback(
+    (jobId: string, priority: number) => {
+      try {
+        priorityMutation.mutate({ jobId, priority })
+      } catch {
+        setNotification({ message: '优先级更新失败', type: 'error' })
+      }
+    },
+    [priorityMutation]
+  )
+
   const clearFilters = () => {
     setFilterStatus('all')
     setFilterTaskType('all')
@@ -155,6 +227,20 @@ export function QueuePage() {
 
   return (
     <section className="studio-page queue-page" aria-labelledby="queue-title">
+      {notification && (
+        <div className={`queue-notification notification-${notification.type}`} role="alert">
+          <span>{notification.message}</span>
+          <button
+            onClick={() => setNotification(null)}
+            className="notification-close"
+            type="button"
+            aria-label="关闭通知"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
       <div className="board-header">
         <div>
           <h1 id="queue-title">生成队列</h1>
@@ -214,6 +300,35 @@ export function QueuePage() {
               刷新
             </button>
           </div>
+        </div>
+
+        {/* Queue Controls Section */}
+        <div className="queue-controls">
+          <button
+            onClick={handlePauseQueue}
+            disabled={pauseMutation.isPending || resumeMutation.isPending}
+            className="queue-control-btn"
+            type="button"
+            aria-label={queuePaused ? '恢复队列' : '暂停队列'}
+          >
+            {queuePaused ? (
+              <>
+                <Play size={16} aria-hidden="true" />
+                恢复队列
+              </>
+            ) : (
+              <>
+                <Pause size={16} aria-hidden="true" />
+                暂停队列
+              </>
+            )}
+          </button>
+          {queuePaused && (
+            <span className="badge-paused">
+              <Zap size={14} aria-hidden="true" />
+              队列已暂停
+            </span>
+          )}
         </div>
 
         <div className="gallery-filters">
@@ -326,12 +441,18 @@ export function QueuePage() {
           <>
             <div className="queue-grid">
               {filtered.map((job) => (
-                <QueueJobCard key={job.id} job={job} isSelected={selectedJobId === job.id} onSelect={() => setSelectedJobId(job.id)} />
+                <QueueJobCard
+                  key={job.id}
+                  job={job}
+                  isSelected={selectedJobId === job.id}
+                  onSelect={() => setSelectedJobId(job.id)}
+                  onRetry={handleRetry}
+                  onUpdatePriority={handleUpdatePriority}
+                  isRetrying={retryMutation.isPending}
+                />
               ))}
             </div>
-            {selectedJob && (
-              <JobDetailPanel job={selectedJob} onClose={() => setSelectedJobId(null)} />
-            )}
+            {selectedJob && <JobDetailPanel job={selectedJob} onClose={() => setSelectedJobId(null)} />}
           </>
         )}
       </article>
@@ -339,9 +460,25 @@ export function QueuePage() {
   )
 }
 
-function QueueJobCard({ job, isSelected, onSelect }: { job: GenerationJob; isSelected: boolean; onSelect: () => void }) {
+function QueueJobCard({
+  job,
+  isSelected,
+  onSelect,
+  onRetry,
+  onUpdatePriority,
+  isRetrying,
+}: {
+  job: GenerationJob
+  isSelected: boolean
+  onSelect: () => void
+  onRetry: (jobId: string) => void
+  onUpdatePriority: (jobId: string, priority: number) => void
+  isRetrying: boolean
+}) {
   const tone = getStatusTone(job.status)
   const canCancel = isCancelable(job.status)
+  const canRetry = isFailed(job.status) && job.can_retry
+  const canChangePriority = canUpdatePriority(job.status)
   const shortId = job.id.substring(0, 6)
 
   return (
@@ -369,12 +506,60 @@ function QueueJobCard({ job, isSelected, onSelect }: { job: GenerationJob; isSel
         </div>
       </div>
 
-      {canCancel && (
-        <button className="queue-cancel-btn" type="button" title="取消此任务" disabled>
-          <X size={14} aria-hidden="true" />
-          取消
-        </button>
+      {/* Priority Control */}
+      {canChangePriority && (
+        <div className="job-priority-control" onClick={(e) => e.stopPropagation()}>
+          <label htmlFor={`priority-${job.id}`} className="priority-label">
+            优先级
+          </label>
+          <div className="priority-slider-container">
+            <input
+              id={`priority-${job.id}`}
+              type="range"
+              min="0"
+              max="100"
+              value={job.priority}
+              onChange={(e) => onUpdatePriority(job.id, parseInt(e.target.value, 10))}
+              className="priority-slider"
+              aria-label="任务优先级"
+            />
+            <span className="priority-value" aria-live="polite">
+              {job.priority}
+            </span>
+          </div>
+        </div>
       )}
+
+      {/* Retry Chain Info */}
+      {job.parent_job_id && (
+        <div className="retry-chain">
+          <small>重试 {job.parent_job_id.substring(0, 8)}…</small>
+        </div>
+      )}
+
+      {/* Action Buttons */}
+      <div className="job-actions" onClick={(e) => e.stopPropagation()}>
+        {canRetry && (
+          <button
+            className="job-retry-btn"
+            type="button"
+            onClick={() => onRetry(job.id)}
+            disabled={isRetrying}
+            title="重试此任务"
+            aria-label="重试失败的任务"
+          >
+            <RotateCw size={14} aria-hidden="true" />
+            {isRetrying ? '重试中...' : '重试'}
+          </button>
+        )}
+
+        {canCancel && (
+          <button className="queue-cancel-btn" type="button" title="取消此任务" disabled>
+            <X size={14} aria-hidden="true" />
+            取消
+          </button>
+        )}
+      </div>
     </article>
   )
 }
