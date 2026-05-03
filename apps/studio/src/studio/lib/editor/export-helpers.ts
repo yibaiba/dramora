@@ -61,10 +61,16 @@ export function downloadBlob(blob: Blob, filename: string): void {
 /**
  * Generate a filename for export
  */
-export function generateExportFilename(title: string, format: 'mp4' | 'fcpxml' = 'mp4'): string {
+export function generateExportFilename(title: string, format: 'mp4' | 'fcpxml' | 'prproj' | 'drp' = 'mp4'): string {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0]
   const cleanTitle = title.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30)
-  const ext = format === 'fcpxml' ? 'fcpxml' : 'mp4'
+  const extMap = {
+    mp4: 'mp4',
+    fcpxml: 'fcpxml',
+    prproj: 'prproj',
+    drp: 'drp',
+  }
+  const ext = extMap[format] || 'mp4'
   return `${cleanTitle}_${timestamp}.${ext}`
 }
 
@@ -185,4 +191,183 @@ export function validateClipsForExport(timeline: Timeline): string | null {
   }
 
   return null
+}
+
+/**
+ * Convert milliseconds to frames at given fps
+ */
+function msToFrames(ms: number, fps: number = 30): number {
+  return Math.round((ms / 1000) * fps)
+}
+
+/**
+ * Escape XML special characters
+ */
+function escapeXml(str: string): string {
+  return str.replace(/[<>&'"]/g, (char) => {
+    const entities: Record<string, string> = {
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;',
+      "'": '&apos;',
+      '"': '&quot;',
+    }
+    return entities[char] || char
+  })
+}
+
+/**
+ * Generate FCPXML format XML string
+ */
+function generateFCPXMLContent(timeline: Timeline, fps: number = 30): string {
+  const videoTracks = timeline.tracks.filter((t) => t.type === 'video')
+  if (videoTracks.length === 0) {
+    return ''
+  }
+
+  const durationFrames = msToFrames(timeline.duration, fps)
+
+  let clipXML = ''
+  for (const track of videoTracks) {
+    for (const clip of track.clips) {
+      const offset = msToFrames(clip.startTime, fps)
+      const duration = msToFrames(clip.duration, fps)
+      const filename = clip.sourceUrl.split('/').pop() || 'clip.mp4'
+
+      clipXML += `    <clip offset="${offset}s" name="${escapeXml(filename)}" duration="${duration}s">
+      <media>
+        <video>
+          <file src="${escapeXml(clip.sourceUrl)}" />
+        </video>
+      </media>
+      <timeMap>
+        <timept value="0s" />
+        <timept value="${duration}s" />
+      </timeMap>
+    </clip>\n`
+    }
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE fcpxml>
+<fcpxml version="1.11">
+  <resources>
+    <format id="r1" name="FFmpeg Image2" framerate="${fps}"/>
+  </resources>
+  <library>
+    <event name="Dramora Timeline">
+      <project name="Export">
+        <sequence format="r1" duration="${durationFrames}s">
+          <spine>
+${clipXML}          </spine>
+        </sequence>
+      </project>
+    </event>
+  </library>
+</fcpxml>`
+}
+
+/**
+ * Export timeline to FCPXML format (generates local XML)
+ */
+export function exportToFCPXML(timeline: Timeline, videoTitle: string = 'timeline'): void {
+  const fcpxmlContent = generateFCPXMLContent(timeline)
+  if (!fcpxmlContent) {
+    throw new Error('没有视频轨道可以导出')
+  }
+
+  const blob = new Blob([fcpxmlContent], { type: 'application/xml' })
+  const filename = generateExportFilename(videoTitle, 'fcpxml')
+  downloadBlob(blob, filename)
+}
+
+/**
+ * Generate Premiere Pro XML format
+ */
+function generatePremiereXML(timeline: Timeline): string {
+  const videoTracks = timeline.tracks.filter((t) => t.type === 'video')
+
+  let clipXML = ''
+  for (const track of videoTracks) {
+    for (const clip of track.clips) {
+      const inTime = Math.round(clip.startTime / 1000 * 30) // 30fps
+      const duration = Math.round(clip.duration / 1000 * 30)
+      const filename = clip.sourceUrl.split('/').pop() || 'clip.mp4'
+
+      clipXML += `  <clip intime="${inTime}" duration="${duration}">
+    <name>${escapeXml(filename)}</name>
+    <media>
+      <video>
+        <file path="${escapeXml(clip.sourceUrl)}" />
+      </video>
+    </media>
+  </clip>\n`
+    }
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<PremiereData version="3">
+  <project>
+    <name>Dramora Export</name>
+    <sequence>
+      <name>Timeline</name>
+      <videoTracks>
+${clipXML}      </videoTracks>
+    </sequence>
+  </project>
+</PremiereData>`
+}
+
+/**
+ * Export timeline to Premiere Pro format
+ */
+export function exportToPremiere(timeline: Timeline, videoTitle: string = 'timeline'): void {
+  const premiereXML = generatePremiereXML(timeline)
+  const blob = new Blob([premiereXML], { type: 'application/xml' })
+  const filename = generateExportFilename(videoTitle, 'prproj')
+  downloadBlob(blob, filename)
+}
+
+/**
+ * Generate DaVinci Resolve XML format
+ */
+function generateDaVinciXML(timeline: Timeline): string {
+  const videoTracks = timeline.tracks.filter((t) => t.type === 'video')
+
+  let clipXML = ''
+  let currentTime = 0
+  for (const track of videoTracks) {
+    for (const clip of track.clips) {
+      const durationSec = clip.duration / 1000
+      clipXML += `  <clip name="${escapeXml(clip.sourceUrl.split('/').pop() || 'clip.mp4')}" start="${currentTime.toFixed(2)}" duration="${durationSec.toFixed(2)}">
+    <media>
+      <video>
+        <path>${escapeXml(clip.sourceUrl)}</path>
+      </video>
+    </media>
+  </clip>\n`
+      currentTime += durationSec
+    }
+  }
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<DavinciResolveProject>
+  <timeline>
+    <name>Dramora Export</name>
+    <framerate>30</framerate>
+    <duration>${(timeline.duration / 1000).toFixed(2)}</duration>
+    <clips>
+${clipXML}    </clips>
+  </timeline>
+</DavinciResolveProject>`
+}
+
+/**
+ * Export timeline to DaVinci Resolve format
+ */
+export function exportToDaVinci(timeline: Timeline, videoTitle: string = 'timeline'): void {
+  const davinciXML = generateDaVinciXML(timeline)
+  const blob = new Blob([davinciXML], { type: 'application/xml' })
+  const filename = generateExportFilename(videoTitle, 'drp')
+  downloadBlob(blob, filename)
 }

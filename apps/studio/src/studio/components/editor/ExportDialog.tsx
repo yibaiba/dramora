@@ -10,6 +10,9 @@ import {
   getQualityDetails,
   getQualityLabel,
   validateClipsForExport,
+  exportToFCPXML,
+  exportToPremiere,
+  exportToDaVinci,
 } from '../../lib/editor/export-helpers'
 
 interface ExportDialogProps {
@@ -21,26 +24,29 @@ interface ExportDialogProps {
 }
 
 type Quality = 'low' | 'medium' | 'high' | 'very-high'
+type Format = 'mp4' | 'fcpxml' | 'premiere' | 'davinci'
 
 export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }: ExportDialogProps) {
   const [quality, setQuality] = useState<Quality>('medium')
+  const [format, setFormat] = useState<Format>('mp4')
   const [isExporting, setIsExporting] = useState(false)
   const [progress, setProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [estimatedTime, setEstimatedTime] = useState(0)
 
   useEffect(() => {
-    if (isOpen) {
-      const estimated = estimateExportDuration(timeline, quality)
-      setEstimatedTime(estimated)
-    }
-  }, [isOpen, timeline, quality])
+    if (!isOpen) return
+    
+    const estimated = format === 'mp4' ? estimateExportDuration(timeline, quality) : 2
+    setEstimatedTime(estimated)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, format, quality, timeline.duration])
 
   if (!isOpen) return null
 
   const validationError = validateClipsForExport(timeline)
-  const estimatedSize = calculateExportSize(timeline.duration, quality)
-  const qualityDetails = getQualityDetails(quality)
+  const estimatedSize = format === 'mp4' ? calculateExportSize(timeline.duration, quality) : 5
+  const qualityDetails = format === 'mp4' ? getQualityDetails(quality) : null
 
   const handleExport = async () => {
     setError(null)
@@ -48,28 +54,35 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
     setProgress(0)
 
     try {
-      // Initialize FFmpeg
-      await initFFmpeg()
+      if (format === 'fcpxml') {
+        exportToFCPXML(timeline, videoTitle)
+        setProgress(1)
+      } else if (format === 'premiere') {
+        exportToPremiere(timeline, videoTitle)
+        setProgress(1)
+      } else if (format === 'davinci') {
+        exportToDaVinci(timeline, videoTitle)
+        setProgress(1)
+      } else {
+        // MP4 export
+        await initFFmpeg()
 
-      // For now, we'll do a simple export of a placeholder
-      // In a real scenario, we'd fetch the video and process clips
-      // This is a simplified version that demonstrates the flow
+        const dummyBlob = new Blob(['mock video data'], { type: 'video/mp4' })
 
-      const dummyBlob = new Blob(['mock video data'], { type: 'video/mp4' })
+        // Simulate progress
+        for (let i = 0; i < 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, (estimatedTime * 1000) / 10))
+          setProgress((i + 1) / 10)
+        }
 
-      // Simulate progress
-      for (let i = 0; i < 10; i++) {
-        await new Promise((resolve) => setTimeout(resolve, (estimatedTime * 1000) / 10))
-        setProgress((i + 1) / 10)
+        const filename = generateExportFilename(videoTitle, 'mp4')
+        downloadBlob(dummyBlob, filename)
+
+        setProgress(1)
+        unloadFFmpeg()
       }
 
-      // Create output
-      const filename = generateExportFilename(videoTitle, 'mp4')
-      downloadBlob(dummyBlob, filename)
-
-      setProgress(1)
       setTimeout(() => {
-        unloadFFmpeg()
         onClose()
       }, 1000)
     } catch (err) {
@@ -120,36 +133,72 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
             </div>
           )}
 
-          {/* Quality Selection */}
           {!validationError && (
             <>
+              {/* Format Selection */}
               <div className="export-section">
-                <label className="export-label">导出质量</label>
-                <div className="export-quality-options">
-                  {(['low', 'medium', 'high', 'very-high'] as const).map((q) => (
-                    <div key={q} className="export-quality-item">
+                <label className="export-label">导出格式</label>
+                <div className="export-format-options">
+                  {(
+                    [
+                      { value: 'mp4', label: 'MP4', desc: '通用视频格式' },
+                      { value: 'fcpxml', label: 'FCPXML', desc: 'Final Cut Pro' },
+                      { value: 'premiere', label: 'Premiere', desc: 'Adobe Premiere Pro' },
+                      { value: 'davinci', label: 'DaVinci', desc: 'DaVinci Resolve' },
+                    ] as const
+                  ).map((opt) => (
+                    <div key={opt.value} className="export-format-item">
                       <input
                         type="radio"
-                        id={`quality-${q}`}
-                        name="quality"
-                        value={q}
-                        checked={quality === q}
-                        onChange={(e) => setQuality(e.target.value as Quality)}
+                        id={`format-${opt.value}`}
+                        name="format"
+                        value={opt.value}
+                        checked={format === opt.value}
+                        onChange={(e) => setFormat(e.target.value as Format)}
                         disabled={isExporting}
-                        className="export-quality-radio"
+                        className="export-format-radio"
                       />
-                      <label htmlFor={`quality-${q}`} className="export-quality-label">
-                        <div className="export-quality-name">{getQualityLabel(q)}</div>
-                        <div className="export-quality-details">
-                          <span>{qualityDetails.resolution}</span>
-                          <span>•</span>
-                          <span>{qualityDetails.bitrate}</span>
-                        </div>
+                      <label htmlFor={`format-${opt.value}`} className="export-format-label">
+                        <div className="export-format-name">{opt.label}</div>
+                        <div className="export-format-desc">{opt.desc}</div>
                       </label>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* Quality Selection (MP4 only) */}
+              {format === 'mp4' && (
+                <div className="export-section">
+                  <label className="export-label">导出质量</label>
+                  <div className="export-quality-options">
+                    {(['low', 'medium', 'high', 'very-high'] as const).map((q) => (
+                      <div key={q} className="export-quality-item">
+                        <input
+                          type="radio"
+                          id={`quality-${q}`}
+                          name="quality"
+                          value={q}
+                          checked={quality === q}
+                          onChange={(e) => setQuality(e.target.value as Quality)}
+                          disabled={isExporting}
+                          className="export-quality-radio"
+                        />
+                        <label htmlFor={`quality-${q}`} className="export-quality-label">
+                          <div className="export-quality-name">{getQualityLabel(q)}</div>
+                          {qualityDetails && (
+                            <div className="export-quality-details">
+                              <span>{qualityDetails.resolution}</span>
+                              <span>•</span>
+                              <span>{qualityDetails.bitrate}</span>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Export Info */}
               <div className="export-info-grid">

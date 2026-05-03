@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { Eye, EyeOff, Lock, LockOpen } from 'lucide-react'
 import { useTimelineStore } from '../../lib/editor/timeline-store'
 import type { Track, Clip } from '../../lib/editor/types'
 
-const TRACK_HEIGHT = 60
 const RULER_HEIGHT = 40
 const PIXELS_PER_SECOND = 100
 const MIN_CLIP_WIDTH = 4
+const TRACK_HEIGHTS: Record<string, number> = {
+  video: 120,
+  audio: 80,
+  subtitle: 60,
+}
+const TRACK_HEADER_WIDTH = 180
 
 export function TimelineCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -16,11 +22,14 @@ export function TimelineCanvas() {
   const setPlayheadTime = useTimelineStore((state) => state.setPlayheadTime)
   const setCurrentClip = useTimelineStore((state) => state.setCurrentClip)
   const moveClip = useTimelineStore((state) => state.moveClip)
+  const toggleTrackVisibility = useTimelineStore((state) => state.toggleTrackVisibility)
+  const toggleTrackLock = useTimelineStore((state) => state.toggleTrackLock)
 
   const [canvasWidth, setCanvasWidth] = useState(0)
   const [canvasHeight, setCanvasHeight] = useState(0)
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
 
   // Update canvas size
   useEffect(() => {
@@ -29,14 +38,15 @@ export function TimelineCanvas() {
 
     const handleResize = () => {
       const rect = container.getBoundingClientRect()
-      setCanvasWidth(rect.width)
-      setCanvasHeight(Math.max(400, rect.height))
+      setCanvasWidth(rect.width - TRACK_HEADER_WIDTH)
+      const totalHeight = RULER_HEIGHT + timeline.tracks.reduce((sum, track) => sum + TRACK_HEIGHTS[track.type], 0)
+      setCanvasHeight(Math.max(400, totalHeight))
     }
 
     handleResize()
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
-  }, [])
+  }, [timeline.tracks])
 
   const drawRuler = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     ctx.fillStyle = 'rgb(19, 22, 33)'
@@ -66,18 +76,25 @@ export function TimelineCanvas() {
     }
   }, [timeline.duration])
 
-  const drawClip = useCallback((ctx: CanvasRenderingContext2D, clip: Clip, yOffset: number, height: number) => {
+  const drawClip = useCallback((ctx: CanvasRenderingContext2D, clip: Clip, yOffset: number, height: number, isSelected: boolean) => {
     const x = (clip.startTime / 1000) * PIXELS_PER_SECOND
     const clipWidth = Math.max(MIN_CLIP_WIDTH, (clip.duration / 1000) * PIXELS_PER_SECOND)
     const padding = 4
 
-    ctx.fillStyle = 'rgba(124, 58, 237, 0.4)'
+    // Clip background color based on selection state
+    if (isSelected) {
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)'
+    } else {
+      ctx.fillStyle = 'rgba(124, 58, 237, 0.4)'
+    }
     ctx.fillRect(x + padding, yOffset + padding, clipWidth - padding * 2, height - padding * 2)
 
-    ctx.strokeStyle = '#7c3aed'
-    ctx.lineWidth = 1.5
+    // Clip border
+    ctx.strokeStyle = isSelected ? '#94a3b8' : '#7c3aed'
+    ctx.lineWidth = isSelected ? 2 : 1.5
     ctx.strokeRect(x + padding, yOffset + padding, clipWidth - padding * 2, height - padding * 2)
 
+    // Clip label
     if (clipWidth > 40) {
       ctx.fillStyle = '#e5e7eb'
       ctx.font = 'bold 12px Inter, sans-serif'
@@ -89,18 +106,27 @@ export function TimelineCanvas() {
 
   const drawTrack = useCallback(
     (ctx: CanvasRenderingContext2D, track: Track, yOffset: number, width: number, height: number) => {
-      ctx.fillStyle = track.visible ? 'rgb(19, 22, 33)' : 'rgba(19, 22, 33, 0.5)'
+      // Track background - varies by type
+      const trackTypeColor = {
+        video: 'rgb(30, 35, 50)',
+        audio: 'rgb(25, 30, 45)',
+        subtitle: 'rgb(20, 25, 40)',
+      }
+      ctx.fillStyle = track.visible ? trackTypeColor[track.type] : 'rgba(19, 22, 33, 0.5)'
       ctx.fillRect(0, yOffset, width, height)
 
+      // Track border
       ctx.strokeStyle = 'rgba(148, 163, 184, 0.16)'
       ctx.lineWidth = 1
       ctx.strokeRect(0, yOffset, width, height)
 
+      // Draw clips
       for (const clip of track.clips) {
-        drawClip(ctx, clip, yOffset, height)
+        const isSelected = clip.id === selectedClipId
+        drawClip(ctx, clip, yOffset, height, isSelected)
       }
     },
-    [drawClip],
+    [drawClip, selectedClipId],
   )
 
   const drawPlayhead = useCallback((ctx: CanvasRenderingContext2D, time: number, pixelsPerSecond: number, height: number) => {
@@ -135,8 +161,9 @@ export function TimelineCanvas() {
 
     let yOffset = RULER_HEIGHT
     for (const track of timeline.tracks) {
-      drawTrack(ctx, track, yOffset, canvasWidth, TRACK_HEIGHT)
-      yOffset += TRACK_HEIGHT
+      const height = TRACK_HEIGHTS[track.type]
+      drawTrack(ctx, track, yOffset, canvasWidth, height)
+      yOffset += height
     }
 
     drawPlayhead(ctx, playheadTime, PIXELS_PER_SECOND, canvasHeight)
@@ -169,7 +196,19 @@ export function TimelineCanvas() {
     }
 
     if (y > RULER_HEIGHT) {
-      const trackIndex = Math.floor((y - RULER_HEIGHT) / TRACK_HEIGHT)
+      // Find which track was clicked
+      let trackIndex = 0
+      let yOffset = RULER_HEIGHT
+      for (let i = 0; i < timeline.tracks.length; i++) {
+        const track = timeline.tracks[i]
+        const trackHeight = TRACK_HEIGHTS[track.type]
+        if (y >= yOffset && y < yOffset + trackHeight) {
+          trackIndex = i
+          break
+        }
+        yOffset += trackHeight
+      }
+
       const track = timeline.tracks[trackIndex]
       if (!track) return
 
@@ -178,6 +217,7 @@ export function TimelineCanvas() {
 
       if (clip && !track.locked) {
         setCurrentClip(clip)
+        setSelectedClipId(clip.id)
         setDraggedClipId(clip.id)
         setDragOffset(clickTime - clip.startTime)
 
@@ -201,6 +241,7 @@ export function TimelineCanvas() {
         document.addEventListener('mouseup', handleMouseUp)
       } else {
         setCurrentClip(null)
+        setSelectedClipId(null)
       }
     }
   }
@@ -208,27 +249,113 @@ export function TimelineCanvas() {
   return (
     <div
       ref={containerRef}
-      className="timeline-canvas-container"
+      className="timeline-canvas-wrapper"
       style={{
         flex: 1,
         minHeight: '300px',
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'auto',
         backgroundColor: 'rgb(13, 15, 23)',
         borderRadius: '8px',
         border: '1px solid rgba(148, 163, 184, 0.16)',
+        display: 'flex',
       }}
     >
-      <canvas
-        ref={canvasRef}
-        onMouseDown={handleCanvasMouseDown}
+      {/* Track Headers */}
+      <div
+        className="timeline-track-headers"
         style={{
-          display: 'block',
-          width: '100%',
-          height: '100%',
-          cursor: draggedClipId ? 'grabbing' : 'default',
+          width: `${TRACK_HEADER_WIDTH}px`,
+          flexShrink: 0,
+          borderRight: '1px solid rgba(148, 163, 184, 0.16)',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: 'rgb(15, 18, 28)',
         }}
-      />
+      >
+        {/* Ruler spacer */}
+        <div
+          style={{
+            height: `${RULER_HEIGHT}px`,
+            borderBottom: '1px solid rgba(148, 163, 184, 0.16)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '12px',
+            color: '#94a3b8',
+            fontWeight: '500',
+          }}
+        >
+          轨道
+        </div>
+
+        {/* Track headers */}
+        {timeline.tracks.map((track) => (
+          <div
+            key={track.id}
+            className="timeline-track-header"
+            style={{
+              height: `${TRACK_HEIGHTS[track.type]}px`,
+              padding: '8px',
+              borderBottom: '1px solid rgba(148, 163, 184, 0.16)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '4px',
+              justifyContent: 'space-between',
+            }}
+          >
+            <div style={{ fontSize: '12px', fontWeight: '600', color: '#e2e8f0' }}>
+              {track.type === 'video' ? '视频' : track.type === 'audio' ? '音频' : '字幕'}
+            </div>
+            <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-start' }}>
+              <button
+                onClick={() => toggleTrackVisibility(track.id)}
+                title={track.visible ? '隐藏' : '显示'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: track.visible ? '#94a3b8' : '#64748b',
+                }}
+              >
+                {track.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+              </button>
+              <button
+                onClick={() => toggleTrackLock(track.id)}
+                title={track.locked ? '解锁' : '锁定'}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  color: track.locked ? '#f87171' : '#94a3b8',
+                }}
+              >
+                {track.locked ? <Lock size={14} /> : <LockOpen size={14} />}
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Canvas */}
+      <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <canvas
+          ref={canvasRef}
+          onMouseDown={handleCanvasMouseDown}
+          style={{
+            display: 'block',
+            width: '100%',
+            height: '100%',
+            cursor: draggedClipId ? 'grabbing' : 'default',
+          }}
+        />
+      </div>
     </div>
   )
 }
