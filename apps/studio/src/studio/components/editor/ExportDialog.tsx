@@ -110,7 +110,7 @@ export function ExportDialog({ isOpen, timeline, videoUrl, videoTitle = 'video',
 
         // Encode to MP4 with real FFmpeg
         const filename = generateExportFilename(videoTitle, 'mp4')
-        const encodedBlob = await encodeToMP4(videoBlob, quality, (currentProgress, _) => {
+        const encodedBlob = await encodeToMP4(videoBlob, quality, (currentProgress) => {
           // Map progress from 0.2-0.95 for encoding phase
           const encodingProgress = 0.2 + currentProgress * 0.75
           setProgress(Math.min(0.95, encodingProgress))
