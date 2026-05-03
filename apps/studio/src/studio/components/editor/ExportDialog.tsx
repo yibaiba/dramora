@@ -39,6 +39,13 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
     
     const estimated = format === 'mp4' ? estimateExportDuration(timeline, quality) : 2
     setEstimatedTime(estimated)
+
+    // Cleanup on unmount or when dialog closes
+    return () => {
+      if (isExporting) {
+        unloadFFmpeg()
+      }
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, format, quality, timeline.duration])
 

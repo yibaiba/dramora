@@ -211,19 +211,22 @@ export function GalleryPage() {
         )}
       </article>
 
-      {editingAssetId && (
-        <EditVideoModal
-          isOpen={true}
-          videoId={editingAssetId}
-          videoUrl={assets.find((a) => a.id === editingAssetId)?.uri}
-          videoTitle={assets.find((a) => a.id === editingAssetId)?.purpose}
-          onClose={() => setEditingAssetId(null)}
-          onSave={(timeline: Timeline) => {
-            // TODO: Handle save in PR2
-            console.log('Timeline saved:', timeline)
-          }}
-        />
-      )}
+      {editingAssetId && (() => {
+        const editingAsset = assets.find((a) => a.id === editingAssetId)
+        return editingAsset ? (
+          <EditVideoModal
+            isOpen={true}
+            videoId={editingAssetId}
+            videoUrl={editingAsset.uri}
+            videoTitle={editingAsset.purpose}
+            onClose={() => setEditingAssetId(null)}
+            onSave={(timeline: Timeline) => {
+              // TODO: Handle save in PR2
+              console.log('Timeline saved:', timeline)
+            }}
+          />
+        ) : null
+      })()}
     </section>
   )
 }

@@ -181,7 +181,7 @@ export function validateClipsForExport(timeline: Timeline): string | null {
   // Check for unreasonable clip properties
   for (const track of timeline.tracks) {
     for (const clip of track.clips) {
-      if (clip.properties.speed <= 0 || clip.properties.speed > 10) {
+      if (clip.properties.speed < 0.25 || clip.properties.speed > 4) {
         return `片段速度必须在 0.25x 到 4x 之间`
       }
       if (clip.properties.opacity < 0 || clip.properties.opacity > 1) {
@@ -320,9 +320,17 @@ ${clipXML}      </videoTracks>
 
 /**
  * Export timeline to Premiere Pro format
+ * Note: This generates a simplified XML structure. Full .prproj compatibility
+ * requires Adobe Premiere Pro XML schema compliance which may require backend processing.
  */
 export function exportToPremiere(timeline: Timeline, videoTitle: string = 'timeline'): void {
   const premiereXML = generatePremiereXML(timeline)
+  
+  // Validate that we have content
+  if (!premiereXML || !premiereXML.includes('<clip')) {
+    throw new Error('没有视频轨道可以导出为 Premiere 格式')
+  }
+  
   const blob = new Blob([premiereXML], { type: 'application/xml' })
   const filename = generateExportFilename(videoTitle, 'prproj')
   downloadBlob(blob, filename)
@@ -364,9 +372,17 @@ ${clipXML}    </clips>
 
 /**
  * Export timeline to DaVinci Resolve format
+ * Note: This generates a simplified XML structure. Full .drp compatibility
+ * requires DaVinci Resolve XML schema compliance which may require backend processing.
  */
 export function exportToDaVinci(timeline: Timeline, videoTitle: string = 'timeline'): void {
   const davinciXML = generateDaVinciXML(timeline)
+  
+  // Validate that we have content
+  if (!davinciXML || !davinciXML.includes('<clip')) {
+    throw new Error('没有视频轨道可以导出为 DaVinci Resolve 格式')
+  }
+  
   const blob = new Blob([davinciXML], { type: 'application/xml' })
   const filename = generateExportFilename(videoTitle, 'drp')
   downloadBlob(blob, filename)

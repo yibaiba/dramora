@@ -33,7 +33,7 @@ export type Timeline = {
 }
 
 export type EditHistoryItem = {
-  action: 'add_clip' | 'remove_clip' | 'move_clip' | 'trim_clip' | 'other'
+  action: 'add_clip' | 'remove_clip' | 'move_clip' | 'trim_clip' | 'update_clip_properties' | 'other'
   beforeState: Timeline
   afterState: Timeline
   timestamp: number

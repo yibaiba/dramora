@@ -213,18 +213,35 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
   },
 
   updateClipProperties: (clipId, properties) => {
-    const { timeline } = get()
+    const { timeline, history, historyIndex } = get()
+    const beforeState = JSON.parse(JSON.stringify(timeline))
     const newTracks = JSON.parse(JSON.stringify(timeline.tracks))
 
+    let found = false
     for (const track of newTracks) {
       const clip = track.clips.find((c: Clip) => c.id === clipId)
       if (clip) {
         clip.properties = { ...clip.properties, ...properties }
+        found = true
         break
       }
     }
 
-    set({ timeline: { ...timeline, tracks: newTracks } })
+    if (!found) return
+
+    const afterState: Timeline = {
+      ...timeline,
+      tracks: newTracks,
+    }
+
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(createHistoryItem('update_clip_properties', beforeState, afterState))
+
+    set({
+      timeline: afterState,
+      history: newHistory.slice(-MAX_HISTORY),
+      historyIndex: newHistory.length - 1,
+    })
   },
 
   addTrack: (track) => {
