@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { X, AlertCircle } from 'lucide-react'
 import type { Timeline } from '../../lib/editor/types'
-import { initFFmpeg, unloadFFmpeg } from '../../lib/editor/ffmpeg-worker'
+import { initFFmpeg, unloadFFmpeg, encodeToMP4 } from '../../lib/editor/ffmpeg-worker'
 import {
   calculateExportSize,
   downloadBlob,
@@ -23,10 +23,20 @@ interface ExportDialogProps {
   onClose: () => void
 }
 
+async function fetchVideoBlob(url: string): Promise<Blob> {
+  const response = await fetch(url, {
+    credentials: 'include',
+  })
+  if (!response.ok) {
+    throw new Error(`Failed to fetch video: ${response.statusText}`)
+  }
+  return response.blob()
+}
+
 type Quality = 'low' | 'medium' | 'high' | 'very-high'
 type Format = 'mp4' | 'fcpxml' | 'premiere' | 'davinci'
 
-export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }: ExportDialogProps) {
+export function ExportDialog({ isOpen, timeline, videoUrl, videoTitle = 'video', onClose }: ExportDialogProps) {
   const [quality, setQuality] = useState<Quality>('medium')
   const [format, setFormat] = useState<Format>('mp4')
   const [isExporting, setIsExporting] = useState(false)
@@ -79,24 +89,35 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
         // MP4 export with FFmpeg
         await initFFmpeg()
 
-        // In production, this would receive actual video data
-        // For now, we'll create a synthetic video from timeline metadata
-        // The actual implementation would merge clips, apply effects, etc.
-        
-        // Create a simple test blob for demonstration
-        const dummyBlob = new Blob(['mock video data'], { type: 'video/mp4' })
-        
-        // In real scenario, would call: await encodeToMP4(sourceBlob, quality, onProgress)
-        // For now, simulate the encoding
-        for (let i = 0; i <= 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, (estimatedTime * 1000) / 11))
-          setProgress(i / 10)
+        let videoBlob: Blob
+        if (videoUrl) {
+          // Fetch actual video from URL
+          try {
+            setProgress(0.1)
+            videoBlob = await fetchVideoBlob(videoUrl)
+            setProgress(0.2)
+          } catch (err) {
+            const message = err instanceof Error ? err.message : 'Failed to fetch video'
+            throw new Error(`Video fetch error: ${message}`, { cause: err })
+          }
+        } else {
+          // Fallback if no video URL (shouldn't happen in normal flow)
+          throw new Error(
+            'No video source available. Please open a video from Gallery to edit.',
+            { cause: undefined }
+          )
         }
 
+        // Encode to MP4 with real FFmpeg
         const filename = generateExportFilename(videoTitle, 'mp4')
-        downloadBlob(dummyBlob, filename)
+        const encodedBlob = await encodeToMP4(videoBlob, quality, (currentProgress, _) => {
+          // Map progress from 0.2-0.95 for encoding phase
+          const encodingProgress = 0.2 + currentProgress * 0.75
+          setProgress(Math.min(0.95, encodingProgress))
+        })
 
         setProgress(1)
+        downloadBlob(encodedBlob, filename)
         unloadFFmpeg()
       }
 
