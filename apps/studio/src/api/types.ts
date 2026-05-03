@@ -429,6 +429,9 @@ export type ShotPromptPack = {
   task_type: 'text_to_video' | 'image_to_video' | 'first_last_frame_to_video'
   direct_prompt: string
   negative_prompt: string
+  ip_adapter_strength: number
+  lora_weight: number
+  lora_combination_weight: number
   time_slices: PromptTimeSlice[]
   reference_bindings: PromptReferenceBinding[]
   params: Record<string, string | number | boolean>
@@ -438,6 +441,9 @@ export type ShotPromptPack = {
 
 export type SaveShotPromptPackRequest = {
   direct_prompt: string
+  ip_adapter_strength?: number
+  lora_weight?: number
+  lora_combination_weight?: number
 }
 
 export type Asset = {
