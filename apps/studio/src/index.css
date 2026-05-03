@@ -7717,3 +7717,117 @@ p {
   font-size: 12px;
   text-align: center;
 }
+
+/* LoRA Parameters */
+.lora-section {
+  border: 1px solid var(--line);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: color-mix(in srgb, var(--bg) 95%, transparent);
+}
+
+.lora-section h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.lora-unsupported-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.lora-params-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.lora-param-item {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.lora-param-item label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.lora-param-item label span {
+  color: var(--text);
+}
+
+.lora-param-item label small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+.lora-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  outline: none;
+  cursor: pointer;
+}
+
+.lora-slider:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lora-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.lora-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(0, 0, 0, 0.1);
+}
+
+.lora-value {
+  text-align: right;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  font-family: 'Courier New', monospace;
+}
+
+.lora-unsupported-message {
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  background: rgba(239, 68, 68, 0.05);
+  border-left: 3px solid rgba(239, 68, 68, 0.3);
+}
+
+.lora-unsupported-message small {
+  color: rgba(239, 68, 68, 0.8);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}

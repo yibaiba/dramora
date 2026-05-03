@@ -47,6 +47,7 @@ import type {
   Episode,
   GenerationJob,
   Project,
+  SaveShotPromptPackRequest,
   ShotPromptPack,
 } from '../../api/types'
 import {
@@ -132,6 +133,7 @@ export function StoryboardPage() {
   const [notes, setNotes] = useState<Record<string, string>>({})
   const [onlyNeedsWork, setOnlyNeedsWork] = useState(false)
   const [promptDrafts, setPromptDrafts] = useState<Record<string, string>>({})
+  const [loraParamDrafts, setLoraParamDrafts] = useState<Record<string, { ipAdapterStrength?: number; loraWeight?: number; loraCombinationWeight?: number }>>({})
   const [referenceCoverageFilter, setReferenceCoverageFilter] = useState<ReferenceCoverageFilter>('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedShotKey, setSelectedShotKey] = useState<string>()
@@ -357,6 +359,20 @@ export function StoryboardPage() {
     })
   }
 
+  const onLoraParamChange = (param: 'ipAdapterStrength' | 'loraWeight' | 'loraCombinationWeight', value?: number) => {
+    if (!selectedShot) return
+    setLoraParamDrafts((current) => {
+      const shotParams = current[selectedShot.key] ?? {}
+      return {
+        ...current,
+        [selectedShot.key]: {
+          ...shotParams,
+          [param]: value,
+        },
+      }
+    })
+  }
+
   const saveSelectedPrompt = () => {
     if (!selectedShot) return
     const directPrompt = promptDrafts[selectedShot.key] ?? selectedShot.prompt
@@ -366,8 +382,15 @@ export function StoryboardPage() {
       updateLocalShot(selectedShot.key, { prompt: mergedPrompt })
       return
     }
+    const loraParams = loraParamDrafts[selectedShot.key]
+    const request: SaveShotPromptPackRequest = {
+      direct_prompt: mergedPrompt,
+      ...(loraParams?.ipAdapterStrength !== undefined && { ip_adapter_strength: loraParams.ipAdapterStrength }),
+      ...(loraParams?.loraWeight !== undefined && { lora_weight: loraParams.loraWeight }),
+      ...(loraParams?.loraCombinationWeight !== undefined && { lora_combination_weight: loraParams.loraCombinationWeight }),
+    }
     savePromptPack.mutate({
-      request: { direct_prompt: mergedPrompt },
+      request,
       shotId: selectedShot.id,
     })
   }
@@ -555,8 +578,10 @@ export function StoryboardPage() {
           displayShots={displayShots}
           gates={gates}
           inspectorTab={inspectorTab}
+          loraParams={loraParamDrafts[selectedShot.key]}
           note={notes[selectedShot.key] ?? ''}
           onInspectorTabChange={setInspectorTab}
+          onLoraParamChange={onLoraParamChange}
           onNoteChange={(value) =>
             setNotes((current) => ({ ...current, [selectedShot.key]: value }))
           }
@@ -955,8 +980,10 @@ function ShotInspector({
   displayShots,
   gates,
   inspectorTab,
+  loraParams,
   note,
   onInspectorTabChange,
+  onLoraParamChange,
   onNoteChange,
   onPromptDraftChange,
   onSavePrompt,
@@ -979,8 +1006,10 @@ function ShotInspector({
   displayShots: StudioShot[]
   gates: ApprovalGate[]
   inspectorTab: InspectorTab
+  loraParams?: { ipAdapterStrength?: number; loraWeight?: number; loraCombinationWeight?: number }
   note: string
   onInspectorTabChange: (tab: InspectorTab) => void
+  onLoraParamChange: (param: 'ipAdapterStrength' | 'loraWeight' | 'loraCombinationWeight', value?: number) => void
   onNoteChange: (value: string) => void
   onPromptDraftChange: (value: string) => void
   onSavePrompt: () => void
@@ -1021,6 +1050,8 @@ function ShotInspector({
         <PromptPackCard
           autoConsistencyReferences={autoConsistencyReferences}
           characterReferenceSelection={characterReferenceSelection}
+          loraParams={loraParams}
+          onLoraParamChange={onLoraParamChange}
           onPromptDraftChange={onPromptDraftChange}
           onSavePrompt={onSavePrompt}
           pack={promptPack}
@@ -1192,6 +1223,8 @@ function SceneTimingCard({
 function PromptPackCard({
   autoConsistencyReferences,
   characterReferenceSelection,
+  loraParams,
+  onLoraParamChange,
   onPromptDraftChange,
   onSavePrompt,
   pack,
@@ -1201,6 +1234,8 @@ function PromptPackCard({
 }: {
   autoConsistencyReferences: StoryboardCharacterReference[]
   characterReferenceSelection: StoryboardCharacterReferenceSelection
+  loraParams?: { ipAdapterStrength?: number; loraWeight?: number; loraCombinationWeight?: number }
+  onLoraParamChange: (param: 'ipAdapterStrength' | 'loraWeight' | 'loraCombinationWeight', value?: number) => void
   onPromptDraftChange: (value: string) => void
   onSavePrompt: () => void
   pack?: ShotPromptPack
@@ -1318,6 +1353,15 @@ function PromptPackCard({
           value={promptText}
         />
       </label>
+      <LoRAParametersCard
+        ipAdapterStrength={loraParams?.ipAdapterStrength ?? pack?.ip_adapter_strength ?? 0.5}
+        loraWeight={loraParams?.loraWeight ?? pack?.lora_weight ?? 0.5}
+        loraCombinationWeight={loraParams?.loraCombinationWeight ?? pack?.lora_combination_weight ?? 1.0}
+        onIpAdapterStrengthChange={(value) => onLoraParamChange('ipAdapterStrength', value)}
+        onLoraWeightChange={(value) => onLoraParamChange('loraWeight', value)}
+        onLoraCombinationWeightChange={(value) => onLoraParamChange('loraCombinationWeight', value)}
+        provider={pack?.provider}
+      />
       <div className="prompt-editor-footer">
         <small>
           {pack
@@ -2061,5 +2105,115 @@ function BatchOperationsToolbar({
         </div>
       </div>
     </div>
+  )
+}
+
+function LoRAParametersCard({
+  ipAdapterStrength,
+  loraWeight,
+  loraCombinationWeight,
+  onIpAdapterStrengthChange,
+  onLoraWeightChange,
+  onLoraCombinationWeightChange,
+  provider,
+}: {
+  ipAdapterStrength: number
+  loraWeight: number
+  loraCombinationWeight: number
+  onIpAdapterStrengthChange: (value: number) => void
+  onLoraWeightChange: (value: number) => void
+  onLoraCombinationWeightChange: (value: number) => void
+  provider?: string
+}) {
+  const isSupported = provider === 'Seedance'
+
+  return (
+    <section className="inspector-section prompt-section lora-section">
+      <div className="section-title-row">
+        <h3>角色一致性 L2/L3 - IP-Adapter & LoRA</h3>
+        {!isSupported && (
+          <small className="lora-unsupported-badge">
+            当前提供商不支持 IP-Adapter/LoRA
+          </small>
+        )}
+      </div>
+
+      <div className="lora-params-grid">
+        <div className="lora-param-item">
+          <label htmlFor="ip-adapter-strength">
+            <span>IP-Adapter 强度</span>
+            <small>{isSupported ? '0 ~ 1.0 (推荐 0.5)' : '不支持'}</small>
+          </label>
+          <input
+            id="ip-adapter-strength"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={ipAdapterStrength}
+            onChange={(e) => onIpAdapterStrengthChange(parseFloat(e.target.value))}
+            disabled={!isSupported}
+            className="lora-slider"
+            style={{
+              background: `linear-gradient(to right, #10b981, #fbbf24, #ef4444)`,
+            }}
+          />
+          <span className="lora-value">{ipAdapterStrength.toFixed(2)}</span>
+        </div>
+
+        <div className="lora-param-item">
+          <label htmlFor="lora-weight">
+            <span>LoRA 权重</span>
+            <small>{isSupported ? '0 ~ 1.0 (推荐 0.5)' : '不支持'}</small>
+          </label>
+          <input
+            id="lora-weight"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={loraWeight}
+            onChange={(e) => onLoraWeightChange(parseFloat(e.target.value))}
+            disabled={!isSupported}
+            className="lora-slider"
+            style={{
+              background: `linear-gradient(to right, #10b981, #fbbf24, #ef4444)`,
+            }}
+          />
+          <span className="lora-value">{loraWeight.toFixed(2)}</span>
+        </div>
+
+        <div className="lora-param-item">
+          <label htmlFor="lora-combination-weight">
+            <span>LoRA 融合权重</span>
+            <small>{isSupported ? '0 ~ 1.0 (推荐 1.0)' : '不支持'}</small>
+          </label>
+          <input
+            id="lora-combination-weight"
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={loraCombinationWeight}
+            onChange={(e) => onLoraCombinationWeightChange(parseFloat(e.target.value))}
+            disabled={!isSupported}
+            className="lora-slider"
+            style={{
+              background: `linear-gradient(to right, #10b981, #fbbf24, #ef4444)`,
+            }}
+          />
+          <span className="lora-value">{loraCombinationWeight.toFixed(2)}</span>
+        </div>
+      </div>
+
+      {!isSupported && (
+        <div className="lora-unsupported-message">
+          <small>
+            <strong>不支持 IP-Adapter/LoRA</strong><br />
+            此功能仅在使用 Seedance 提供商时可用。建议使用 Seedance 以获得最佳角色一致性效果。
+          </small>
+        </div>
+      )}
+    </section>
   )
 }
