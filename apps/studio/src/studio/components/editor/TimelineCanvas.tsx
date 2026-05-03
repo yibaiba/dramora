@@ -24,12 +24,15 @@ export function TimelineCanvas() {
   const moveClip = useTimelineStore((state) => state.moveClip)
   const toggleTrackVisibility = useTimelineStore((state) => state.toggleTrackVisibility)
   const toggleTrackLock = useTimelineStore((state) => state.toggleTrackLock)
+  const trimClip = useTimelineStore((state) => state.trimClip)
 
   const [canvasWidth, setCanvasWidth] = useState(0)
   const [canvasHeight, setCanvasHeight] = useState(0)
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [trimMode, setTrimMode] = useState<'start' | 'end' | null>(null)
+  const [cursorStyle, setCursorStyle] = useState('default')
 
   // Update canvas size
   useEffect(() => {
@@ -101,6 +104,18 @@ export function TimelineCanvas() {
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
       ctx.fillText(`Clip`, x + padding + 6, yOffset + height / 2)
+    }
+
+    // Draw trim handles when selected
+    if (isSelected) {
+      const handleWidth = 6
+      ctx.fillStyle = '#38bdf8'
+
+      // Start trim handle
+      ctx.fillRect(x, yOffset + padding, handleWidth, height - padding * 2)
+
+      // End trim handle
+      ctx.fillRect(x + clipWidth - handleWidth, yOffset + padding, handleWidth, height - padding * 2)
     }
   }, [])
 
@@ -216,34 +231,114 @@ export function TimelineCanvas() {
       const clip = track.clips.find((c) => c.startTime <= clickTime && clickTime <= c.startTime + c.duration)
 
       if (clip && !track.locked) {
-        setCurrentClip(clip)
-        setSelectedClipId(clip.id)
-        setDraggedClipId(clip.id)
-        setDragOffset(clickTime - clip.startTime)
+        // Check if clicking on clip edges for trimming
+        const clipStartX = (clip.startTime / 1000) * PIXELS_PER_SECOND
+        const clipEndX = ((clip.startTime + clip.duration) / 1000) * PIXELS_PER_SECOND
+        const TRIM_HANDLE_WIDTH = 6
 
-        const handleMouseMove = (moveE: MouseEvent) => {
-          const moveX = moveE.clientX - rect.left
-          const newTime = (moveX / PIXELS_PER_SECOND) * 1000
-          const newStartTime = newTime - dragOffset
+        const isStartEdge = Math.abs(x - clipStartX) < TRIM_HANDLE_WIDTH
+        const isEndEdge = Math.abs(x - clipEndX) < TRIM_HANDLE_WIDTH
 
-          if (newStartTime !== clip.startTime) {
-            moveClip(clip.id, newStartTime)
+        if (isStartEdge || isEndEdge) {
+          // Trim mode
+          const mode = isStartEdge ? 'start' : 'end'
+          setTrimMode(mode)
+          setCurrentClip(clip)
+          setSelectedClipId(clip.id)
+
+          const handleMouseMove = (moveE: MouseEvent) => {
+            const moveX = moveE.clientX - rect.left
+            const newTime = Math.max(0, (moveX / PIXELS_PER_SECOND) * 1000)
+
+            if (mode === 'start') {
+              const maxNewStart = clip.startTime + clip.duration - 100 // Prevent zero-length clips
+              const adjustedStart = Math.min(newTime, maxNewStart)
+              const newDuration = clip.startTime + clip.duration - adjustedStart
+              trimClip(clip.id, adjustedStart, newDuration)
+            } else {
+              const minNewEnd = clip.startTime + 100 // Prevent zero-length clips
+              const adjustedEnd = Math.max(newTime, minNewEnd)
+              const newDuration = adjustedEnd - clip.startTime
+              trimClip(clip.id, clip.startTime, newDuration)
+            }
           }
-        }
 
-        const handleMouseUp = () => {
-          setDraggedClipId(null)
-          document.removeEventListener('mousemove', handleMouseMove)
-          document.removeEventListener('mouseup', handleMouseUp)
-        }
+          const handleMouseUp = () => {
+            setTrimMode(null)
+            document.removeEventListener('mousemove', handleMouseMove)
+            document.removeEventListener('mouseup', handleMouseUp)
+          }
 
-        document.addEventListener('mousemove', handleMouseMove)
-        document.addEventListener('mouseup', handleMouseUp)
+          document.addEventListener('mousemove', handleMouseMove)
+          document.addEventListener('mouseup', handleMouseUp)
+        } else {
+          // Normal drag mode (move clip)
+          setCurrentClip(clip)
+          setSelectedClipId(clip.id)
+          setDraggedClipId(clip.id)
+          setDragOffset(clickTime - clip.startTime)
+
+          const handleMouseMove = (moveE: MouseEvent) => {
+            const moveX = moveE.clientX - rect.left
+            const newTime = (moveX / PIXELS_PER_SECOND) * 1000
+            const newStartTime = newTime - dragOffset
+
+            if (newStartTime !== clip.startTime) {
+              moveClip(clip.id, newStartTime)
+            }
+          }
+
+          const handleMouseUp = () => {
+            setDraggedClipId(null)
+            document.removeEventListener('mousemove', handleMouseMove)
+            document.removeEventListener('mouseup', handleMouseUp)
+          }
+
+          document.addEventListener('mousemove', handleMouseMove)
+          document.addEventListener('mouseup', handleMouseUp)
+        }
       } else {
         setCurrentClip(null)
         setSelectedClipId(null)
       }
     }
+  }
+
+  const handleCanvasMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current
+    if (!canvas || draggedClipId) {
+      setCursorStyle('default')
+      return
+    }
+
+    const rect = canvas.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+
+    if (y > RULER_HEIGHT && selectedClipId) {
+      // Find the selected clip
+      let foundClip: Clip | null = null
+      for (const track of timeline.tracks) {
+        const clip = track.clips.find((c) => c.id === selectedClipId)
+        if (clip) {
+          foundClip = clip
+          break
+        }
+      }
+
+      if (foundClip) {
+        const clipStartX = (foundClip.startTime / 1000) * PIXELS_PER_SECOND
+        const clipEndX = ((foundClip.startTime + foundClip.duration) / 1000) * PIXELS_PER_SECOND
+        const TRIM_HANDLE_WIDTH = 6
+
+        if (Math.abs(x - clipStartX) < TRIM_HANDLE_WIDTH || Math.abs(x - clipEndX) < TRIM_HANDLE_WIDTH) {
+          setCursorStyle('ew-resize')
+          return
+        }
+      }
+    }
+
+    setCursorStyle('default')
   }
 
   return (
@@ -348,11 +443,12 @@ export function TimelineCanvas() {
         <canvas
           ref={canvasRef}
           onMouseDown={handleCanvasMouseDown}
+          onMouseMove={handleCanvasMouseMove}
           style={{
             display: 'block',
             width: '100%',
             height: '100%',
-            cursor: draggedClipId ? 'grabbing' : 'default',
+            cursor: draggedClipId ? 'grabbing' : trimMode ? 'ew-resize' : cursorStyle,
           }}
         />
       </div>
