@@ -36,6 +36,7 @@ import {
   listStoryAnalyses,
   listStoryboardShots,
   lockAsset,
+  deleteAsset,
   saveCharacterBible,
   saveEpisodeTimeline,
   saveProviderConfig,
@@ -873,6 +874,18 @@ export function useBatchGenerateShots() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
       queryClient.invalidateQueries({ queryKey: ['storyboard-workspace'] })
+    },
+  })
+}
+
+export function useDeleteAsset() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ assetId }: { assetId: string; episodeId: string }) =>
+      deleteAsset(assetId),
+    onSuccess: (_void, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['assets', variables.episodeId] })
+      queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', variables.episodeId] })
     },
   })
 }

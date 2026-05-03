@@ -1,4 +1,4 @@
-import { Library, X, Edit2 } from 'lucide-react'
+import { Library, X, Edit2, Check } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useEpisodeAssets } from '../../api/hooks'
@@ -8,6 +8,7 @@ import { EditVideoModal } from '../components/editor/EditVideoModal'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
 import type { Timeline } from '../lib/editor/types'
+import { SelectionToolbar } from '../components/SelectionToolbar'
 
 type AssetKind = 'character' | 'scene' | 'prop'
 type FilterKind = 'all' | AssetKind
@@ -19,6 +20,7 @@ export function GalleryPage() {
   const [filterKind, setFilterKind] = useState<FilterKind>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
   const [editingAssetId, setEditingAssetId] = useState<string | null>(null)
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set())
 
   const filtered = useMemo(() => {
     return assets.filter((asset) => {
@@ -51,6 +53,22 @@ export function GalleryPage() {
   const clearFilters = () => {
     setFilterKind('all')
     setFilterStatus('all')
+  }
+
+  const handleToggleAsset = (assetId: string) => {
+    setSelectedAssetIds((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(assetId)) {
+        newSet.delete(assetId)
+      } else {
+        newSet.add(assetId)
+      }
+      return newSet
+    })
+  }
+
+  const handleClearSelection = () => {
+    setSelectedAssetIds(new Set())
   }
 
   const activeFilterCount = (filterKind !== 'all' ? 1 : 0) + (filterStatus !== 'all' ? 1 : 0)
@@ -199,15 +217,30 @@ export function GalleryPage() {
             description="请调整筛选条件。"
           />
         ) : (
-          <div className="gallery-grid">
-            {filtered.map((asset) => (
-              <GalleryAssetCard
-                key={asset.id}
-                asset={asset}
-                onEdit={() => setEditingAssetId(asset.id)}
+          <>
+            {selectedAssetIds.size > 0 && (
+              <SelectionToolbar
+                selectedCount={selectedAssetIds.size}
+                onClearSelection={handleClearSelection}
+                selectedAssetIds={selectedAssetIds}
+                episodeId={activeEpisode?.id ?? ''}
+                onDeleteSuccess={() => {
+                  setSelectedAssetIds(new Set())
+                }}
               />
-            ))}
-          </div>
+            )}
+            <div className="gallery-grid">
+              {filtered.map((asset) => (
+                <GalleryAssetCard
+                  key={asset.id}
+                  asset={asset}
+                  isSelected={selectedAssetIds.has(asset.id)}
+                  onToggleSelect={() => handleToggleAsset(asset.id)}
+                  onEdit={() => setEditingAssetId(asset.id)}
+                />
+              ))}
+            </div>
+          </>
         )}
       </article>
 
@@ -231,7 +264,17 @@ export function GalleryPage() {
   )
 }
 
-function GalleryAssetCard({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
+function GalleryAssetCard({
+  asset,
+  isSelected,
+  onToggleSelect,
+  onEdit,
+}: {
+  asset: Asset
+  isSelected: boolean
+  onToggleSelect: () => void
+  onEdit: () => void
+}) {
   const statusLabel: Record<AssetStatus, string> = {
     draft: '草稿',
     generating: '生成中',
@@ -249,7 +292,17 @@ function GalleryAssetCard({ asset, onEdit }: { asset: Asset; onEdit: () => void 
   const statusTone = asset.status === 'ready' ? 'success' : asset.status === 'failed' ? 'error' : 'neutral'
 
   return (
-    <article className={`gallery-asset-card tone-${statusTone}`}>
+    <article className={`gallery-asset-card tone-${statusTone} ${isSelected ? 'selected' : ''}`}>
+      <button
+        className="asset-checkbox"
+        onClick={onToggleSelect}
+        type="button"
+        title={isSelected ? '取消选择' : '选择此资产'}
+        aria-label={`${isSelected ? '取消选择' : '选择'} ${asset.purpose}`}
+      >
+        {isSelected && <Check size={16} />}
+      </button>
+
       <div className="asset-header">
         <div>
           <span className="asset-kind-badge">{kindLabel[asset.kind] ?? asset.kind}</span>

@@ -889,3 +889,22 @@ export async function batchGenerateShots(
     }
   )
 }
+
+// Asset Management APIs
+export async function deleteAsset(assetId: string): Promise<void> {
+  await fetchJSON(`/api/v1/assets/${assetId}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function downloadAssetFile(uri: string): Promise<Blob> {
+  const token = readStoredSession()?.token
+  const headers: HeadersInit = {
+    'Authorization': `Bearer ${token}`,
+  }
+  const response = await fetch(`${API_BASE_URL}${uri}`, { headers })
+  if (!response.ok) {
+    throw new Error(`Failed to download asset: ${response.statusText}`)
+  }
+  return response.blob()
+}
