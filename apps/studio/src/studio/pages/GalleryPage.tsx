@@ -1,11 +1,13 @@
-import { Library, X } from 'lucide-react'
+import { Library, X, Edit2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useEpisodeAssets } from '../../api/hooks'
 import type { Asset, AssetStatus } from '../../api/types'
 import { StatePlaceholder } from '../components/StatePlaceholder'
+import { EditVideoModal } from '../components/editor/EditVideoModal'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
+import type { Timeline } from '../lib/editor/types'
 
 type AssetKind = 'character' | 'scene' | 'prop'
 type FilterKind = 'all' | AssetKind
@@ -16,6 +18,7 @@ export function GalleryPage() {
   const { data: assets = [], isLoading } = useEpisodeAssets(activeEpisode?.id)
   const [filterKind, setFilterKind] = useState<FilterKind>('all')
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all')
+  const [editingAssetId, setEditingAssetId] = useState<string | null>(null)
 
   const filtered = useMemo(() => {
     return assets.filter((asset) => {
@@ -198,16 +201,34 @@ export function GalleryPage() {
         ) : (
           <div className="gallery-grid">
             {filtered.map((asset) => (
-              <GalleryAssetCard key={asset.id} asset={asset} />
+              <GalleryAssetCard
+                key={asset.id}
+                asset={asset}
+                onEdit={() => setEditingAssetId(asset.id)}
+              />
             ))}
           </div>
         )}
       </article>
+
+      {editingAssetId && (
+        <EditVideoModal
+          isOpen={true}
+          videoId={editingAssetId}
+          videoUrl={assets.find((a) => a.id === editingAssetId)?.uri}
+          videoTitle={assets.find((a) => a.id === editingAssetId)?.purpose}
+          onClose={() => setEditingAssetId(null)}
+          onSave={(timeline: Timeline) => {
+            // TODO: Handle save in PR2
+            console.log('Timeline saved:', timeline)
+          }}
+        />
+      )}
     </section>
   )
 }
 
-function GalleryAssetCard({ asset }: { asset: Asset }) {
+function GalleryAssetCard({ asset, onEdit }: { asset: Asset; onEdit: () => void }) {
   const statusLabel: Record<AssetStatus, string> = {
     draft: '草稿',
     generating: '生成中',
@@ -243,6 +264,18 @@ function GalleryAssetCard({ asset }: { asset: Asset }) {
           {asset.uri.replace('manmu://', '')}
         </span>
       </div>
+
+      {asset.status === 'ready' && (
+        <button
+          onClick={onEdit}
+          className="gallery-edit-button"
+          type="button"
+          title="编辑此视频"
+        >
+          <Edit2 size={14} />
+          编辑
+        </button>
+      )}
     </article>
   )
 }
