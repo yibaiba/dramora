@@ -59,6 +59,13 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
     setProgress(0)
 
     try {
+      const validationError = validateClipsForExport(timeline)
+      if (validationError) {
+        setError(validationError)
+        setIsExporting(false)
+        return
+      }
+
       if (format === 'fcpxml') {
         exportToFCPXML(timeline, videoTitle)
         setProgress(1)
@@ -69,15 +76,21 @@ export function ExportDialog({ isOpen, timeline, videoTitle = 'video', onClose }
         exportToDaVinci(timeline, videoTitle)
         setProgress(1)
       } else {
-        // MP4 export
+        // MP4 export with FFmpeg
         await initFFmpeg()
 
+        // In production, this would receive actual video data
+        // For now, we'll create a synthetic video from timeline metadata
+        // The actual implementation would merge clips, apply effects, etc.
+        
+        // Create a simple test blob for demonstration
         const dummyBlob = new Blob(['mock video data'], { type: 'video/mp4' })
-
-        // Simulate progress
-        for (let i = 0; i < 10; i++) {
-          await new Promise((resolve) => setTimeout(resolve, (estimatedTime * 1000) / 10))
-          setProgress((i + 1) / 10)
+        
+        // In real scenario, would call: await encodeToMP4(sourceBlob, quality, onProgress)
+        // For now, simulate the encoding
+        for (let i = 0; i <= 10; i++) {
+          await new Promise((resolve) => setTimeout(resolve, (estimatedTime * 1000) / 11))
+          setProgress(i / 10)
         }
 
         const filename = generateExportFilename(videoTitle, 'mp4')
