@@ -1,8 +1,14 @@
+import { Trash2, Download } from 'lucide-react'
 import { useTimelineStore } from '../../lib/editor/timeline-store'
 
-export function PropertyPanel() {
+interface PropertyPanelProps {
+  onExportClick?: () => void
+}
+
+export function PropertyPanel({ onExportClick }: PropertyPanelProps) {
   const currentClip = useTimelineStore((state) => state.currentClip)
   const updateClipProperties = useTimelineStore((state) => state.updateClipProperties)
+  const removeClip = useTimelineStore((state) => state.removeClip)
   const timeline = useTimelineStore((state) => state.timeline)
 
   if (!currentClip) {
@@ -30,6 +36,12 @@ export function PropertyPanel() {
     const opacity = parseFloat(e.target.value)
     if (!isNaN(opacity) && opacity >= 0 && opacity <= 1) {
       updateClipProperties(currentClip.id, { opacity })
+    }
+  }
+
+  const handleDelete = () => {
+    if (window.confirm(`确定要删除这个片段吗？`)) {
+      removeClip(currentClip.id)
     }
   }
 
@@ -92,6 +104,30 @@ export function PropertyPanel() {
             </div>
           </div>
         )}
+
+        {/* Action Buttons */}
+        <div className="property-section property-section-buttons">
+          <button
+            onClick={handleDelete}
+            className="property-button property-button-danger"
+            type="button"
+            title="删除片段"
+          >
+            <Trash2 size={16} />
+            删除
+          </button>
+          {onExportClick && (
+            <button
+              onClick={onExportClick}
+              className="property-button property-button-primary"
+              type="button"
+              title="导出视频"
+            >
+              <Download size={16} />
+              导出
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
