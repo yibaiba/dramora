@@ -58,3 +58,79 @@ func (api *api) batchGenerateShots(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusAccepted, Envelope{"job_ids": jobIDs})
 }
+
+func (api *api) retryGenerationJob(w http.ResponseWriter, r *http.Request) {
+	jobID := chi.URLParam(r, "jobId")
+	if jobID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "job id is required")
+		return
+	}
+
+	newJobID, err := api.productionService.RetryGenerationJob(r.Context(), jobID)
+	if err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Envelope{"job_id": newJobID})
+}
+
+type updateGenerationJobPriorityRequest struct {
+	Priority int `json:"priority"`
+}
+
+func (api *api) updateGenerationJobPriority(w http.ResponseWriter, r *http.Request) {
+	jobID := chi.URLParam(r, "jobId")
+	if jobID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "job id is required")
+		return
+	}
+
+	var request updateGenerationJobPriorityRequest
+	if err := readJSON(r, &request); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_request", "invalid request body")
+		return
+	}
+
+	if request.Priority < 0 || request.Priority > 100 {
+		writeError(w, http.StatusBadRequest, "invalid_request", "priority must be between 0 and 100")
+		return
+	}
+
+	if err := api.productionService.UpdateGenerationJobPriority(r.Context(), jobID, request.Priority); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Envelope{"success": true})
+}
+
+func (api *api) pauseEpisodeQueue(w http.ResponseWriter, r *http.Request) {
+	episodeID := chi.URLParam(r, "episodeId")
+	if episodeID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "episode id is required")
+		return
+	}
+
+	if err := api.productionService.PauseEpisodeQueue(r.Context(), episodeID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Envelope{"success": true, "paused": true})
+}
+
+func (api *api) resumeEpisodeQueue(w http.ResponseWriter, r *http.Request) {
+	episodeID := chi.URLParam(r, "episodeId")
+	if episodeID == "" {
+		writeError(w, http.StatusBadRequest, "invalid_request", "episode id is required")
+		return
+	}
+
+	if err := api.productionService.ResumeEpisodeQueue(r.Context(), episodeID); err != nil {
+		writeServiceError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, Envelope{"success": true, "paused": false})
+}

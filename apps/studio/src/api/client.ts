@@ -264,6 +264,34 @@ export async function getGenerationJobRecovery(jobId: string): Promise<Generatio
   return payload.generation_job_recovery
 }
 
+export async function retryGenerationJob(jobId: string): Promise<{ job_id: string }> {
+  return fetchJSON<{ job_id: string }>(`/api/v1/generation-jobs/${jobId}:retry`, {
+    method: 'POST',
+  })
+}
+
+export async function updateGenerationJobPriority(
+  jobId: string,
+  priority: number,
+): Promise<{ success: boolean }> {
+  return fetchJSON<{ success: boolean }>(`/api/v1/generation-jobs/${jobId}:priority`, {
+    method: 'POST',
+    body: JSON.stringify({ priority }),
+  })
+}
+
+export async function pauseEpisodeQueue(episodeId: string): Promise<{ success: boolean; paused: boolean }> {
+  return fetchJSON<{ success: boolean; paused: boolean }>(`/api/v1/episodes/${episodeId}/queue:pause`, {
+    method: 'POST',
+  })
+}
+
+export async function resumeEpisodeQueue(episodeId: string): Promise<{ success: boolean; paused: boolean }> {
+  return fetchJSON<{ success: boolean; paused: boolean }>(`/api/v1/episodes/${episodeId}/queue:resume`, {
+    method: 'POST',
+  })
+}
+
 export async function getShotPromptPackRecovery(shotId: string): Promise<PromptPackRecovery> {
   const payload = await fetchJSON<{ prompt_pack_recovery: PromptPackRecovery }>(
     `/api/v1/storyboard-shots/${shotId}/prompt-pack/recovery`,

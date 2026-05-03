@@ -78,6 +78,10 @@ import {
 	getAdminBillingReportByID,
 	getAdminBillingReportSummary,
 	batchGenerateShots,
+	retryGenerationJob,
+	updateGenerationJobPriority,
+	pauseEpisodeQueue,
+	resumeEpisodeQueue,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -886,6 +890,47 @@ export function useDeleteAsset() {
     onSuccess: (_void, variables) => {
       queryClient.invalidateQueries({ queryKey: ['assets', variables.episodeId] })
       queryClient.invalidateQueries({ queryKey: ['storyboard-workspace', variables.episodeId] })
+    },
+  })
+}
+
+export function useRetryGenerationJob() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (jobId: string) => retryGenerationJob(jobId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+    },
+  })
+}
+
+export function useUpdateGenerationJobPriority() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ jobId, priority }: { jobId: string; priority: number }) =>
+      updateGenerationJobPriority(jobId, priority),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+    },
+  })
+}
+
+export function usePauseEpisodeQueue() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => pauseEpisodeQueue(episodeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
+    },
+  })
+}
+
+export function useResumeEpisodeQueue() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (episodeId: string) => resumeEpisodeQueue(episodeId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
     },
   })
 }

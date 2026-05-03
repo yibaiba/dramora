@@ -118,6 +118,10 @@ export type GenerationJob = {
   task_type: string
   status: GenerationJobStatus
   result_asset_id: string
+  priority: number
+  retry_count: number
+  parent_job_id?: string
+  can_retry: boolean
   created_at: string
   updated_at: string
 }
