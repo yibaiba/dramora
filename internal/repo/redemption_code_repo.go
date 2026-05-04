@@ -87,6 +87,52 @@ func (r *PostgresRedemptionCodeRepository) CreateCampaign(ctx context.Context, c
 	return nil
 }
 
+// scanRedemptionCode 从数据库行扫描赎回码，统一处理 Scan 逻辑
+func (r *PostgresRedemptionCodeRepository) scanRedemptionCode(row pgx.Row) (*domain.RedemptionCode, error) {
+	var rc domain.RedemptionCode
+	var usedBy, campaignID, reason *string
+	var usedAt, expiresAt *time.Time
+
+	err := row.Scan(
+		&rc.ID,
+		&rc.Code,
+		&rc.OrganizationID,
+		&campaignID,
+		&rc.Amount,
+		&rc.Status,
+		&rc.CreatedBy,
+		&rc.CreatedAt,
+		&usedBy,
+		&usedAt,
+		&expiresAt,
+		&reason,
+		&rc.Version,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// 统一处理 nullable 字段
+	if usedBy != nil {
+		rc.UsedBy = *usedBy
+	}
+	if usedAt != nil {
+		rc.UsedAt = *usedAt
+	}
+	if expiresAt != nil {
+		rc.ExpiresAt = *expiresAt
+	}
+	if campaignID != nil {
+		rc.CampaignID = *campaignID
+	}
+	if reason != nil {
+		rc.Reason = *reason
+	}
+
+	return &rc, nil
+}
+
 // GetCampaignByID 根据 ID 获取赎回活动
 func (r *PostgresRedemptionCodeRepository) GetCampaignByID(ctx context.Context, campaignID string) (*domain.RedemptionCampaign, error) {
 	query := `
@@ -181,26 +227,7 @@ func (r *PostgresRedemptionCodeRepository) GetCodeByCode(ctx context.Context, co
 
 	row := r.pool.QueryRow(ctx, query, code)
 
-	var rc domain.RedemptionCode
-	var usedBy, campaignID, reason *string
-	var usedAt, expiresAt *time.Time
-
-	err := row.Scan(
-		&rc.ID,
-		&rc.Code,
-		&rc.OrganizationID,
-		&campaignID,
-		&rc.Amount,
-		&rc.Status,
-		&rc.CreatedBy,
-		&rc.CreatedAt,
-		&usedBy,
-		&usedAt,
-		&expiresAt,
-		&reason,
-		&rc.Version,
-	)
-
+	rc, err := r.scanRedemptionCode(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrCodeNotFound
@@ -208,24 +235,7 @@ func (r *PostgresRedemptionCodeRepository) GetCodeByCode(ctx context.Context, co
 		return nil, fmt.Errorf("get code: %w", err)
 	}
 
-	// 处理 nullable 字段
-	if usedBy != nil {
-		rc.UsedBy = *usedBy
-	}
-	if usedAt != nil {
-		rc.UsedAt = *usedAt
-	}
-	if expiresAt != nil {
-		rc.ExpiresAt = *expiresAt
-	}
-	if campaignID != nil {
-		rc.CampaignID = *campaignID
-	}
-	if reason != nil {
-		rc.Reason = *reason
-	}
-
-	return &rc, nil
+	return rc, nil
 }
 
 // RedeemCode 使用乐观锁完成兑换（原子操作）
@@ -246,26 +256,7 @@ func (r *PostgresRedemptionCodeRepository) RedeemCode(ctx context.Context, code 
 		currentVersion,
 	)
 
-	var rc domain.RedemptionCode
-	var usedBy_db, campaignID, reason *string
-	var usedAt, expiresAt *time.Time
-
-	err := row.Scan(
-		&rc.ID,
-		&rc.Code,
-		&rc.OrganizationID,
-		&campaignID,
-		&rc.Amount,
-		&rc.Status,
-		&rc.CreatedBy,
-		&rc.CreatedAt,
-		&usedBy_db,
-		&usedAt,
-		&expiresAt,
-		&reason,
-		&rc.Version,
-	)
-
+	rc, err := r.scanRedemptionCode(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			// 确定失败原因：已使用、版本冲突、或码不存在
@@ -293,24 +284,7 @@ func (r *PostgresRedemptionCodeRepository) RedeemCode(ctx context.Context, code 
 		return nil, fmt.Errorf("redeem code: %w", err)
 	}
 
-	// 处理 nullable 字段
-	if usedBy_db != nil {
-		rc.UsedBy = *usedBy_db
-	}
-	if usedAt != nil {
-		rc.UsedAt = *usedAt
-	}
-	if expiresAt != nil {
-		rc.ExpiresAt = *expiresAt
-	}
-	if campaignID != nil {
-		rc.CampaignID = *campaignID
-	}
-	if reason != nil {
-		rc.Reason = *reason
-	}
-
-	return &rc, nil
+	return rc, nil
 }
 
 // GetCampaignStats 获取活动的统计数据
@@ -414,47 +388,11 @@ func (r *PostgresRedemptionCodeRepository) ListCodes(ctx context.Context, filter
 
 	var codes []*domain.RedemptionCode
 	for rows.Next() {
-		var rc domain.RedemptionCode
-		var usedBy, campaignID, reason *string
-		var usedAt, expiresAt *time.Time
-
-		err := rows.Scan(
-			&rc.ID,
-			&rc.Code,
-			&rc.OrganizationID,
-			&campaignID,
-			&rc.Amount,
-			&rc.Status,
-			&rc.CreatedBy,
-			&rc.CreatedAt,
-			&usedBy,
-			&usedAt,
-			&expiresAt,
-			&reason,
-			&rc.Version,
-		)
-
+		rc, err := r.scanRedemptionCode(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan code: %w", err)
 		}
-
-		if usedBy != nil {
-			rc.UsedBy = *usedBy
-		}
-		if usedAt != nil {
-			rc.UsedAt = *usedAt
-		}
-		if expiresAt != nil {
-			rc.ExpiresAt = *expiresAt
-		}
-		if campaignID != nil {
-			rc.CampaignID = *campaignID
-		}
-		if reason != nil {
-			rc.Reason = *reason
-		}
-
-		codes = append(codes, &rc)
+		codes = append(codes, rc)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -489,47 +427,11 @@ func (r *PostgresRedemptionCodeRepository) ListCodesByCampaign(ctx context.Conte
 
 	var codes []*domain.RedemptionCode
 	for rows.Next() {
-		var rc domain.RedemptionCode
-		var usedBy, campaignID, reason *string
-		var usedAt, expiresAt *time.Time
-
-		err := rows.Scan(
-			&rc.ID,
-			&rc.Code,
-			&rc.OrganizationID,
-			&campaignID,
-			&rc.Amount,
-			&rc.Status,
-			&rc.CreatedBy,
-			&rc.CreatedAt,
-			&usedBy,
-			&usedAt,
-			&expiresAt,
-			&reason,
-			&rc.Version,
-		)
-
+		rc, err := r.scanRedemptionCode(rows)
 		if err != nil {
 			return nil, fmt.Errorf("scan code: %w", err)
 		}
-
-		if usedBy != nil {
-			rc.UsedBy = *usedBy
-		}
-		if usedAt != nil {
-			rc.UsedAt = *usedAt
-		}
-		if expiresAt != nil {
-			rc.ExpiresAt = *expiresAt
-		}
-		if campaignID != nil {
-			rc.CampaignID = *campaignID
-		}
-		if reason != nil {
-			rc.Reason = *reason
-		}
-
-		codes = append(codes, &rc)
+		codes = append(codes, rc)
 	}
 
 	if err = rows.Err(); err != nil {

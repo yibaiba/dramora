@@ -124,9 +124,8 @@ type RedeemCodeResponse struct {
 	Message    string `json:"message"`
 }
 
-// RedeemCode 用户兑换赎回码
-// 使用乐观锁 + 重试机制确保幂等性
-func (s *RedemptionCodeService) RedeemCode(ctx context.Context, authCtx RequestAuthContext, codeStr string) (*RedeemCodeResponse, error) {
+// validateAndGetCode 验证并获取赎回码
+func (s *RedemptionCodeService) validateAndGetCode(ctx context.Context, authCtx RequestAuthContext, codeStr string) (*domain.RedemptionCode, error) {
 	if codeStr = strings.TrimSpace(codeStr); codeStr == "" {
 		return nil, errors.New("code cannot be empty")
 	}
@@ -154,39 +153,18 @@ func (s *RedemptionCodeService) RedeemCode(ctx context.Context, authCtx RequestA
 		return nil, domain.ErrCodeExpired
 	}
 
-	// 使用乐观锁重试兑换，最多 3 次
+	return code, nil
+}
+
+// attemptRedeemWithRetry 执行兑换并带重试机制
+func (s *RedemptionCodeService) attemptRedeemWithRetry(ctx context.Context, authCtx RequestAuthContext, code *domain.RedemptionCode, codeStr string) (*domain.RedemptionCode, error) {
 	const maxRetries = 3
-	var retryErr error
+	var lastErr error
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		redeemedCode, err := s.repo.RedeemCode(ctx, codeStr, authCtx.UserID, code.Version)
 		if err == nil {
-			// 兑换成功，记录交易
-			reason := fmt.Sprintf("redemption code: %s", codeStr[len(codeStr)-4:])
-
-			wallet, _, err := s.walletRepo.ApplyTransaction(ctx, repo.WalletApplyParams{
-				OrganizationID: authCtx.OrganizationID,
-				Kind:           domain.WalletKindCredit,
-				Direction:      1,
-				Amount:         redeemedCode.Amount,
-				Reason:         reason,
-				RefType:        "redemption_code",
-				RefID:          redeemedCode.ID,
-				ActorUserID:    authCtx.UserID,
-				TransactionID:  "",
-				CreatedAt:      time.Now().UTC(),
-			})
-
-			if err != nil {
-				return nil, fmt.Errorf("record wallet transaction: %w", err)
-			}
-
-			return &RedeemCodeResponse{
-				Success:    true,
-				Amount:     redeemedCode.Amount,
-				NewBalance: wallet.Balance,
-				Message:    fmt.Sprintf("恭喜！你获得了 %d 積分", redeemedCode.Amount),
-			}, nil
+			return redeemedCode, nil
 		}
 
 		// 处理不同的错误
@@ -202,27 +180,81 @@ func (s *RedemptionCodeService) RedeemCode(ctx context.Context, authCtx RequestA
 
 		// 版本冲突，重新查询后重试
 		if errors.Is(err, domain.ErrCodeVersionConflict) {
-			retryErr = err
+			lastErr = err
 			// 重新查询最新的码信息
-			code, err = s.repo.GetCodeByCode(ctx, codeStr)
+			updatedCode, err := s.repo.GetCodeByCode(ctx, codeStr)
 			if err != nil {
 				return nil, err
 			}
 
 			// 如果已被使用，不再重试
-			if code.Status != domain.RedemptionCodeStatusUnused {
+			if updatedCode.Status != domain.RedemptionCodeStatusUnused {
 				return nil, domain.ErrCodeAlreadyUsed
 			}
 
-			// 继续重试
+			code = updatedCode
 			continue
 		}
 
 		return nil, err
 	}
 
-	return nil, fmt.Errorf("failed to redeem code after %d attempts: %w", maxRetries, retryErr)
+	return nil, fmt.Errorf("failed to redeem code after %d attempts: %w", maxRetries, lastErr)
 }
+
+// recordRedemptionTransaction 记录兑换交易到钱包
+func (s *RedemptionCodeService) recordRedemptionTransaction(ctx context.Context, authCtx RequestAuthContext, redeemedCode *domain.RedemptionCode, codeStr string) (domain.Wallet, error) {
+	reason := fmt.Sprintf("redemption code: %s", codeStr[len(codeStr)-4:])
+
+	wallet, _, err := s.walletRepo.ApplyTransaction(ctx, repo.WalletApplyParams{
+		OrganizationID: authCtx.OrganizationID,
+		Kind:           domain.WalletKindCredit,
+		Direction:      1,
+		Amount:         redeemedCode.Amount,
+		Reason:         reason,
+		RefType:        "redemption_code",
+		RefID:          redeemedCode.ID,
+		ActorUserID:    authCtx.UserID,
+		TransactionID:  "",
+		CreatedAt:      time.Now().UTC(),
+	})
+
+	if err != nil {
+		return domain.Wallet{}, fmt.Errorf("record wallet transaction: %w", err)
+	}
+
+	return wallet, nil
+}
+
+// RedeemCode 用户兑换赎回码
+// 使用乐观锁 + 重试机制确保幂等性
+func (s *RedemptionCodeService) RedeemCode(ctx context.Context, authCtx RequestAuthContext, codeStr string) (*RedeemCodeResponse, error) {
+	// 1. 验证并获取码
+	code, err := s.validateAndGetCode(ctx, authCtx, codeStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. 执行兑换（带重试）
+	redeemedCode, err := s.attemptRedeemWithRetry(ctx, authCtx, code, codeStr)
+	if err != nil {
+		return nil, err
+	}
+
+	// 3. 记录交易
+	wallet, err := s.recordRedemptionTransaction(ctx, authCtx, redeemedCode, codeStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return &RedeemCodeResponse{
+		Success:    true,
+		Amount:     redeemedCode.Amount,
+		NewBalance: wallet.Balance,
+		Message:    fmt.Sprintf("恭喜！你获得了 %d 積分", redeemedCode.Amount),
+	}, nil
+}
+
 
 // GetCampaignStats 获取活动的统计数据
 func (s *RedemptionCodeService) GetCampaignStats(ctx context.Context, authCtx RequestAuthContext, campaignID string) (*domain.CampaignStats, error) {
