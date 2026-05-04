@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/yibaiba/dramora/internal/media"
+	"github.com/yibaiba/dramora/internal/provider/heygen"
 	"github.com/yibaiba/dramora/internal/provider/payment"
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
@@ -124,6 +125,13 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		}
 	} else {
 		productionSvc.SetMediaStorage(media.NewMemoryStorage())
+	}
+
+	// Initialize HeyGen client if API key is available
+	if cfg.HeyGenAPIKey != "" {
+		heyGenClient := heygen.NewClient(cfg.HeyGenAPIKey)
+		productionSvc.SetHeyGenClient(heyGenClient)
+		logger.Info("HeyGen client initialized", "api_key_length", len(cfg.HeyGenAPIKey))
 	}
 
 	if workerMetricsRepo != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/yibaiba/dramora/internal/jobs"
 	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/provider"
+	"github.com/yibaiba/dramora/internal/provider/heygen"
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
@@ -18,6 +19,7 @@ type ProductionService struct {
 	production   repo.ProductionRepository
 	jobClient    jobs.Client
 	seedance     seedanceProvider
+	heyGenClient *heygen.Client
 	agentSvc     *AgentService
 	projectSvc   *ProjectService
 	providerSvc  *ProviderService
@@ -85,6 +87,11 @@ func (s *ProductionService) SetProjectService(projectSvc *ProjectService) {
 
 func (s *ProductionService) SetWalletService(walletSvc *WalletService) {
 	s.walletSvc = walletSvc
+}
+
+// SetHeyGenClient injects the HeyGen API client for video generation
+func (s *ProductionService) SetHeyGenClient(client *heygen.Client) {
+	s.heyGenClient = client
 }
 
 // SetMediaStorage 注入媒体二进制存储后端，audio worker 在收到非 URL（仅字节）
@@ -647,18 +654,33 @@ func (s *ProductionService) GetQueueStatus(ctx context.Context, episodeID string
 	return s.production.IsEpisodeQueuePaused(ctx, episodeID)
 }
 
-// StartShortVideoGeneration initiates generation for a short video
-// This method will eventually integrate with HeyGen API
+// StartShortVideoGeneration initiates generation for a short video using HeyGen API
 func (s *ProductionService) StartShortVideoGeneration(
-ctx context.Context,
-videoID string,
-avatarID string,
-parameters map[string]interface{},
+	ctx context.Context,
+	videoID string,
+	avatarID string,
+	parameters map[string]interface{},
 ) (string, error) {
-// TODO: Implement HeyGen API integration
-// For now, return a placeholder video ID
-// In Phase 3b, this will call the actual HeyGen API
+	// If HeyGen client is not initialized, return a placeholder
+	if s.heyGenClient == nil {
+		return "heygen-" + videoID[:8], nil
+	}
 
-generatedVideoID := "heygen-" + videoID[:8]
-return generatedVideoID, nil
+	// Extract script from parameters (should be provided by the template)
+	script, ok := parameters["script"].(string)
+	if !ok || script == "" {
+		return "", fmt.Errorf("script parameter is required")
+	}
+
+	// Call HeyGen API to create video
+	response, err := s.heyGenClient.CreateVideo(ctx, &heygen.VideoRequest{
+		AvatarID: heygen.AvatarID(avatarID),
+		Script:   script,
+	})
+
+	if err != nil {
+		return "", fmt.Errorf("failed to create HeyGen video: %w", err)
+	}
+
+	return response.VideoID, nil
 }
