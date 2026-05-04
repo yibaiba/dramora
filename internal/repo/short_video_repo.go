@@ -219,8 +219,8 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 	}
 
 	query := `
-		INSERT INTO short_videos (id, organization_id, template_id, parameters, status, error_message, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO short_videos (id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, created_at, updated_at, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	err := r.pool.QueryRow(ctx, query,
@@ -228,6 +228,7 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 		video.OrganizationID,
 		video.TemplateID,
 		video.Parameters,
+		video.HeyGenAvatarID,
 		video.Status,
 		video.ErrorMessage,
 		video.CreatedAt,
@@ -251,7 +252,7 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 	var result *string
 
 	query := `
-		SELECT id, organization_id, template_id, parameters, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, result, created_at, updated_at, version
 		FROM short_videos
 		WHERE id = $1 AND organization_id = $2
 	`
@@ -261,6 +262,7 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 		&video.OrganizationID,
 		&video.TemplateID,
 		&video.Parameters,
+		&video.HeyGenAvatarID,
 		&video.Status,
 		&video.ErrorMessage,
 		&result,
@@ -300,7 +302,7 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 
 	// Get paginated results
 	query := `
-		SELECT id, organization_id, template_id, parameters, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, result, created_at, updated_at, version
 		FROM short_videos
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -323,6 +325,7 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 			&video.OrganizationID,
 			&video.TemplateID,
 			&video.Parameters,
+			&video.HeyGenAvatarID,
 			&video.Status,
 			&video.ErrorMessage,
 			&result,

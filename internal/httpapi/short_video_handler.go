@@ -13,6 +13,28 @@ import (
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
+// Valid HeyGen avatar IDs
+const (
+	HeyGenAvatarProfessionalFemale = "avatar_001"
+	HeyGenAvatarProfessionalMale   = "avatar_002"
+	HeyGenAvatarYoungStyle         = "avatar_003"
+)
+
+// isValidHeyGenAvatarID validates if the avatar ID is supported.
+func isValidHeyGenAvatarID(avatarID string) bool {
+	switch avatarID {
+	case HeyGenAvatarProfessionalFemale, HeyGenAvatarProfessionalMale, HeyGenAvatarYoungStyle:
+		return true
+	default:
+		return false
+	}
+}
+
+// GetDefaultHeyGenAvatarID returns the default avatar for short videos.
+func GetDefaultHeyGenAvatarID() string {
+	return HeyGenAvatarProfessionalFemale
+}
+
 // CreateShortVideoTemplateRequest represents the request body for creating a template
 type CreateShortVideoTemplateRequest struct {
 	Name        string          `json:"name"`
@@ -31,8 +53,9 @@ type UpdateShortVideoTemplateRequest struct {
 
 // CreateShortVideoRequest represents the request body for creating a short video
 type CreateShortVideoRequest struct {
-	TemplateID uuid.UUID       `json:"templateId"`
-	Parameters json.RawMessage `json:"parameters"`
+	TemplateID     uuid.UUID       `json:"templateId"`
+	Parameters     json.RawMessage `json:"parameters"`
+	HeyGenAvatarID string          `json:"heyGenAvatarId"` // NEW: virtual presenter choice
 }
 
 // ShortVideoHandler handles HTTP requests for short videos
@@ -215,6 +238,14 @@ func (h *ShortVideoHandler) CreateShortVideo(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Validate HeyGen avatar ID (use default if not provided)
+	if req.HeyGenAvatarID == "" {
+		req.HeyGenAvatarID = GetDefaultHeyGenAvatarID()
+	} else if !isValidHeyGenAvatarID(req.HeyGenAvatarID) {
+		http.Error(w, "invalid heyGenAvatarId: must be one of avatar_001, avatar_002, avatar_003", http.StatusBadRequest)
+		return
+	}
+
 	// Verify template exists in the same organization
 	_, err := h.templateRepo.GetByID(r.Context(), req.TemplateID, orgID)
 	if err != nil {
@@ -231,6 +262,7 @@ func (h *ShortVideoHandler) CreateShortVideo(w http.ResponseWriter, r *http.Requ
 		OrganizationID: orgID,
 		TemplateID:     req.TemplateID,
 		Parameters:     req.Parameters,
+		HeyGenAvatarID: req.HeyGenAvatarID,
 		Status:         domain.ShortVideoStatusPending,
 		CreatedAt:      time.Now(),
 		UpdatedAt:      time.Now(),
