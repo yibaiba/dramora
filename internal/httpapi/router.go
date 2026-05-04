@@ -18,21 +18,23 @@ type Readiness interface {
 }
 
 type RouterConfig struct {
-	Logger                *slog.Logger
-	Version               string
-	Readiness             Readiness
-	AuthService           *service.AuthService
-	ProjectService        *service.ProjectService
-	ProductionService     *service.ProductionService
-	ProviderService       *service.ProviderService
-	AgentService          *service.AgentService
-	WalletService         *service.WalletService
-	NotificationService   *service.NotificationService
-	PaymentService        *service.PaymentService
-	ReportService         *service.ReportService
-	RedemptionCodeService *service.RedemptionCodeService
-	ShortCodeRepository   repo.ShortCodeRepository
-	JobsClient            jobs.Client
+	Logger                       *slog.Logger
+	Version                      string
+	Readiness                    Readiness
+	AuthService                  *service.AuthService
+	ProjectService               *service.ProjectService
+	ProductionService            *service.ProductionService
+	ProviderService              *service.ProviderService
+	AgentService                 *service.AgentService
+	WalletService                *service.WalletService
+	NotificationService          *service.NotificationService
+	PaymentService               *service.PaymentService
+	ReportService                *service.ReportService
+	RedemptionCodeService        *service.RedemptionCodeService
+	ShortCodeRepository          repo.ShortCodeRepository
+	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
+	ShortVideoRepository         repo.ShortVideoRepository
+	JobsClient                   jobs.Client
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -117,6 +119,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/notifications", api.listNotifications)
 		r.Post("/redemption-codes:redeem", api.redeemCode)
 
+		// Short video routes
+		svHandler := NewShortVideoHandler(api.shortVideoTemplateRepo, api.shortVideoRepo)
+		svHandler.RegisterRoutes(r)
+
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
 			admin.Use(requireRole("owner", "admin"))
@@ -165,37 +171,41 @@ func NewRouter(cfg RouterConfig) http.Handler {
 }
 
 type api struct {
-	readinessChecker      Readiness
-	logger                *slog.Logger
-	authService           *service.AuthService
-	projectService        *service.ProjectService
-	productionService     *service.ProductionService
-	providerService       *service.ProviderService
-	agentService          *service.AgentService
-	walletService         *service.WalletService
-	notificationService   *service.NotificationService
-	paymentService        *service.PaymentService
-	reportService         *service.ReportService
-	redemptionCodeService *service.RedemptionCodeService
-	shortCodeRepo         repo.ShortCodeRepository
-	jobsClient            jobs.Client
+	readinessChecker       Readiness
+	logger                 *slog.Logger
+	authService            *service.AuthService
+	projectService         *service.ProjectService
+	productionService      *service.ProductionService
+	providerService        *service.ProviderService
+	agentService           *service.AgentService
+	walletService          *service.WalletService
+	notificationService    *service.NotificationService
+	paymentService         *service.PaymentService
+	reportService          *service.ReportService
+	redemptionCodeService  *service.RedemptionCodeService
+	shortCodeRepo          repo.ShortCodeRepository
+	shortVideoTemplateRepo repo.ShortVideoTemplateRepository
+	shortVideoRepo         repo.ShortVideoRepository
+	jobsClient             jobs.Client
 }
 
 func newAPI(cfg RouterConfig) *api {
 	return &api{
-		readinessChecker:      cfg.Readiness,
-		logger:                cfg.Logger,
-		authService:           cfg.AuthService,
-		projectService:        cfg.ProjectService,
-		productionService:     cfg.ProductionService,
-		providerService:       cfg.ProviderService,
-		agentService:          cfg.AgentService,
-		walletService:         cfg.WalletService,
-		notificationService:   cfg.NotificationService,
-		paymentService:        cfg.PaymentService,
-		reportService:         cfg.ReportService,
-		redemptionCodeService: cfg.RedemptionCodeService,
-		shortCodeRepo:         cfg.ShortCodeRepository,
-		jobsClient:            cfg.JobsClient,
+		readinessChecker:       cfg.Readiness,
+		logger:                 cfg.Logger,
+		authService:            cfg.AuthService,
+		projectService:         cfg.ProjectService,
+		productionService:      cfg.ProductionService,
+		providerService:        cfg.ProviderService,
+		agentService:           cfg.AgentService,
+		walletService:          cfg.WalletService,
+		notificationService:    cfg.NotificationService,
+		paymentService:         cfg.PaymentService,
+		reportService:          cfg.ReportService,
+		redemptionCodeService:  cfg.RedemptionCodeService,
+		shortCodeRepo:          cfg.ShortCodeRepository,
+		shortVideoTemplateRepo: cfg.ShortVideoTemplateRepository,
+		shortVideoRepo:         cfg.ShortVideoRepository,
+		jobsClient:             cfg.JobsClient,
 	}
 }

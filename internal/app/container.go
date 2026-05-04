@@ -12,21 +12,23 @@ import (
 )
 
 type Container struct {
-	cfg                  Config
-	ctx                  context.Context
-	db                   *repo.DB
-	sqliteDB             *repo.SQLiteDB
-	Logger               *slog.Logger
-	AuthService          *service.AuthService
-	ProjectService       *service.ProjectService
-	ProductionService    *service.ProductionService
-	ProviderService      *service.ProviderService
-	AgentService         *service.AgentService
-	WalletService        *service.WalletService
-	NotificationService  *service.NotificationService
-	PaymentService       *service.PaymentService
-	PendingBillingWorker *service.PendingBillingWorker
-	ReportService        *service.ReportService
+	cfg                          Config
+	ctx                          context.Context
+	db                           *repo.DB
+	sqliteDB                     *repo.SQLiteDB
+	Logger                       *slog.Logger
+	AuthService                  *service.AuthService
+	ProjectService               *service.ProjectService
+	ProductionService            *service.ProductionService
+	ProviderService              *service.ProviderService
+	AgentService                 *service.AgentService
+	WalletService                *service.WalletService
+	NotificationService          *service.NotificationService
+	PaymentService               *service.PaymentService
+	PendingBillingWorker         *service.PendingBillingWorker
+	ReportService                *service.ReportService
+	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
+	ShortVideoRepository         repo.ShortVideoRepository
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -50,6 +52,8 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var paymentOrderRepo repo.PaymentOrderRepository = repo.NewMemoryPaymentOrderRepository()
 	var billingReportRepo repo.BillingReportRepository = repo.NewMemoryBillingReportRepository()
 	var operationCostRepo repo.OperationCostRepository = repo.NewMemoryOperationCostRepository()
+	var shortVideoTemplateRepo repo.ShortVideoTemplateRepository = repo.NewMemoryShortVideoTemplateRepository()
+	var shortVideoRepo repo.ShortVideoRepository = repo.NewMemoryShortVideoRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -69,6 +73,8 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		paymentOrderRepo = repo.NewPaymentOrderRepository(openedDB.Pool)
 		billingReportRepo = repo.NewPostgresBillingReportRepository(openedDB.Pool)
 		operationCostRepo = repo.NewPostgresOperationCostRepository(openedDB.Pool)
+		shortVideoTemplateRepo = repo.NewPostgresShortVideoTemplateRepository(openedDB.Pool)
+		shortVideoRepo = repo.NewPostgresShortVideoRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -153,21 +159,23 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	reportSvc := service.NewReportService(walletRepo, pendingBillingRepo, operationCostRepo, billingReportRepo)
 
 	return &Container{
-		cfg:                  cfg,
-		ctx:                  ctx,
-		db:                   db,
-		sqliteDB:             sqliteDB,
-		Logger:               logger.With("env", cfg.Env),
-		AuthService:          authService,
-		ProjectService:       projectSvc,
-		ProductionService:    productionSvc,
-		ProviderService:      providerService,
-		AgentService:         agentSvc,
-		WalletService:        walletSvc,
-		NotificationService:  notificationSvc,
-		PaymentService:       paymentSvc,
-		PendingBillingWorker: pendingBillingWorker,
-		ReportService:        reportSvc,
+		cfg:                          cfg,
+		ctx:                          ctx,
+		db:                           db,
+		sqliteDB:                     sqliteDB,
+		Logger:                       logger.With("env", cfg.Env),
+		AuthService:                  authService,
+		ProjectService:               projectSvc,
+		ProductionService:            productionSvc,
+		ProviderService:              providerService,
+		AgentService:                 agentSvc,
+		WalletService:                walletSvc,
+		NotificationService:          notificationSvc,
+		PaymentService:               paymentSvc,
+		PendingBillingWorker:         pendingBillingWorker,
+		ReportService:                reportSvc,
+		ShortVideoTemplateRepository: shortVideoTemplateRepo,
+		ShortVideoRepository:         shortVideoRepo,
 	}, nil
 }
 

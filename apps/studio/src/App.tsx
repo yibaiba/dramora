@@ -21,6 +21,7 @@ import { BillingReportsPage } from './studio/pages/BillingReportsPage'
 import TransactionHistoryPage from './studio/pages/TransactionHistoryPage'
 import { NotificationsPage } from './studio/pages/NotificationsPage'
 import { WorkerMetricsPage } from './studio/pages/WorkerMetricsPage'
+import ShortVideoPage from './studio/pages/ShortVideoPage'
 
 function App() {
   const session = useAuthStore((state) => state.session)
@@ -81,6 +82,7 @@ function App() {
         <Route path="admin/invitations" element={<InvitationsPage />} />
         <Route path="admin/worker-metrics" element={<WorkerMetricsPage />} />
         <Route path="account/sessions" element={<SessionsPage />} />
+        <Route path="short-video" element={<ShortVideoPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

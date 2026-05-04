@@ -921,3 +921,51 @@ export type GenerateRedemptionCodesResponse = {
   codes: string[]
   count: number
 }
+
+// Short Video Types
+export type ShortVideoTemplateStatus = 'product-focus' | 'promotion' | 'usage-scenario'
+
+export type ShortVideoTemplate = {
+  id: string
+  organizationId: string
+  name: string
+  description: string
+  category: ShortVideoTemplateStatus
+  config: Record<string, any>
+  createdAt: string
+  updatedAt: string
+}
+
+export type ShortVideoStatus = 'pending' | 'generating' | 'completed' | 'failed'
+
+export type ShortVideoResult = {
+  heyGenVideoURL: string
+  thumbURL: string
+  duration: number // in seconds
+  sizeBytes: number
+}
+
+export type ShortVideo = {
+  id: string
+  organizationId: string
+  templateId: string
+  parameters: Record<string, any>
+  status: ShortVideoStatus
+  errorMessage?: string
+  result?: ShortVideoResult
+  createdAt: string
+  updatedAt: string
+  version: number
+}
+
+export type CreateShortVideoTemplateRequest = {
+  name: string
+  description: string
+  category: ShortVideoTemplateStatus
+  config: Record<string, any>
+}
+
+export type CreateShortVideoRequest = {
+  templateId: string
+  parameters: Record<string, any>
+}

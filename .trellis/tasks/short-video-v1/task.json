@@ -1,0 +1,38 @@
+{
+  "id": "short-video-v1",
+  "name": "📱 电商 AI 短视频生成 (MVP v1)",
+  "description": "为 Dramora Studio 提供一键 AI 电商短视频生成功能",
+  "status": "planning",
+  "priority": "high",
+  "created_at": "2026-05-04T20:12:00Z",
+  "target_completion": "2026-06-15",
+  "duration_weeks": 5.5,
+  "phase": 1,
+  "team": ["ai", "backend", "frontend"],
+  "key_decisions": [
+    "虚拟主播优先 (HeyGen) vs 图像生成",
+    "预设音乐库 (v1) vs Suno AI (v2)",
+    "Claude 文案生成",
+    "初期 2-3 个核心模板"
+  ],
+  "success_metrics": {
+    "generation_time": "15-30 分钟",
+    "success_rate": "> 90%",
+    "video_quality": "可直接发布",
+    "cost_per_video": "< ¥1.5"
+  },
+  "dependencies": [
+    "HeyGen API 账户和密钥",
+    "Claude API 密钥 (已有)",
+    "现有 FFmpeg + Timeline 系统"
+  ],
+  "deliverables": [
+    "ShortVideoTemplate + ShortVideo 数据模型",
+    "模板 CRUD API",
+    "HeyGen 虚拟主播集成",
+    "Claude 文案生成",
+    "ShortVideoPage 前端",
+    "Timeline 合成 + FFmpeg 导出",
+    "QueuePage 集成"
+  ]
+}

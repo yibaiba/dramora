@@ -85,6 +85,14 @@ import {
 	redeemCode,
 	generateRedemptionCodes,
 	getCampaignStats,
+	listShortVideoTemplates,
+	getShortVideoTemplate,
+	createShortVideoTemplate,
+	deleteShortVideoTemplate,
+	createShortVideo,
+	listShortVideos,
+	getShortVideo,
+	deleteShortVideo,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -110,6 +118,8 @@ import type {
   BatchGenerateShotsRequest,
   RedeemCodeRequest,
   GenerateRedemptionCodesRequest,
+  CreateShortVideoTemplateRequest,
+  CreateShortVideoRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -967,5 +977,86 @@ export function useGetCampaignStats(campaignId?: string) {
       return getCampaignStats(campaignId)
     },
     enabled: !!campaignId,
+  })
+}
+
+// Short Video hooks
+export function useShortVideoTemplates() {
+  return useQuery({
+    queryKey: ['short-video-templates'],
+    queryFn: () => listShortVideoTemplates(),
+  })
+}
+
+export function useShortVideoTemplate(templateId?: string) {
+  return useQuery({
+    queryKey: ['short-video-template', templateId],
+    queryFn: async () => {
+      if (!templateId) {
+        throw new Error('Template ID is required')
+      }
+      return getShortVideoTemplate(templateId)
+    },
+    enabled: !!templateId,
+  })
+}
+
+export function useCreateShortVideoTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (req: CreateShortVideoTemplateRequest) => createShortVideoTemplate(req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['short-video-templates'] })
+    },
+  })
+}
+
+export function useDeleteShortVideoTemplate() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (templateId: string) => deleteShortVideoTemplate(templateId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['short-video-templates'] })
+    },
+  })
+}
+
+export function useShortVideos(limit = 20, offset = 0) {
+  return useQuery({
+    queryKey: ['short-videos', limit, offset],
+    queryFn: () => listShortVideos(limit, offset),
+  })
+}
+
+export function useShortVideo(videoId?: string) {
+  return useQuery({
+    queryKey: ['short-video', videoId],
+    queryFn: async () => {
+      if (!videoId) {
+        throw new Error('Video ID is required')
+      }
+      return getShortVideo(videoId)
+    },
+    enabled: !!videoId,
+  })
+}
+
+export function useCreateShortVideo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (req: CreateShortVideoRequest) => createShortVideo(req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['short-videos'] })
+    },
+  })
+}
+
+export function useDeleteShortVideo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (videoId: string) => deleteShortVideo(videoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['short-videos'] })
+    },
   })
 }

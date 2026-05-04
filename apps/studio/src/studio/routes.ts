@@ -12,6 +12,7 @@ import {
   Layers3,
   Mail,
   Settings,
+  Video,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -24,6 +25,7 @@ export const studioRoutePaths = {
   notifications: '/notifications',
   organizationInvitations: '/admin/invitations',
   queue: '/queue',
+  shortVideo: '/short-video',
   storyAnalysis: '/story-analysis',
   storyboard: '/storyboard',
   timelineExport: '/timeline-export',
@@ -76,6 +78,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'gallery',
     label: 'Gallery',
     path: studioRoutePaths.gallery,
+  },
+  {
+    description: 'AI 生成电商短视频，支持多种模板和自定义参数。',
+    icon: Video,
+    key: 'shortVideo',
+    label: 'Short Video',
+    path: studioRoutePaths.shortVideo,
   },
   {
     description: '实时监控所有生成任务的进度和状态。',

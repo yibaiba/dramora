@@ -67,6 +67,10 @@ import type {
   RedeemCodeResponse,
   GenerateRedemptionCodesRequest,
   GenerateRedemptionCodesResponse,
+  ShortVideoTemplate,
+  ShortVideo,
+  CreateShortVideoTemplateRequest,
+  CreateShortVideoRequest,
 } from './types'
 
 
@@ -964,4 +968,50 @@ export async function generateRedemptionCodes(req: GenerateRedemptionCodesReques
 
 export async function getCampaignStats(campaignId: string): Promise<CampaignStats> {
   return fetchJSON(`/api/v1/admin/redemption-campaigns/${encodeURIComponent(campaignId)}/stats`)
+}
+
+// Short Video APIs
+export async function listShortVideoTemplates(): Promise<ShortVideoTemplate[]> {
+  const response = await fetchJSON<ShortVideoTemplate[]>('/api/v1/short-video-templates')
+  return Array.isArray(response) ? response : []
+}
+
+export async function getShortVideoTemplate(templateId: string): Promise<ShortVideoTemplate> {
+  return fetchJSON(`/api/v1/short-video-templates/${encodeURIComponent(templateId)}`)
+}
+
+export async function createShortVideoTemplate(req: CreateShortVideoTemplateRequest): Promise<ShortVideoTemplate> {
+  return fetchJSON('/api/v1/short-video-templates', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function deleteShortVideoTemplate(templateId: string): Promise<void> {
+  await fetchJSON(`/api/v1/short-video-templates/${encodeURIComponent(templateId)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function createShortVideo(req: CreateShortVideoRequest): Promise<ShortVideo> {
+  return fetchJSON('/api/v1/short-videos', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function listShortVideos(limit = 20, offset = 0): Promise<{ videos: ShortVideo[]; total: number }> {
+  const response = await fetchJSON<ShortVideo[]>(`/api/v1/short-videos?limit=${limit}&offset=${offset}`)
+  const videos = Array.isArray(response) ? response : []
+  return { videos, total: videos.length }
+}
+
+export async function getShortVideo(videoId: string): Promise<ShortVideo> {
+  return fetchJSON(`/api/v1/short-videos/${encodeURIComponent(videoId)}`)
+}
+
+export async function deleteShortVideo(videoId: string): Promise<void> {
+  await fetchJSON(`/api/v1/short-videos/${encodeURIComponent(videoId)}`, {
+    method: 'DELETE',
+  })
 }
