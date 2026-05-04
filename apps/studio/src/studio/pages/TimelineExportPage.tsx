@@ -1,4 +1,4 @@
-import { Activity, Boxes, Download, Film, Edit2 } from 'lucide-react'
+import { Activity, Boxes, Download, Film, Edit2, AlertCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
@@ -7,6 +7,7 @@ import {
   useStoryboardShots,
   useStoryAnalyses,
   useWorkflowRun,
+  useSaveEpisodeTimeline,
 } from '../../api/hooks'
 import type { Timeline as APITimeline } from '../../api/types'
 import { generateFCPXML } from '../../lib/fcpxml-generator'
@@ -54,14 +55,58 @@ function convertApiTimelineToEditor(apiTimeline: APITimeline | undefined): Edito
   }
 }
 
+// Convert Editor Timeline to API Timeline (for saving)
+function convertEditorTimelineToApi(
+  editorTimeline: EditorTimeline,
+  originalApiTimeline: APITimeline | undefined,
+): APITimeline {
+  const now = new Date().toISOString()
+  return {
+    id: originalApiTimeline?.id ?? '',
+    episode_id: originalApiTimeline?.episode_id ?? '',
+    status: originalApiTimeline?.status ?? 'draft',
+    version: (originalApiTimeline?.version ?? 0) + 1,
+    duration_ms: editorTimeline.duration,
+    tracks: editorTimeline.tracks.map((track) => {
+      const originalTrack = originalApiTimeline?.tracks.find((t) => t.id === track.id)
+      return {
+        id: track.id,
+        kind: track.type,
+        name: track.name,
+        position: editorTimeline.tracks.indexOf(track),
+        clips: track.clips.map((clip) => {
+          const originalClip = originalTrack?.clips.find((c) => c.id === clip.id)
+          return {
+            id: clip.id,
+            asset_id: clip.sourceUrl,
+            kind: track.type,
+            start_ms: clip.startTime,
+            duration_ms: clip.duration,
+            trim_start_ms: originalClip?.trim_start_ms ?? 0,
+            created_at: originalClip?.created_at ?? now,
+            updated_at: now,
+          }
+        }),
+        created_at: originalTrack?.created_at ?? now,
+        updated_at: now,
+      }
+    }),
+    created_at: originalApiTimeline?.created_at ?? now,
+    updated_at: now,
+  }
+}
+
+
 export function TimelineExportPage() {
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
   const { activeEpisode } = useStudioSelection()
   const location = useLocation()
   const { data: storyboardShots = [] } = useStoryboardShots(activeEpisode?.id)
   const { data: timeline } = useEpisodeTimeline(activeEpisode?.id)
   const { data: jobs = [] } = useGenerationJobs()
   const { data: analyses = [] } = useStoryAnalyses(activeEpisode?.id)
+  const saveTimeline = useSaveEpisodeTimeline()
   const storyboardDisplayShots = useMemo(
     () => mapDisplayShots(storyboardShots),
     [storyboardShots],
@@ -112,6 +157,27 @@ export function TimelineExportPage() {
 
   return (
     <section className="studio-page timeline-page" aria-labelledby="timeline-export-title">
+      {saveMessage && (
+        <div
+          className={`board-notice timeline-${saveMessage.type}-notice`}
+          style={{
+            backgroundColor: saveMessage.type === 'success' ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            borderColor: saveMessage.type === 'success' ? '#22c55e' : '#ef4444',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <AlertCircle
+            aria-hidden="true"
+            style={{
+              color: saveMessage.type === 'success' ? '#22c55e' : '#ef4444',
+              flexShrink: 0,
+            }}
+          />
+          <span>{saveMessage.text}</span>
+        </div>
+      )}
       <div className="board-header">
         <div>
           <h1 id="timeline-export-title">Timeline / Export</h1>
@@ -238,9 +304,43 @@ export function TimelineExportPage() {
         videoTitle={`编辑 Timeline v${timeline?.version ?? 1}`}
         onClose={() => setIsEditOpen(false)}
         onSave={(editedTimeline) => {
-          // TODO: Save edited timeline back to server in PR3c
-          console.log('Edited timeline saved:', editedTimeline)
-          setIsEditOpen(false)
+          // Convert edited timeline back to API format and save
+          if (!activeEpisode || !timeline) {
+            setSaveMessage({ type: 'error', text: '缺少必要的上下文信息' })
+            return
+          }
+
+          try {
+            const updatedApiTimeline = convertEditorTimelineToApi(editedTimeline, timeline)
+            saveTimeline.mutate(
+              {
+                episodeId: activeEpisode.id,
+                request: {
+                  tracks: updatedApiTimeline.tracks,
+                  duration_ms: updatedApiTimeline.duration_ms,
+                },
+              },
+              {
+                onSuccess: () => {
+                  setSaveMessage({ type: 'success', text: '时间线已保存成功' })
+                  setIsEditOpen(false)
+                  // Auto-dismiss message after 3 seconds
+                  setTimeout(() => setSaveMessage(null), 3000)
+                },
+                onError: (error) => {
+                  setSaveMessage({
+                    type: 'error',
+                    text: `保存失败: ${error instanceof Error ? error.message : '未知错误'}`,
+                  })
+                },
+              },
+            )
+          } catch (error) {
+            setSaveMessage({
+              type: 'error',
+              text: `转换失败: ${error instanceof Error ? error.message : '未知错误'}`,
+            })
+          }
         }}
       />
     </section>
