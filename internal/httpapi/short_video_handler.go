@@ -298,6 +298,7 @@ func (h *ShortVideoHandler) CreateShortVideo(w http.ResponseWriter, r *http.Requ
 				video.ID.String(),
 				video.HeyGenAvatarID,
 				params,
+				video.OrganizationID.String(),
 			)
 
 			if err == nil {

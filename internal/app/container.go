@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path/filepath"
 
+	"github.com/yibaiba/dramora/internal/httpapi"
 	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/provider/heygen"
 	"github.com/yibaiba/dramora/internal/provider/payment"
@@ -30,6 +31,7 @@ type Container struct {
 	ReportService                *service.ReportService
 	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
 	ShortVideoRepository         repo.ShortVideoRepository
+	WebSocketManager             *httpapi.WebSocketManager
 }
 
 func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Container, error) {
@@ -166,6 +168,10 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	// 初始化报表服务
 	reportSvc := service.NewReportService(walletRepo, pendingBillingRepo, operationCostRepo, billingReportRepo)
 
+	// 初始化 WebSocket 管理器
+	wsManager := httpapi.NewWebSocketManager(logger)
+	productionSvc.SetWebSocketEventBroadcaster(wsManager)
+
 	return &Container{
 		cfg:                          cfg,
 		ctx:                          ctx,
@@ -184,6 +190,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		ReportService:                reportSvc,
 		ShortVideoTemplateRepository: shortVideoTemplateRepo,
 		ShortVideoRepository:         shortVideoRepo,
+		WebSocketManager:             wsManager,
 	}, nil
 }
 

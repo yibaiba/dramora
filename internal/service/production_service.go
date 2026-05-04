@@ -12,20 +12,27 @@ import (
 	"github.com/yibaiba/dramora/internal/media"
 	"github.com/yibaiba/dramora/internal/provider"
 	"github.com/yibaiba/dramora/internal/provider/heygen"
+	"github.com/yibaiba/dramora/internal/realtime"
 	"github.com/yibaiba/dramora/internal/repo"
 )
 
+// WebSocketEventBroadcaster is the interface for broadcasting events to WebSocket clients
+type WebSocketEventBroadcaster interface {
+	BroadcastEvent(orgID string, event *realtime.Event)
+}
+
 type ProductionService struct {
-	production   repo.ProductionRepository
-	jobClient    jobs.Client
-	seedance     seedanceProvider
-	heyGenClient *heygen.Client
-	agentSvc     *AgentService
-	projectSvc   *ProjectService
-	providerSvc  *ProviderService
-	walletSvc    *WalletService
-	mediaStorage media.Storage
-	metrics      workerMetrics
+	production    repo.ProductionRepository
+	jobClient     jobs.Client
+	seedance      seedanceProvider
+	heyGenClient  *heygen.Client
+	agentSvc      *AgentService
+	projectSvc    *ProjectService
+	providerSvc   *ProviderService
+	walletSvc     *WalletService
+	mediaStorage  media.Storage
+	metrics       workerMetrics
+	wsBroadcaster WebSocketEventBroadcaster
 }
 
 type StartStoryAnalysisResult struct {
@@ -99,6 +106,11 @@ func (s *ProductionService) SetHeyGenClient(client *heygen.Client) {
 // 到老的 inline placeholder（manmu://providers/audio/inline?bytes=...）。
 func (s *ProductionService) SetMediaStorage(storage media.Storage) {
 	s.mediaStorage = storage
+}
+
+// SetWebSocketEventBroadcaster injects the WebSocket broadcaster for real-time events
+func (s *ProductionService) SetWebSocketEventBroadcaster(broadcaster WebSocketEventBroadcaster) {
+	s.wsBroadcaster = broadcaster
 }
 
 func (s *ProductionService) StartStoryAnalysis(
@@ -660,6 +672,7 @@ func (s *ProductionService) StartShortVideoGeneration(
 	videoID string,
 	avatarID string,
 	parameters map[string]interface{},
+	organizationID string,
 ) (string, error) {
 	// If HeyGen client is not initialized, return a placeholder
 	if s.heyGenClient == nil {
@@ -679,7 +692,29 @@ func (s *ProductionService) StartShortVideoGeneration(
 	})
 
 	if err != nil {
+		// Broadcast error event if broadcaster is available
+		if s.wsBroadcaster != nil {
+			s.wsBroadcaster.BroadcastEvent(organizationID, &realtime.Event{
+				Type: realtime.EventGenerationFailed,
+				Data: map[string]any{
+					"videoID": videoID,
+					"error":   err.Error(),
+				},
+			})
+		}
 		return "", fmt.Errorf("failed to create HeyGen video: %w", err)
+	}
+
+	// Broadcast started event if broadcaster is available
+	if s.wsBroadcaster != nil {
+		s.wsBroadcaster.BroadcastEvent(organizationID, &realtime.Event{
+			Type: realtime.EventGenerationProgress,
+			Data: map[string]any{
+				"videoID":  videoID,
+				"progress": 10,
+				"status":   "started",
+			},
+		})
 	}
 
 	return response.VideoID, nil

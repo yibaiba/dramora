@@ -45,6 +45,7 @@ func main() {
 		ReportService:                container.ReportService,
 		ShortVideoTemplateRepository: container.ShortVideoTemplateRepository,
 		ShortVideoRepository:         container.ShortVideoRepository,
+		WebSocketManager:             container.WebSocketManager,
 	})
 
 	server := &http.Server{

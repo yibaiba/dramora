@@ -35,6 +35,7 @@ type RouterConfig struct {
 	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
 	ShortVideoRepository         repo.ShortVideoRepository
 	JobsClient                   jobs.Client
+	WebSocketManager             *WebSocketManager
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -50,6 +51,13 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	router.Get("/metrics", api.prometheusMetrics)
 	router.Post("/webhook/payment", api.handlePaymentWebhook)
 	router.Get("/r/:shortCode", api.redirectShortCode)
+
+	// WebSocket route (requires auth)
+	router.Route("/ws", func(r chi.Router) {
+		r.Use(authContextMiddleware(cfg.AuthService))
+		wsHandler := NewWebSocketHandler(cfg.WebSocketManager, cfg.Logger)
+		r.Get("/", wsHandler.HandleWebSocket)
+	})
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Use(authContextMiddleware(cfg.AuthService))
