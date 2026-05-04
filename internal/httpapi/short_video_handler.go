@@ -265,20 +265,52 @@ func (h *ShortVideoHandler) CreateShortVideo(w http.ResponseWriter, r *http.Requ
 	}
 
 	video := &domain.ShortVideo{
-		ID:             uuid.New(),
-		OrganizationID: orgID,
-		TemplateID:     req.TemplateID,
-		Parameters:     req.Parameters,
-		HeyGenAvatarID: req.HeyGenAvatarID,
-		Status:         domain.ShortVideoStatusPending,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
-		Version:        1,
+		ID:                uuid.New(),
+		OrganizationID:    orgID,
+		TemplateID:        req.TemplateID,
+		Parameters:        req.Parameters,
+		HeyGenAvatarID:    req.HeyGenAvatarID,
+		Status:            domain.ShortVideoStatusPending,
+		GenerationStatus:  domain.ShortVideoStatusPending,
+		CreatedAt:         time.Now(),
+		UpdatedAt:         time.Now(),
+		Version:           1,
 	}
 
 	if err := h.videoRepo.Create(r.Context(), video); err != nil {
 		http.Error(w, "failed to create short video", http.StatusInternalServerError)
 		return
+	}
+
+	// Asynchronously start the generation process if production service is available
+	if h.productionService != nil {
+		go func() {
+			// Decode parameters into a map for the service
+			var params map[string]interface{}
+			if err := json.Unmarshal(req.Parameters, &params); err != nil {
+				// Log error but don't fail the request
+				return
+			}
+
+			// Start video generation (will be updated to call HeyGen API in Phase 3c+)
+			generatedVideoID, err := h.productionService.StartShortVideoGeneration(
+				r.Context(),
+				video.ID.String(),
+				video.HeyGenAvatarID,
+				params,
+			)
+
+			if err == nil {
+				// Update video with generated ID and status
+				video.HeyGenVideoID = generatedVideoID
+				video.GenerationStatus = domain.ShortVideoStatusGenerating
+				video.Status = domain.ShortVideoStatusGenerating
+				video.UpdatedAt = time.Now()
+				video.Version++
+				// Note: In production, we would use an Update method here
+				// For now, the status is stored in memory
+			}
+		}()
 	}
 
 	w.Header().Set("Content-Type", "application/json")
