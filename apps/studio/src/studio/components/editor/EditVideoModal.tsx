@@ -11,11 +11,19 @@ interface EditVideoModalProps {
   videoId?: string
   videoUrl?: string
   videoTitle?: string
+  initialTimeline?: Timeline // Support pre-initialized timeline from TimelineExportPage
   onClose: () => void
   onSave?: (timeline: Timeline) => void
 }
 
-export function EditVideoModal({ isOpen, videoUrl, videoTitle, onClose, onSave }: EditVideoModalProps) {
+export function EditVideoModal({
+  isOpen,
+  videoUrl,
+  videoTitle,
+  initialTimeline,
+  onClose,
+  onSave,
+}: EditVideoModalProps) {
   const timeline = useTimelineStore((state) => state.timeline)
   const undo = useTimelineStore((state) => state.undo)
   const redo = useTimelineStore((state) => state.redo)
@@ -26,28 +34,34 @@ export function EditVideoModal({ isOpen, videoUrl, videoTitle, onClose, onSave }
 
   const [showExportDialog, setShowExportDialog] = useState(false)
 
-  // Initialize timeline with a video track if opening with a URL
+  // Initialize timeline with either passed-in timeline or a new one from videoUrl
   useEffect(() => {
-    if (isOpen && videoUrl && timeline.tracks.length === 0) {
-      const videoTrack: Track = {
-        id: `track-${Date.now()}`,
-        type: 'video',
-        name: '视频轨',
-        clips: [],
-        visible: true,
-        locked: false,
-        height: 60,
-      }
+    if (isOpen) {
+      if (initialTimeline && timeline.tracks.length === 0) {
+        // Use pre-initialized timeline from props (e.g., from TimelineExportPage)
+        initializeTimeline(initialTimeline)
+      } else if (videoUrl && timeline.tracks.length === 0) {
+        // Create new timeline for single video editing (e.g., from GalleryPage)
+        const videoTrack: Track = {
+          id: `track-${Date.now()}`,
+          type: 'video',
+          name: '视频轨',
+          clips: [],
+          visible: true,
+          locked: false,
+          height: 60,
+        }
 
-      const initialTimeline: Timeline = {
-        tracks: [videoTrack],
-        duration: 10000, // 10 seconds default
-        fps: 30,
-      }
+        const newTimeline: Timeline = {
+          tracks: [videoTrack],
+          duration: 10000, // 10 seconds default
+          fps: 30,
+        }
 
-      initializeTimeline(initialTimeline)
+        initializeTimeline(newTimeline)
+      }
     }
-  }, [isOpen, videoUrl, timeline.tracks.length, initializeTimeline])
+  }, [isOpen, videoUrl, initialTimeline, timeline.tracks.length, initializeTimeline])
 
   if (!isOpen) return null
 

@@ -1,5 +1,5 @@
-import { Activity, Boxes, Download, Film } from 'lucide-react'
-import { useMemo } from 'react'
+import { Activity, Boxes, Download, Film, Edit2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   useEpisodeTimeline,
@@ -8,9 +8,12 @@ import {
   useStoryAnalyses,
   useWorkflowRun,
 } from '../../api/hooks'
+import type { Timeline as APITimeline } from '../../api/types'
 import { generateFCPXML } from '../../lib/fcpxml-generator'
+import type { Timeline as EditorTimeline } from '../lib/editor/types'
 import { TimelineWorkspace } from '../components/TimelineWorkspace'
 import { WorkflowRecoveryTimeline } from '../components/WorkflowRecoveryTimeline'
+import { EditVideoModal } from '../components/editor/EditVideoModal'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { studioRoutePaths } from '../routes'
 import {
@@ -22,7 +25,37 @@ import {
   workflowRunStatusLabel,
 } from '../utils'
 
+// Convert API Timeline to Editor Timeline
+function convertApiTimelineToEditor(apiTimeline: APITimeline | undefined): EditorTimeline | undefined {
+  if (!apiTimeline) return undefined
+
+  return {
+    tracks: apiTimeline.tracks.map((track) => ({
+      id: track.id,
+      type: track.kind as 'video' | 'audio' | 'subtitle',
+      name: track.name,
+      clips: track.clips.map((clip) => ({
+        id: clip.id,
+        trackId: track.id,
+        startTime: clip.start_ms,
+        duration: clip.duration_ms,
+        sourceUrl: clip.asset_id,
+        properties: {
+          speed: 1.0,
+          opacity: 1,
+        },
+      })),
+      visible: true,
+      locked: false,
+      height: 60,
+    })),
+    duration: apiTimeline.duration_ms,
+    fps: 30, // Default fps from API
+  }
+}
+
 export function TimelineExportPage() {
+  const [isEditOpen, setIsEditOpen] = useState(false)
   const { activeEpisode } = useStudioSelection()
   const location = useLocation()
   const { data: storyboardShots = [] } = useStoryboardShots(activeEpisode?.id)
@@ -41,6 +74,7 @@ export function TimelineExportPage() {
     [storyboardDisplayShots, storyboardShots, timeline],
   )
   const timelineSource = timeline ? 'saved' : 'storyboard'
+  const editorTimeline = useMemo(() => convertApiTimelineToEditor(timeline), [timeline])
   const exportJobs = jobs.filter((job) => job.episode_id === activeEpisode?.id && job.task_type === 'export')
   const currentWorkflowRunId = useMemo(
     () => resolveEpisodeWorkflowRunId(activeEpisode?.id, analyses, jobs),
@@ -84,6 +118,15 @@ export function TimelineExportPage() {
           <span>汇总镜头到剪辑时间线，保存版本并发起导出。</span>
         </div>
         <div className="board-actions">
+          <button
+            onClick={() => setIsEditOpen(true)}
+            disabled={!timeline}
+            className="hero-secondary-action"
+            title={!timeline ? '请先保存时间线' : '打开高级编辑器'}
+          >
+            <Edit2 aria-hidden="true" />
+            编辑时间线
+          </button>
           <button
             onClick={handleExportFCPXML}
             disabled={!timeline}
@@ -187,6 +230,19 @@ export function TimelineExportPage() {
           <small>如分镜质量不足，可回到分析页补充原文并重跑解析。</small>
         </Link>
       </div>
+
+      {/* Advanced editing modal */}
+      <EditVideoModal
+        isOpen={isEditOpen}
+        initialTimeline={editorTimeline}
+        videoTitle={`编辑 Timeline v${timeline?.version ?? 1}`}
+        onClose={() => setIsEditOpen(false)}
+        onSave={(editedTimeline) => {
+          // TODO: Save edited timeline back to server in PR3c
+          console.log('Edited timeline saved:', editedTimeline)
+          setIsEditOpen(false)
+        }}
+      />
     </section>
   )
 }
