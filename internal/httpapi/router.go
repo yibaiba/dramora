@@ -16,18 +16,19 @@ type Readiness interface {
 }
 
 type RouterConfig struct {
-	Logger              *slog.Logger
-	Version             string
-	Readiness           Readiness
-	AuthService         *service.AuthService
-	ProjectService      *service.ProjectService
-	ProductionService   *service.ProductionService
-	ProviderService     *service.ProviderService
-	AgentService        *service.AgentService
-	WalletService       *service.WalletService
-	NotificationService *service.NotificationService
-	PaymentService      *service.PaymentService
-	ReportService       *service.ReportService
+	Logger                *slog.Logger
+	Version               string
+	Readiness             Readiness
+	AuthService           *service.AuthService
+	ProjectService        *service.ProjectService
+	ProductionService     *service.ProductionService
+	ProviderService       *service.ProviderService
+	AgentService          *service.AgentService
+	WalletService         *service.WalletService
+	NotificationService   *service.NotificationService
+	PaymentService        *service.PaymentService
+	ReportService         *service.ReportService
+	RedemptionCodeService *service.RedemptionCodeService
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -109,6 +110,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/wallet:charge:initiate", api.initiateChargeWallet)
 		r.Get("/operation-costs", api.getOperationCosts)
 		r.Get("/notifications", api.listNotifications)
+		r.Post("/redemption-codes:redeem", api.redeemCode)
 
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
@@ -137,6 +139,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/wallet/preview-cost", api.previewWalletCost)
 			admin.Post("/notifications/{id}:read", api.markNotificationAsRead)
 			admin.Post("/notifications:read-all", api.markAllNotificationsAsRead)
+			admin.Post("/admin/redemption-codes:generate", api.generateCodes)
+			admin.Post("/admin/redemption-campaigns:create", api.createCampaign)
+			admin.Get("/admin/redemption-campaigns/{campaignId}/stats", api.getCampaignStats)
 
 			// owner-only mutations: provider config save / test 真实凭证写入
 			admin.Group(func(owner chi.Router) {
@@ -153,31 +158,33 @@ func NewRouter(cfg RouterConfig) http.Handler {
 }
 
 type api struct {
-	readinessChecker    Readiness
-	logger              *slog.Logger
-	authService         *service.AuthService
-	projectService      *service.ProjectService
-	productionService   *service.ProductionService
-	providerService     *service.ProviderService
-	agentService        *service.AgentService
-	walletService       *service.WalletService
-	notificationService *service.NotificationService
-	paymentService      *service.PaymentService
-	reportService       *service.ReportService
+	readinessChecker      Readiness
+	logger                *slog.Logger
+	authService           *service.AuthService
+	projectService        *service.ProjectService
+	productionService     *service.ProductionService
+	providerService       *service.ProviderService
+	agentService          *service.AgentService
+	walletService         *service.WalletService
+	notificationService   *service.NotificationService
+	paymentService        *service.PaymentService
+	reportService         *service.ReportService
+	redemptionCodeService *service.RedemptionCodeService
 }
 
 func newAPI(cfg RouterConfig) *api {
 	return &api{
-		readinessChecker:    cfg.Readiness,
-		logger:              cfg.Logger,
-		authService:         cfg.AuthService,
-		projectService:      cfg.ProjectService,
-		productionService:   cfg.ProductionService,
-		providerService:     cfg.ProviderService,
-		agentService:        cfg.AgentService,
-		walletService:       cfg.WalletService,
-		notificationService: cfg.NotificationService,
-		paymentService:      cfg.PaymentService,
-		reportService:       cfg.ReportService,
+		readinessChecker:      cfg.Readiness,
+		logger:                cfg.Logger,
+		authService:           cfg.AuthService,
+		projectService:        cfg.ProjectService,
+		productionService:     cfg.ProductionService,
+		providerService:       cfg.ProviderService,
+		agentService:          cfg.AgentService,
+		walletService:         cfg.WalletService,
+		notificationService:   cfg.NotificationService,
+		paymentService:        cfg.PaymentService,
+		reportService:         cfg.ReportService,
+		redemptionCodeService: cfg.RedemptionCodeService,
 	}
 }

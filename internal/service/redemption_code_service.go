@@ -255,7 +255,6 @@ func (s *RedemptionCodeService) RedeemCode(ctx context.Context, authCtx RequestA
 	}, nil
 }
 
-
 // GetCampaignStats 获取活动的统计数据
 func (s *RedemptionCodeService) GetCampaignStats(ctx context.Context, authCtx RequestAuthContext, campaignID string) (*domain.CampaignStats, error) {
 	// 检查权限

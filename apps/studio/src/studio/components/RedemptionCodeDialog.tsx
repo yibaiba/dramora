@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, CheckCircle, Loader2, X } from 'lucide-react'
 import { useRedeemCode } from '../../api/hooks'
+import { validateRedemptionCode, normalizeRedemptionCode } from '../../lib/redemption'
 import type { RedeemCodeResponse } from '../../api/types'
 
 interface RedemptionCodeDialogProps {
@@ -28,17 +29,19 @@ export default function RedemptionCodeDialog({ isOpen, onClose }: RedemptionCode
   const { mutate: redeem, isPending } = useRedeemCode()
 
   const handleRedeem = () => {
-    const trimmedCode = code.trim().toUpperCase()
-    if (!trimmedCode) {
+    const normalized = normalizeRedemptionCode(code)
+    const validation = validateRedemptionCode(normalized)
+
+    if (!validation.valid) {
       setFeedback({
         type: 'error',
-        message: '请输入赎回码',
+        message: validation.error || '赎回码格式不正确',
       })
       return
     }
 
     redeem(
-      { code: trimmedCode },
+      { code: normalized },
       {
         onSuccess: (response) => {
           setFeedback({

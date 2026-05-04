@@ -38,3 +38,12 @@ CREATE INDEX IF NOT EXISTS redemption_codes_campaign_idx
 
 CREATE INDEX IF NOT EXISTS redemption_codes_org_created_idx
     ON redemption_codes (organization_id, created_at DESC);
+
+-- 补充索引：用于查询用户兑换历史
+CREATE INDEX IF NOT EXISTS redemption_codes_used_by_idx
+    ON redemption_codes (used_by, used_at DESC);
+
+-- 补充索引：用于查询和清理过期码
+CREATE INDEX IF NOT EXISTS redemption_codes_expires_at_idx
+    ON redemption_codes (expires_at) WHERE status = 'unused';
+
