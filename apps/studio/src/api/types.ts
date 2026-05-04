@@ -870,3 +870,54 @@ export type BatchGenerateShotsRequest = {
 export type BatchGenerateShotsResponse = {
   job_ids: string[]
 }
+
+// Redemption Code types
+export type RedemptionCode = {
+  id: string
+  code: string
+  amount: number
+  status: 'unused' | 'used' | 'expired'
+  usedBy?: string
+  usedAt?: string
+  expiresAt?: string
+}
+
+export type RedemptionCampaign = {
+  id: string
+  name: string
+  description?: string
+  status: string
+  createdAt: string
+  createdBy: string
+}
+
+export type CampaignStats = {
+  totalCodes: number
+  redeemedCodes: number
+  totalAmount: number
+  redeemedAmount: number
+  generatedAt: string
+}
+
+export type RedeemCodeRequest = {
+  code: string
+}
+
+export type RedeemCodeResponse = {
+  success: boolean
+  amount: number
+  newBalance: number
+  message: string
+}
+
+export type GenerateRedemptionCodesRequest = {
+  count: number
+  amount: number
+  expiresAt?: string
+  reason?: string
+}
+
+export type GenerateRedemptionCodesResponse = {
+  codes: string[]
+  count: number
+}

@@ -62,6 +62,11 @@ import type {
   GenerateBillingReportRequest,
   BatchGenerateShotsRequest,
   BatchGenerateShotsResponse,
+  CampaignStats,
+  RedeemCodeRequest,
+  RedeemCodeResponse,
+  GenerateRedemptionCodesRequest,
+  GenerateRedemptionCodesResponse,
 } from './types'
 
 
@@ -940,4 +945,23 @@ export async function downloadAssetFile(uri: string): Promise<Blob> {
     throw new Error(`Failed to download asset: ${response.statusText}`)
   }
   return response.blob()
+}
+
+// Redemption Code API functions
+export async function redeemCode(req: RedeemCodeRequest): Promise<RedeemCodeResponse> {
+  return fetchJSON('/api/v1/redemption-codes:redeem', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function generateRedemptionCodes(req: GenerateRedemptionCodesRequest): Promise<GenerateRedemptionCodesResponse> {
+  return fetchJSON('/api/v1/admin/redemption-codes:generate', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function getCampaignStats(campaignId: string): Promise<CampaignStats> {
+  return fetchJSON(`/api/v1/admin/redemption-campaigns/${encodeURIComponent(campaignId)}/stats`)
 }

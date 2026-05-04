@@ -1,32 +1,48 @@
-import { useEffect, useState } from 'react'
-import { Loader2, CheckCircle, AlertCircle, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Loader2, CheckCircle, AlertCircle, X, Gift } from 'lucide-react'
 import { useWallet, useOperationCosts } from '../../api/hooks'
 import WalletBalanceCard from '../components/WalletBalanceCard'
 import OperationCostsTable from '../components/OperationCostsTable'
+import RedemptionCodeDialog from '../components/RedemptionCodeDialog'
 
 export default function WalletPage() {
   const { data: wallet, isLoading: walletLoading, refetch: refetchWallet } = useWallet()
   const { data: costs, isLoading: costsLoading } = useOperationCosts()
-  const [paymentStatus, setPaymentStatus] = useState<'success' | 'cancel' | null>(null)
+
+  // Initialize payment status from URL on mount
+  const getInitialPaymentStatus = (): 'success' | 'cancel' | null => {
+    if (typeof window === 'undefined') return null
+    const params = new URLSearchParams(window.location.search)
+    return params.get('status') as 'success' | 'cancel' | null
+  }
+
+  const [paymentStatus, setPaymentStatus] = useState<'success' | 'cancel' | null>(() =>
+    getInitialPaymentStatus()
+  )
+  const [isRedemptionDialogOpen, setIsRedemptionDialogOpen] = useState(false)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   // Handle payment callback status from URL
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const status = params.get('status') as 'success' | 'cancel' | null
-    if (status) {
-      setPaymentStatus(status)
-      // Refetch wallet if payment was successful
-      if (status === 'success') {
-        refetchWallet()
-      }
-      // Clear the URL parameter after 5 seconds
-      const timer = setTimeout(() => {
-        window.history.replaceState({}, '', '/wallet')
-        setPaymentStatus(null)
-      }, 5000)
-      return () => clearTimeout(timer)
+    if (!paymentStatus) return
+
+    // Refetch wallet if payment was successful
+    if (paymentStatus === 'success') {
+      refetchWallet()
     }
-  }, [refetchWallet])
+
+    // Clear the URL parameter and status after 5 seconds
+    timerRef.current = setTimeout(() => {
+      window.history.replaceState({}, '', '/wallet')
+      setPaymentStatus(null)
+    }, 5000)
+
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current)
+      }
+    }
+  }, [paymentStatus, refetchWallet])
 
   if (walletLoading || costsLoading) {
     return (
@@ -82,11 +98,42 @@ export default function WalletPage() {
         <WalletBalanceCard wallet={wallet} />
       </div>
 
+      {/* Redemption Code Section */}
+      <div className="mb-12">
+        <div className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden shadow-sm">
+          <div className="p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Gift className="w-5 h-5" />
+                  兑换赎回码
+                </h2>
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  输入你的赎回码获得积分
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsRedemptionDialogOpen(true)}
+              className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white font-medium rounded-lg transition-colors"
+            >
+              输入赎回码
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Operation Costs Table */}
       <div>
         <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">Operation Costs</h2>
         <OperationCostsTable costs={costs} />
       </div>
+
+      {/* Redemption Dialog */}
+      <RedemptionCodeDialog
+        isOpen={isRedemptionDialogOpen}
+        onClose={() => setIsRedemptionDialogOpen(false)}
+      />
     </div>
   )
 }

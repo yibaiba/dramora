@@ -1,4 +1,4 @@
-import { ArrowUp, ArrowDown } from 'lucide-react'
+import { ArrowUp, ArrowDown, Gift } from 'lucide-react'
 import type { WalletTransaction } from '../../api/types'
 
 interface TransactionHistoryTableProps {
@@ -28,6 +28,13 @@ export default function TransactionHistoryTable({ transactions, isLoading }: Tra
       default:
         return 'text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-800'
     }
+  }
+
+  const getReason = (tx: WalletTransaction): string => {
+    if (tx.ref_type === 'redemption_code') {
+      return `赎回码兑换${tx.reason ? ` - ${tx.reason}` : ''}`
+    }
+    return tx.reason || '-'
   }
 
   if (isLoading) {
@@ -71,8 +78,14 @@ export default function TransactionHistoryTable({ transactions, isLoading }: Tra
               </td>
               <td className="px-4 py-3">
                 <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-sm font-medium ${getTypeColor(tx.kind)}`}>
-                  {tx.direction > 0 ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                  {getTypeLabel(tx.kind)}
+                  {tx.ref_type === 'redemption_code' ? (
+                    <Gift className="w-3 h-3" />
+                  ) : tx.direction > 0 ? (
+                    <ArrowUp className="w-3 h-3" />
+                  ) : (
+                    <ArrowDown className="w-3 h-3" />
+                  )}
+                  {tx.ref_type === 'redemption_code' ? '赎回码' : getTypeLabel(tx.kind)}
                 </span>
               </td>
               <td className="px-4 py-3 text-sm text-right font-semibold text-slate-900 dark:text-white">
@@ -80,8 +93,8 @@ export default function TransactionHistoryTable({ transactions, isLoading }: Tra
               </td>
               <td className="px-4 py-3 text-sm text-right text-slate-600 dark:text-slate-400">{tx.balance_after}</td>
               <td className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400">
-                <div title={tx.reason} className="truncate max-w-xs">
-                  {tx.reason || '-'}
+                <div title={getReason(tx)} className="truncate max-w-xs">
+                  {getReason(tx)}
                 </div>
               </td>
             </tr>
@@ -91,3 +104,4 @@ export default function TransactionHistoryTable({ transactions, isLoading }: Tra
     </div>
   )
 }
+

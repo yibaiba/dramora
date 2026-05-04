@@ -82,6 +82,9 @@ import {
 	updateGenerationJobPriority,
 	pauseEpisodeQueue,
 	resumeEpisodeQueue,
+	redeemCode,
+	generateRedemptionCodes,
+	getCampaignStats,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -105,6 +108,8 @@ import type {
   ChargeInitiateRequest,
   GenerateBillingReportRequest,
   BatchGenerateShotsRequest,
+  RedeemCodeRequest,
+  GenerateRedemptionCodesRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -932,5 +937,35 @@ export function useResumeEpisodeQueue() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['generation-jobs'] })
     },
+  })
+}
+
+// Redemption Code hooks
+export function useRedeemCode() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (req: RedeemCodeRequest) => redeemCode(req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['wallet'] })
+    },
+  })
+}
+
+export function useGenerateRedemptionCodes() {
+  return useMutation({
+    mutationFn: (req: GenerateRedemptionCodesRequest) => generateRedemptionCodes(req),
+  })
+}
+
+export function useGetCampaignStats(campaignId?: string) {
+  return useQuery({
+    queryKey: ['redemption-campaign-stats', campaignId],
+    queryFn: async () => {
+      if (!campaignId) {
+        throw new Error('Campaign ID is required')
+      }
+      return getCampaignStats(campaignId)
+    },
+    enabled: !!campaignId,
   })
 }
