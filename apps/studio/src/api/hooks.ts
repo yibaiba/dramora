@@ -1039,6 +1039,7 @@ export function useShortVideo(videoId?: string) {
       return getShortVideo(videoId)
     },
     enabled: !!videoId,
+    refetchInterval: 2000, // Auto-refetch every 2 seconds for real-time status
   })
 }
 

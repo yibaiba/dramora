@@ -1,6 +1,7 @@
 import type { ShortVideo } from '../../api/types'
-import { useDeleteShortVideo } from '../../api/hooks'
+import { useDeleteShortVideo, useShortVideo } from '../../api/hooks'
 import { Loader2, Trash2, Download } from 'lucide-react'
+import { useMemo } from 'react'
 
 interface ShortVideoListProps {
   videos: ShortVideo[]
@@ -22,8 +23,16 @@ function formatTimeAgo(dateString: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
-export default function ShortVideoList({ videos }: ShortVideoListProps) {
+// 单个视频卡片组件，支持轮询
+function ShortVideoCard({ video: initialVideo }: { video: ShortVideo }) {
   const deleteMutation = useDeleteShortVideo()
+  
+  // 对于生成中的视频，使用 hook 来轮询状态
+  const pollingQuery = useShortVideo(
+    initialVideo.status === 'generating' ? initialVideo.id : undefined
+  )
+  
+  const video = pollingQuery.data || initialVideo
 
   const handleDelete = async (videoId: string) => {
     if (confirm('确定要删除这个视频吗？')) {
@@ -50,6 +59,123 @@ export default function ShortVideoList({ videos }: ShortVideoListProps) {
     )
   }
 
+  // 计算估计的生成进度（基于创建时间）
+  const estimatedProgress = useMemo(() => {
+    if (video.status !== 'generating') return 0
+    
+    const createdAt = new Date(video.createdAt).getTime()
+    const now = Date.now()
+    const elapsed = now - createdAt
+    
+    // 假设生成通常在 60 秒内完成
+    const estimatedTotal = 60000
+    const progress = Math.min(90, (elapsed / estimatedTotal) * 100)
+    
+    return Math.round(progress)
+  }, [video.status, video.createdAt])
+
+  return (
+    <div key={video.id} className="rounded-lg border border-gray-200 p-6">
+      <div className="flex items-start justify-between">
+        <div className="space-y-3 flex-1">
+          <div className="flex items-center gap-3">
+            <h3 className="font-semibold text-gray-900">
+              视频 #{video.id.slice(0, 8)}
+            </h3>
+            {getStatusBadge(video.status)}
+          </div>
+
+          <div className="text-sm text-gray-600 space-y-1">
+            <p>
+              <span className="font-medium">创建时间：</span>
+              {formatTimeAgo(video.createdAt)}
+            </p>
+            {video.heyGenVideoId && (
+              <p>
+                <span className="font-medium">HeyGen 视频 ID：</span>
+                <code className="text-xs bg-gray-100 px-2 py-0.5 rounded ml-1">{video.heyGenVideoId}</code>
+              </p>
+            )}
+            {video.status === 'generating' && (
+              <div className="pt-2">
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-blue-500 rounded-full transition-all duration-300"
+                      style={{ width: `${estimatedProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-blue-600 font-medium whitespace-nowrap">
+                    {estimatedProgress}%
+                  </span>
+                </div>
+              </div>
+            )}
+            {video.result && (
+              <>
+                <p>
+                  <span className="font-medium">时长：</span>
+                  {video.result.duration}秒
+                </p>
+                <p>
+                  <span className="font-medium">文件大小：</span>
+                  {(video.result.sizeBytes / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </>
+            )}
+            {video.errorMessage && (
+              <p className="text-red-600">
+                <span className="font-medium">错误：</span>
+                {video.errorMessage}
+              </p>
+            )}
+          </div>
+
+          {video.result && (
+            <div className="pt-2">
+              <img
+                src={video.result.thumbURL}
+                alt="视频缩略图"
+                className="h-16 w-28 rounded object-cover"
+              />
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {video.status === 'completed' && video.result && (
+            <button
+              onClick={() => {
+                const a = document.createElement('a')
+                a.href = video.result!.heyGenVideoURL
+                a.download = `video-${video.id}.mp4`
+                a.click()
+              }}
+              className="inline-flex items-center justify-center rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Download size={16} className="mr-2" />
+              下载
+            </button>
+          )}
+          <button
+            onClick={() => handleDelete(video.id)}
+            disabled={deleteMutation.isPending}
+            className="inline-flex items-center justify-center rounded border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            {deleteMutation.isPending ? (
+              <Loader2 size={16} className="mr-2 animate-spin" />
+            ) : (
+              <Trash2 size={16} className="mr-2" />
+            )}
+            删除
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function ShortVideoList({ videos }: ShortVideoListProps) {
   if (videos.length === 0) {
     return (
       <div className="rounded-lg border border-gray-200 p-12 text-center">
@@ -61,98 +187,7 @@ export default function ShortVideoList({ videos }: ShortVideoListProps) {
   return (
     <div className="space-y-4">
       {videos.map((video) => (
-        <div key={video.id} className="rounded-lg border border-gray-200 p-6">
-          <div className="flex items-start justify-between">
-            <div className="space-y-3 flex-1">
-              <div className="flex items-center gap-3">
-                <h3 className="font-semibold text-gray-900">
-                  视频 #{video.id.slice(0, 8)}
-                </h3>
-                {getStatusBadge(video.status)}
-              </div>
-
-              <div className="text-sm text-gray-600 space-y-1">
-                <p>
-                  <span className="font-medium">创建时间：</span>
-                  {formatTimeAgo(video.createdAt)}
-                </p>
-                {video.heyGenVideoId && (
-                  <p>
-                    <span className="font-medium">HeyGen 视频 ID：</span>
-                    <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{video.heyGenVideoId}</code>
-                  </p>
-                )}
-                {video.status === 'generating' && (
-                  <div className="pt-2">
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full w-1/2 bg-blue-500 rounded-full animate-pulse"></div>
-                      </div>
-                      <span className="text-xs text-blue-600 font-medium">生成中...</span>
-                    </div>
-                  </div>
-                )}
-                {video.result && (
-                  <>
-                    <p>
-                      <span className="font-medium">时长：</span>
-                      {video.result.duration}秒
-                    </p>
-                    <p>
-                      <span className="font-medium">文件大小：</span>
-                      {(video.result.sizeBytes / 1024 / 1024).toFixed(2)} MB
-                    </p>
-                  </>
-                )}
-                {video.errorMessage && (
-                  <p className="text-red-600">
-                    <span className="font-medium">错误：</span>
-                    {video.errorMessage}
-                  </p>
-                )}
-              </div>
-
-              {video.result && (
-                <div className="pt-2">
-                  <img
-                    src={video.result.thumbURL}
-                    alt="视频缩略图"
-                    className="h-16 w-28 rounded object-cover"
-                  />
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-2">
-              {video.status === 'completed' && video.result && (
-                <button
-                  onClick={() => {
-                    const a = document.createElement('a')
-                    a.href = video.result!.heyGenVideoURL
-                    a.download = `video-${video.id}.mp4`
-                    a.click()
-                  }}
-                  className="inline-flex items-center justify-center rounded border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Download size={16} className="mr-2" />
-                  下载
-                </button>
-              )}
-              <button
-                onClick={() => handleDelete(video.id)}
-                disabled={deleteMutation.isPending}
-                className="inline-flex items-center justify-center rounded border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                {deleteMutation.isPending ? (
-                  <Loader2 size={16} className="mr-2 animate-spin" />
-                ) : (
-                  <Trash2 size={16} className="mr-2" />
-                )}
-                删除
-              </button>
-            </div>
-          </div>
-        </div>
+        <ShortVideoCard key={video.id} video={video} />
       ))}
     </div>
   )
