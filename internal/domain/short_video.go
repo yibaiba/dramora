@@ -47,8 +47,10 @@ type ShortVideo struct {
 	OrganizationID uuid.UUID         `json:"organizationId"`
 	TemplateID     uuid.UUID         `json:"templateId"`
 	Parameters     json.RawMessage   `json:"parameters"`     // User input parameters
-	HeyGenAvatarID string            `json:"heyGenAvatarId"` // NEW: HeyGen avatar choice
-	Status         string            `json:"status"`         // pending, generating, completed, failed
+	HeyGenAvatarID string            `json:"heyGenAvatarId"` // HeyGen avatar choice
+	HeyGenVideoID  string            `json:"heyGenVideoId,omitempty"` // HeyGen generated video ID
+	GenerationStatus string          `json:"generationStatus"` // pending, generating, completed, failed
+	Status         string            `json:"status"`         // pending, generating, completed, failed (deprecated, use generationStatus)
 	ErrorMessage   *string           `json:"errorMessage,omitempty"`
 	Result         *ShortVideoResult `json:"result,omitempty"`
 	CreatedAt      time.Time         `json:"createdAt"`

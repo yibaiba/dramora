@@ -218,9 +218,15 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 		video.ID = uuid.New()
 	}
 
+	// Use generationStatus if available, otherwise use Status
+	generationStatus := video.GenerationStatus
+	if generationStatus == "" {
+		generationStatus = video.Status
+	}
+
 	query := `
-		INSERT INTO short_videos (id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		INSERT INTO short_videos (id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, created_at, updated_at, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 	`
 
 	err := r.pool.QueryRow(ctx, query,
@@ -229,6 +235,8 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 		video.TemplateID,
 		video.Parameters,
 		video.HeyGenAvatarID,
+		video.HeyGenVideoID,
+		generationStatus,
 		video.Status,
 		video.ErrorMessage,
 		video.CreatedAt,
@@ -252,7 +260,7 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 	var result *string
 
 	query := `
-		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, created_at, updated_at, version
 		FROM short_videos
 		WHERE id = $1 AND organization_id = $2
 	`
@@ -263,6 +271,8 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 		&video.TemplateID,
 		&video.Parameters,
 		&video.HeyGenAvatarID,
+		&video.HeyGenVideoID,
+		&video.GenerationStatus,
 		&video.Status,
 		&video.ErrorMessage,
 		&result,
@@ -302,7 +312,7 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 
 	// Get paginated results
 	query := `
-		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, created_at, updated_at, version
 		FROM short_videos
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -326,6 +336,8 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 			&video.TemplateID,
 			&video.Parameters,
 			&video.HeyGenAvatarID,
+			&video.HeyGenVideoID,
+			&video.GenerationStatus,
 			&video.Status,
 			&video.ErrorMessage,
 			&result,
