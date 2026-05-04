@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
 
@@ -29,6 +31,8 @@ type RouterConfig struct {
 	PaymentService        *service.PaymentService
 	ReportService         *service.ReportService
 	RedemptionCodeService *service.RedemptionCodeService
+	ShortCodeRepository   repo.ShortCodeRepository
+	JobsClient            jobs.Client
 }
 
 func NewRouter(cfg RouterConfig) http.Handler {
@@ -43,6 +47,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	router.Get("/readyz", api.readiness)
 	router.Get("/metrics", api.prometheusMetrics)
 	router.Post("/webhook/payment", api.handlePaymentWebhook)
+	router.Get("/r/:shortCode", api.redirectShortCode)
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Use(authContextMiddleware(cfg.AuthService))
@@ -142,6 +147,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/admin/redemption-codes:generate", api.generateCodes)
 			admin.Post("/admin/redemption-campaigns:create", api.createCampaign)
 			admin.Get("/admin/redemption-campaigns/{campaignId}/stats", api.getCampaignStats)
+			admin.Post("/admin/redemption-codes:send-email", api.sendEmail)
+			admin.Post("/redemption-codes:shorten", api.shortenCode)
 
 			// owner-only mutations: provider config save / test 真实凭证写入
 			admin.Group(func(owner chi.Router) {
@@ -170,6 +177,8 @@ type api struct {
 	paymentService        *service.PaymentService
 	reportService         *service.ReportService
 	redemptionCodeService *service.RedemptionCodeService
+	shortCodeRepo         repo.ShortCodeRepository
+	jobsClient            jobs.Client
 }
 
 func newAPI(cfg RouterConfig) *api {
@@ -186,5 +195,7 @@ func newAPI(cfg RouterConfig) *api {
 		paymentService:        cfg.PaymentService,
 		reportService:         cfg.ReportService,
 		redemptionCodeService: cfg.RedemptionCodeService,
+		shortCodeRepo:         cfg.ShortCodeRepository,
+		jobsClient:            cfg.JobsClient,
 	}
 }

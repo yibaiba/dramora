@@ -14,6 +14,7 @@ const (
 	JobKindGenerationPollTick JobKind = "generation.poll_tick"
 	JobKindRetryGeneration    JobKind = "generation.retry"
 	JobKindExportRender       JobKind = "export.render"
+	JobKindEmailDistribution  JobKind = "email.distribution"
 )
 
 type Job struct {

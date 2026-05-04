@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Loader2, Download, Copy, Check } from 'lucide-react'
+import { Loader2, Download, Copy, Check, Mail } from 'lucide-react'
 import { useGenerateRedemptionCodes } from '../../api/hooks'
+import EmailDistributionDialog from './EmailDistributionDialog'
 
 interface ApiError {
   response?: {
@@ -17,6 +18,7 @@ export default function RedemptionCampaignManager() {
   const [reason, setReason] = useState('')
   const [generatedCodes, setGeneratedCodes] = useState<string[]>([])
   const [copySuccess, setCopySuccess] = useState(false)
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false)
 
   const { mutate: generate, isPending } = useGenerateRedemptionCodes()
 
@@ -207,6 +209,13 @@ export default function RedemptionCampaignManager() {
                   <Download className="w-4 h-4" />
                   下载 CSV
                 </button>
+                <button
+                  onClick={() => setIsEmailDialogOpen(true)}
+                  className="md:col-span-2 px-4 py-2 bg-cyan-500 hover:bg-cyan-600 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                >
+                  <Mail className="w-4 h-4" />
+                  分发邮件
+                </button>
               </div>
 
               <button
@@ -225,6 +234,13 @@ export default function RedemptionCampaignManager() {
           )}
         </div>
       </div>
+
+      <EmailDistributionDialog
+        isOpen={isEmailDialogOpen}
+        onClose={() => setIsEmailDialogOpen(false)}
+        codes={generatedCodes}
+        amount={parseInt(amount)}
+      />
     </div>
   )
 }
