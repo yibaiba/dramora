@@ -1,5 +1,6 @@
 import { useShortVideoTemplates, useCreateShortVideo, useShortVideos } from '../../api/hooks'
-import type { ShortVideoTemplate, CreateShortVideoRequest } from '../../api/types'
+import type { ShortVideoTemplate, CreateShortVideoRequest, HeyGenAvatarId } from '../../api/types'
+import { HEYGEN_AVATARS } from '../../api/types'
 import { useCallback, useState } from 'react'
 import TemplateSelector from '../components/TemplateSelector'
 import ShortVideoForm from '../components/ShortVideoForm'
@@ -13,6 +14,7 @@ export default function ShortVideoPage() {
 
   const [selectedTemplate, setSelectedTemplate] = useState<ShortVideoTemplate | null>(null)
   const [parameters, setParameters] = useState<Record<string, any>>({})
+  const [selectedAvatarId, setSelectedAvatarId] = useState<HeyGenAvatarId>('avatar_001')
   const [activeTab, setActiveTab] = useState<'create' | 'videos'>('create')
 
   const handleSelectTemplate = useCallback((template: ShortVideoTemplate) => {
@@ -32,17 +34,19 @@ export default function ShortVideoPage() {
     const request: CreateShortVideoRequest = {
       templateId: selectedTemplate.id,
       parameters,
+      heyGenAvatarId: selectedAvatarId,
     }
 
     try {
       await createMutation.mutateAsync(request)
       setSelectedTemplate(null)
       setParameters({})
+      setSelectedAvatarId('avatar_001')
       setActiveTab('videos')
     } catch (error) {
       console.error('Failed to create short video:', error)
     }
-  }, [selectedTemplate, parameters, createMutation])
+  }, [selectedTemplate, parameters, selectedAvatarId, createMutation])
 
   return (
     <div className="space-y-6 p-6">
@@ -118,6 +122,28 @@ export default function ShortVideoPage() {
                           parameters={parameters}
                           onChange={handleParametersChange}
                         />
+
+                        <div className="mt-6 space-y-4 border-t border-gray-200 pt-6">
+                          <div>
+                            <h4 className="text-sm font-medium text-gray-900 mb-3">选择虚拟主播</h4>
+                            <div className="grid grid-cols-3 gap-3">
+                              {Object.values(HEYGEN_AVATARS).map((avatar) => (
+                                <button
+                                  key={avatar.id}
+                                  onClick={() => setSelectedAvatarId(avatar.id)}
+                                  className={`p-3 rounded-lg border-2 transition-all text-left ${
+                                    selectedAvatarId === avatar.id
+                                      ? 'border-blue-500 bg-blue-50'
+                                      : 'border-gray-200 bg-white hover:border-gray-300'
+                                  }`}
+                                >
+                                  <div className="font-medium text-sm text-gray-900">{avatar.name}</div>
+                                  <div className="text-xs text-gray-500 mt-1">{avatar.description}</div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
 
                         <div className="mt-6 flex justify-end gap-3">
                           <button

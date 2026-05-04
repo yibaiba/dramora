@@ -965,7 +965,38 @@ export type CreateShortVideoTemplateRequest = {
   config: Record<string, any>
 }
 
+export type HeyGenAvatarId = 'avatar_001' | 'avatar_002' | 'avatar_003'
+
+export type HeyGenAvatar = {
+  id: HeyGenAvatarId
+  name: string
+  description: string
+  style: string
+}
+
+export const HEYGEN_AVATARS: Record<HeyGenAvatarId, HeyGenAvatar> = {
+  avatar_001: {
+    id: 'avatar_001',
+    name: '专业女性主播',
+    description: '电商风格专业女性虚拟主播',
+    style: 'professional-female',
+  },
+  avatar_002: {
+    id: 'avatar_002',
+    name: '专业男性主播',
+    description: '产品讲解风格专业男性虚拟主播',
+    style: 'professional-male',
+  },
+  avatar_003: {
+    id: 'avatar_003',
+    name: '年轻风格主播',
+    description: '潮流卖家风格年轻虚拟主播',
+    style: 'young-trendy',
+  },
+}
+
 export type CreateShortVideoRequest = {
   templateId: string
   parameters: Record<string, any>
+  heyGenAvatarId?: HeyGenAvatarId // Optional, defaults to avatar_001
 }
