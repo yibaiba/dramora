@@ -646,3 +646,19 @@ func (s *ProductionService) GetQueueStatus(ctx context.Context, episodeID string
 
 	return s.production.IsEpisodeQueuePaused(ctx, episodeID)
 }
+
+// StartShortVideoGeneration initiates generation for a short video
+// This method will eventually integrate with HeyGen API
+func (s *ProductionService) StartShortVideoGeneration(
+ctx context.Context,
+videoID string,
+avatarID string,
+parameters map[string]interface{},
+) (string, error) {
+// TODO: Implement HeyGen API integration
+// For now, return a placeholder video ID
+// In Phase 3b, this will call the actual HeyGen API
+
+generatedVideoID := "heygen-" + videoID[:8]
+return generatedVideoID, nil
+}

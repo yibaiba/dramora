@@ -120,7 +120,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Post("/redemption-codes:redeem", api.redeemCode)
 
 		// Short video routes
-		svHandler := NewShortVideoHandler(api.shortVideoTemplateRepo, api.shortVideoRepo)
+		svHandler := NewShortVideoHandler(api.shortVideoTemplateRepo, api.shortVideoRepo, api.productionService)
 		svHandler.RegisterRoutes(r)
 
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)

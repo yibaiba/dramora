@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/repo"
+	"github.com/yibaiba/dramora/internal/service"
 )
 
 // Valid HeyGen avatar IDs
@@ -60,15 +61,21 @@ type CreateShortVideoRequest struct {
 
 // ShortVideoHandler handles HTTP requests for short videos
 type ShortVideoHandler struct {
-	templateRepo repo.ShortVideoTemplateRepository
-	videoRepo    repo.ShortVideoRepository
+	templateRepo      repo.ShortVideoTemplateRepository
+	videoRepo         repo.ShortVideoRepository
+	productionService *service.ProductionService
 }
 
 // NewShortVideoHandler creates a new short video handler
-func NewShortVideoHandler(templateRepo repo.ShortVideoTemplateRepository, videoRepo repo.ShortVideoRepository) *ShortVideoHandler {
+func NewShortVideoHandler(
+	templateRepo repo.ShortVideoTemplateRepository,
+	videoRepo repo.ShortVideoRepository,
+	productionService *service.ProductionService,
+) *ShortVideoHandler {
 	return &ShortVideoHandler{
-		templateRepo: templateRepo,
-		videoRepo:    videoRepo,
+		templateRepo:      templateRepo,
+		videoRepo:         videoRepo,
+		productionService: productionService,
 	}
 }
 
