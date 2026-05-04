@@ -31,6 +31,7 @@ export function TimelineCanvas() {
   const [draggedClipId, setDraggedClipId] = useState<string | null>(null)
   const [dragOffset, setDragOffset] = useState(0)
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null)
+  const [hoveredClipId, setHoveredClipId] = useState<string | null>(null)
   const [trimMode, setTrimMode] = useState<'start' | 'end' | null>(null)
   const [cursorStyle, setCursorStyle] = useState('default')
 
@@ -79,31 +80,41 @@ export function TimelineCanvas() {
     }
   }, [timeline.duration])
 
-  const drawClip = useCallback((ctx: CanvasRenderingContext2D, clip: Clip, yOffset: number, height: number, isSelected: boolean) => {
+  const drawClip = useCallback((ctx: CanvasRenderingContext2D, clip: Clip, yOffset: number, height: number, isSelected: boolean, isHovered: boolean) => {
     const x = (clip.startTime / 1000) * PIXELS_PER_SECOND
     const clipWidth = Math.max(MIN_CLIP_WIDTH, (clip.duration / 1000) * PIXELS_PER_SECOND)
     const padding = 4
 
-    // Clip background color based on selection state
+    // Clip background color based on selection/hover state
     if (isSelected) {
-      ctx.fillStyle = 'rgba(148, 163, 184, 0.6)'
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.7)'
+    } else if (isHovered) {
+      ctx.fillStyle = 'rgba(124, 58, 237, 0.55)'
     } else {
       ctx.fillStyle = 'rgba(124, 58, 237, 0.4)'
     }
     ctx.fillRect(x + padding, yOffset + padding, clipWidth - padding * 2, height - padding * 2)
 
     // Clip border
-    ctx.strokeStyle = isSelected ? '#94a3b8' : '#7c3aed'
-    ctx.lineWidth = isSelected ? 2 : 1.5
+    ctx.strokeStyle = isSelected ? '#94a3b8' : isHovered ? '#a78bfa' : '#7c3aed'
+    ctx.lineWidth = isSelected ? 2 : isHovered ? 2 : 1.5
     ctx.strokeRect(x + padding, yOffset + padding, clipWidth - padding * 2, height - padding * 2)
 
-    // Clip label
+    // Clip label with duration
     if (clipWidth > 40) {
       ctx.fillStyle = '#e5e7eb'
       ctx.font = 'bold 12px Inter, sans-serif'
       ctx.textAlign = 'left'
       ctx.textBaseline = 'middle'
-      ctx.fillText(`Clip`, x + padding + 6, yOffset + height / 2)
+
+      // Format duration as MM:SS
+      const durationSeconds = clip.duration / 1000
+      const minutes = Math.floor(durationSeconds / 60)
+      const seconds = Math.floor(durationSeconds % 60)
+      const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
+
+      const labelText = clipWidth > 80 ? `Clip ${durationStr}` : 'Clip'
+      ctx.fillText(labelText, x + padding + 6, yOffset + height / 2)
     }
 
     // Draw trim handles when selected
@@ -138,10 +149,11 @@ export function TimelineCanvas() {
       // Draw clips
       for (const clip of track.clips) {
         const isSelected = clip.id === selectedClipId
-        drawClip(ctx, clip, yOffset, height, isSelected)
+        const isHovered = clip.id === hoveredClipId
+        drawClip(ctx, clip, yOffset, height, isSelected, isHovered)
       }
     },
-    [drawClip, selectedClipId],
+    [drawClip, selectedClipId, hoveredClipId],
   )
 
   const drawPlayhead = useCallback((ctx: CanvasRenderingContext2D, time: number, pixelsPerSecond: number, height: number) => {
@@ -308,12 +320,38 @@ export function TimelineCanvas() {
     const canvas = canvasRef.current
     if (!canvas || draggedClipId) {
       setCursorStyle('default')
+      setHoveredClipId(null)
       return
     }
 
     const rect = canvas.getBoundingClientRect()
     const x = e.clientX - rect.left
     const y = e.clientY - rect.top
+
+    let hoveredId: string | null = null
+
+    // Check if hovering over any clip
+    if (y > RULER_HEIGHT) {
+      let yOffset = RULER_HEIGHT
+      for (let i = 0; i < timeline.tracks.length; i++) {
+        const track = timeline.tracks[i]
+        const trackHeight = TRACK_HEIGHTS[track.type]
+        if (y >= yOffset && y < yOffset + trackHeight) {
+          for (const clip of track.clips) {
+            const clipStartX = (clip.startTime / 1000) * PIXELS_PER_SECOND
+            const clipEndX = ((clip.startTime + clip.duration) / 1000) * PIXELS_PER_SECOND
+            if (x >= clipStartX && x <= clipEndX) {
+              hoveredId = clip.id
+              break
+            }
+          }
+          break
+        }
+        yOffset += trackHeight
+      }
+    }
+
+    setHoveredClipId(hoveredId)
 
     if (y > RULER_HEIGHT && selectedClipId) {
       // Find the selected clip

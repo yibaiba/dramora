@@ -1,4 +1,4 @@
-import { Trash2, Download } from 'lucide-react'
+import { Trash2, Download, Scissors } from 'lucide-react'
 import { useTimelineStore } from '../../lib/editor/timeline-store'
 
 interface PropertyPanelProps {
@@ -7,8 +7,10 @@ interface PropertyPanelProps {
 
 export function PropertyPanel({ onExportClick }: PropertyPanelProps) {
   const currentClip = useTimelineStore((state) => state.currentClip)
+  const playheadTime = useTimelineStore((state) => state.playheadTime)
   const updateClipProperties = useTimelineStore((state) => state.updateClipProperties)
   const removeClip = useTimelineStore((state) => state.removeClip)
+  const splitClip = useTimelineStore((state) => state.splitClip)
   const timeline = useTimelineStore((state) => state.timeline)
 
   if (!currentClip) {
@@ -44,6 +46,21 @@ export function PropertyPanel({ onExportClick }: PropertyPanelProps) {
       removeClip(currentClip.id)
     }
   }
+
+  const handleSplit = () => {
+    const clipStartTime = currentClip.startTime
+    const clipEndTime = currentClip.startTime + currentClip.duration
+
+    if (playheadTime <= clipStartTime || playheadTime >= clipEndTime) {
+      alert('播放头必须在片段内才能分割')
+      return
+    }
+
+    splitClip(currentClip.id, playheadTime)
+  }
+
+  const canSplit =
+    currentClip && playheadTime > currentClip.startTime && playheadTime < currentClip.startTime + currentClip.duration
 
   return (
     <div className="property-panel">
@@ -107,6 +124,16 @@ export function PropertyPanel({ onExportClick }: PropertyPanelProps) {
 
         {/* Action Buttons */}
         <div className="property-section property-section-buttons">
+          <button
+            onClick={handleSplit}
+            disabled={!canSplit}
+            className="property-button property-button-secondary"
+            type="button"
+            title={canSplit ? '在播放头位置分割片段' : '播放头必须在片段内才能分割'}
+          >
+            <Scissors size={16} />
+            分割
+          </button>
           <button
             onClick={handleDelete}
             className="property-button property-button-danger"

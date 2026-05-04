@@ -25,6 +25,7 @@ export type TimelineStore = {
   removeClip: (clipId: string) => void
   moveClip: (clipId: string, newStartTime: number) => void
   trimClip: (clipId: string, newStartTime: number, newDuration: number) => void
+  splitClip: (clipId: string, splitAtTime: number) => void
   updateClipProperties: (clipId: string, properties: Partial<Clip['properties']>) => void
 
   // Track operations
@@ -204,6 +205,78 @@ export const useTimelineStore = create<TimelineStore>((set, get) => ({
 
     const newHistory = history.slice(0, historyIndex + 1)
     newHistory.push(createHistoryItem('trim_clip', beforeState, afterState))
+
+    set({
+      timeline: afterState,
+      history: newHistory.slice(-MAX_HISTORY),
+      historyIndex: newHistory.length - 1,
+    })
+  },
+
+  splitClip: (clipId, splitAtTime) => {
+    const { timeline, history, historyIndex } = get()
+    const beforeState = JSON.parse(JSON.stringify(timeline))
+    const newTracks = JSON.parse(JSON.stringify(timeline.tracks))
+
+    let found = false
+    let trackIndex = -1
+    let clipIndex = -1
+
+    for (let ti = 0; ti < newTracks.length; ti++) {
+      for (let ci = 0; ci < newTracks[ti].clips.length; ci++) {
+        const clip = newTracks[ti].clips[ci]
+        if (clip.id === clipId) {
+          trackIndex = ti
+          clipIndex = ci
+          found = true
+          break
+        }
+      }
+      if (found) break
+    }
+
+    if (!found) return
+
+    const clip = newTracks[trackIndex].clips[clipIndex]
+    const clipEndTime = clip.startTime + clip.duration
+
+    // Validate split position
+    if (splitAtTime <= clip.startTime || splitAtTime >= clipEndTime) {
+      return // Split position invalid
+    }
+
+    // First part: original clip trimmed to split point
+    const part1Duration = splitAtTime - clip.startTime
+    clip.duration = part1Duration
+
+    // Second part: new clip from split point to end
+    const part2StartTime = splitAtTime
+    const part2Duration = clipEndTime - splitAtTime
+    const newClip: Clip = {
+      id: `clip-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      trackId: clip.trackId,
+      startTime: part2StartTime,
+      duration: part2Duration,
+      sourceUrl: clip.sourceUrl,
+      properties: JSON.parse(JSON.stringify(clip.properties)),
+    }
+
+    // Insert new clip after the original
+    newTracks[trackIndex].clips.splice(clipIndex + 1, 0, newClip)
+
+    const newDuration_ = Math.max(
+      timeline.duration,
+      Math.max(...newTracks.flatMap((t: Track) => t.clips.map((c: Clip) => c.startTime + c.duration))),
+    )
+
+    const afterState: Timeline = {
+      ...timeline,
+      tracks: newTracks,
+      duration: newDuration_,
+    }
+
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(createHistoryItem('split_clip', beforeState, afterState))
 
     set({
       timeline: afterState,
