@@ -129,7 +129,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 
 	// Initialize HeyGen client if API key is available
 	if cfg.HeyGenAPIKey != "" {
-		heyGenClient := heygen.NewClient(cfg.HeyGenAPIKey)
+		heyGenClient := heygen.NewClient(cfg.HeyGenAPIKey, nil)
 		productionSvc.SetHeyGenClient(heyGenClient)
 		logger.Info("HeyGen client initialized", "api_key_length", len(cfg.HeyGenAPIKey))
 	}

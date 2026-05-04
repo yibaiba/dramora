@@ -43,19 +43,19 @@ type ShortVideoResult struct {
 
 // ShortVideo represents a generated or in-progress short video record.
 type ShortVideo struct {
-	ID             uuid.UUID         `json:"id"`
-	OrganizationID uuid.UUID         `json:"organizationId"`
-	TemplateID     uuid.UUID         `json:"templateId"`
-	Parameters     json.RawMessage   `json:"parameters"`     // User input parameters
-	HeyGenAvatarID string            `json:"heyGenAvatarId"` // HeyGen avatar choice
-	HeyGenVideoID  string            `json:"heyGenVideoId,omitempty"` // HeyGen generated video ID
-	GenerationStatus string          `json:"generationStatus"` // pending, generating, completed, failed
-	Status         string            `json:"status"`         // pending, generating, completed, failed (deprecated, use generationStatus)
-	ErrorMessage   *string           `json:"errorMessage,omitempty"`
-	Result         *ShortVideoResult `json:"result,omitempty"`
-	CreatedAt      time.Time         `json:"createdAt"`
-	UpdatedAt      time.Time         `json:"updatedAt"`
-	Version        int               `json:"version"` // For optimistic locking
+	ID               uuid.UUID         `json:"id"`
+	OrganizationID   uuid.UUID         `json:"organizationId"`
+	TemplateID       uuid.UUID         `json:"templateId"`
+	Parameters       json.RawMessage   `json:"parameters"`              // User input parameters
+	HeyGenAvatarID   string            `json:"heyGenAvatarId"`          // HeyGen avatar choice
+	HeyGenVideoID    string            `json:"heyGenVideoId,omitempty"` // HeyGen generated video ID
+	GenerationStatus string            `json:"generationStatus"`        // pending, generating, completed, failed
+	Status           string            `json:"status"`                  // pending, generating, completed, failed (deprecated, use generationStatus)
+	ErrorMessage     *string           `json:"errorMessage,omitempty"`
+	Result           *ShortVideoResult `json:"result,omitempty"`
+	CreatedAt        time.Time         `json:"createdAt"`
+	UpdatedAt        time.Time         `json:"updatedAt"`
+	Version          int               `json:"version"` // For optimistic locking
 }
 
 // Validate checks if the short video has valid required fields.

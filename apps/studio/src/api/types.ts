@@ -951,6 +951,8 @@ export type ShortVideo = {
   templateId: string
   parameters: Record<string, any>
   status: ShortVideoStatus
+  heyGenAvatarId?: HeyGenAvatarId
+  heyGenVideoId?: string
   errorMessage?: string
   result?: ShortVideoResult
   createdAt: string

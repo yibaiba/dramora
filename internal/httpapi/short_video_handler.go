@@ -265,16 +265,16 @@ func (h *ShortVideoHandler) CreateShortVideo(w http.ResponseWriter, r *http.Requ
 	}
 
 	video := &domain.ShortVideo{
-		ID:                uuid.New(),
-		OrganizationID:    orgID,
-		TemplateID:        req.TemplateID,
-		Parameters:        req.Parameters,
-		HeyGenAvatarID:    req.HeyGenAvatarID,
-		Status:            domain.ShortVideoStatusPending,
-		GenerationStatus:  domain.ShortVideoStatusPending,
-		CreatedAt:         time.Now(),
-		UpdatedAt:         time.Now(),
-		Version:           1,
+		ID:               uuid.New(),
+		OrganizationID:   orgID,
+		TemplateID:       req.TemplateID,
+		Parameters:       req.Parameters,
+		HeyGenAvatarID:   req.HeyGenAvatarID,
+		Status:           domain.ShortVideoStatusPending,
+		GenerationStatus: domain.ShortVideoStatusPending,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		Version:          1,
 	}
 
 	if err := h.videoRepo.Create(r.Context(), video); err != nil {

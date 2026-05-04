@@ -76,6 +76,22 @@ export default function ShortVideoList({ videos }: ShortVideoListProps) {
                   <span className="font-medium">创建时间：</span>
                   {formatTimeAgo(video.createdAt)}
                 </p>
+                {video.heyGenVideoId && (
+                  <p>
+                    <span className="font-medium">HeyGen 视频 ID：</span>
+                    <code className="text-xs bg-gray-100 px-2 py-0.5 rounded">{video.heyGenVideoId}</code>
+                  </p>
+                )}
+                {video.status === 'generating' && (
+                  <div className="pt-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div className="h-full w-1/2 bg-blue-500 rounded-full animate-pulse"></div>
+                      </div>
+                      <span className="text-xs text-blue-600 font-medium">生成中...</span>
+                    </div>
+                  </div>
+                )}
                 {video.result && (
                   <>
                     <p>

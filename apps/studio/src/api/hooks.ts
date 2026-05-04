@@ -1025,6 +1025,7 @@ export function useShortVideos(limit = 20, offset = 0) {
   return useQuery({
     queryKey: ['short-videos', limit, offset],
     queryFn: () => listShortVideos(limit, offset),
+    refetchInterval: 2000, // Refetch every 2 seconds
   })
 }
 
