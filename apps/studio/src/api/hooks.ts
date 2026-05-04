@@ -1029,7 +1029,7 @@ export function useShortVideos(limit = 20, offset = 0) {
   })
 }
 
-export function useShortVideo(videoId?: string) {
+export function useShortVideo(videoId?: string, options?: { refetchInterval?: number }) {
   return useQuery({
     queryKey: ['short-video', videoId],
     queryFn: async () => {
@@ -1039,7 +1039,7 @@ export function useShortVideo(videoId?: string) {
       return getShortVideo(videoId)
     },
     enabled: !!videoId,
-    refetchInterval: 2000, // Auto-refetch every 2 seconds for real-time status
+    refetchInterval: options?.refetchInterval ?? 2000, // Auto-refetch every 2 seconds for real-time status
   })
 }
 

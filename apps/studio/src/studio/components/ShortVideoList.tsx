@@ -1,7 +1,10 @@
 import type { ShortVideo } from '../../api/types'
 import { useDeleteShortVideo, useShortVideo } from '../../api/hooks'
-import { Loader2, Trash2, Download } from 'lucide-react'
-import { useMemo } from 'react'
+import { useWebSocketEvent, useWebSocketEvents } from '../../api/websocket-hooks'
+import { WebSocketEventType } from '../../types/websocket'
+import { Loader2, Trash2, Download, Wifi, WifiOff } from 'lucide-react'
+import { useMemo, useState, useEffect } from 'react'
+import type { WebSocketMessage } from '../../types/websocket'
 
 interface ShortVideoListProps {
   videos: ShortVideo[]
@@ -23,16 +26,70 @@ function formatTimeAgo(dateString: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
-// 单个视频卡片组件，支持轮询
+// 单个视频卡片组件，支持轮询和 WebSocket 实时更新
 function ShortVideoCard({ video: initialVideo }: { video: ShortVideo }) {
   const deleteMutation = useDeleteShortVideo()
+  const [wsProgress, setWsProgress] = useState<number | null>(null)
+  const { isConnected: wsIsConnected } = useWebSocketEvents()
   
   // 对于生成中的视频，使用 hook 来轮询状态
+  // 如果 WebSocket 未连接，更激进地轮询（每 2 秒），否则减少轮询频率
   const pollingQuery = useShortVideo(
-    initialVideo.status === 'generating' ? initialVideo.id : undefined
+    initialVideo.status === 'generating' ? initialVideo.id : undefined,
+    {
+      refetchInterval: wsIsConnected ? 5000 : 2000, // 断线时更频繁的轮询
+    }
   )
   
   const video = pollingQuery.data || initialVideo
+
+  // 监听 WebSocket 生成进度事件
+  useWebSocketEvent(
+    WebSocketEventType.GENERATION_PROGRESS,
+    (message: WebSocketMessage) => {
+      const data = message.data as Record<string, unknown>
+      if (data.videoID === video.id && typeof data.progress === 'number') {
+        setWsProgress(data.progress)
+      }
+    }
+  )
+
+  // 监听 WebSocket 生成失败事件
+  useWebSocketEvent(
+    WebSocketEventType.GENERATION_FAILED,
+    (message: WebSocketMessage) => {
+      const data = message.data as Record<string, unknown>
+      if (data.videoID === video.id) {
+        // 生成失败，清空进度，让轮询查询获取最新状态
+        setWsProgress(null)
+      }
+    }
+  )
+
+  // 重置 ws 状态当视频不再生成时
+  useEffect(() => {
+    if (video.status !== 'generating') {
+      setWsProgress(null)
+    }
+  }, [video.status])
+
+  // 计算估计的生成进度（基于创建时间）
+  const estimatedProgress = useMemo(() => {
+    if (video.status !== 'generating') return 0
+    
+    const createdAt = new Date(video.createdAt).getTime()
+    const now = Date.now()
+    const elapsed = now - createdAt
+    
+    // 假设生成通常在 60 秒内完成
+    const estimatedTotal = 60000
+    const progress = Math.min(90, (elapsed / estimatedTotal) * 100)
+    
+    return Math.round(progress)
+  }, [video.status, video.createdAt])
+
+  // WebSocket 进度优先于估计进度
+  const displayProgress = wsProgress ?? estimatedProgress
 
   const handleDelete = async (videoId: string) => {
     if (confirm('确定要删除这个视频吗？')) {
@@ -58,21 +115,6 @@ function ShortVideoCard({ video: initialVideo }: { video: ShortVideo }) {
       </span>
     )
   }
-
-  // 计算估计的生成进度（基于创建时间）
-  const estimatedProgress = useMemo(() => {
-    if (video.status !== 'generating') return 0
-    
-    const createdAt = new Date(video.createdAt).getTime()
-    const now = Date.now()
-    const elapsed = now - createdAt
-    
-    // 假设生成通常在 60 秒内完成
-    const estimatedTotal = 60000
-    const progress = Math.min(90, (elapsed / estimatedTotal) * 100)
-    
-    return Math.round(progress)
-  }, [video.status, video.createdAt])
 
   return (
     <div key={video.id} className="rounded-lg border border-gray-200 p-6">
@@ -102,11 +144,11 @@ function ShortVideoCard({ video: initialVideo }: { video: ShortVideo }) {
                   <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-blue-500 rounded-full transition-all duration-300"
-                      style={{ width: `${estimatedProgress}%` }}
+                      style={{ width: `${displayProgress}%` }}
                     />
                   </div>
                   <span className="text-xs text-blue-600 font-medium whitespace-nowrap">
-                    {estimatedProgress}%
+                    {displayProgress}%
                   </span>
                 </div>
               </div>
@@ -176,6 +218,8 @@ function ShortVideoCard({ video: initialVideo }: { video: ShortVideo }) {
 }
 
 export default function ShortVideoList({ videos }: ShortVideoListProps) {
+  const { isConnected, connectionError } = useWebSocketEvents()
+
   if (videos.length === 0) {
     return (
       <div className="rounded-lg border border-gray-200 p-12 text-center">
@@ -186,6 +230,24 @@ export default function ShortVideoList({ videos }: ShortVideoListProps) {
 
   return (
     <div className="space-y-4">
+      {/* WebSocket 连接状态指示器 */}
+      {connectionError && (
+        <div className="flex items-center gap-2 rounded-lg border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800">
+          <WifiOff size={16} className="flex-shrink-0" />
+          <span>
+            实时更新已断开 - 正在尝试重新连接...
+            {connectionError && <span className="ml-1">({connectionError})</span>}
+          </span>
+        </div>
+      )}
+
+      {isConnected && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          <Wifi size={16} className="flex-shrink-0" />
+          <span>实时更新已连接</span>
+        </div>
+      )}
+
       {videos.map((video) => (
         <ShortVideoCard key={video.id} video={video} />
       ))}
