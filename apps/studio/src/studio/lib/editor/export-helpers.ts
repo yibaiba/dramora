@@ -221,24 +221,68 @@ function escapeXml(str: string): string {
  */
 function generateFCPXMLContent(timeline: Timeline, fps: number = 30): string {
   const videoTracks = timeline.tracks.filter((t) => t.type === 'video')
+  const audioTracks = timeline.tracks.filter((t) => t.type === 'audio')
+  const subtitleTracks = timeline.tracks.filter((t) => t.type === 'subtitle')
+
   if (videoTracks.length === 0) {
     return ''
   }
 
   const durationFrames = msToFrames(timeline.duration, fps)
 
-  let clipXML = ''
+  // Generate video track clips with effects
+  let videoClipXML = ''
   for (const track of videoTracks) {
     for (const clip of track.clips) {
       const offset = msToFrames(clip.startTime, fps)
       const duration = msToFrames(clip.duration, fps)
       const filename = clip.sourceUrl.split('/').pop() || 'clip.mp4'
 
-      clipXML += `    <clip offset="${offset}s" name="${escapeXml(filename)}" duration="${duration}s">
+      let effectsXML = ''
+      // Add video effects if properties differ from defaults
+      if (clip.properties.opacity !== 1) {
+        effectsXML += `      <effect name="Opacity">
+        <param name="amount" value="${clip.properties.opacity}"/>
+      </effect>\n`
+      }
+      if (clip.properties.speed !== 1) {
+        effectsXML += `      <effect name="Speed">
+        <param name="rate" value="${clip.properties.speed}"/>
+      </effect>\n`
+      }
+
+      videoClipXML += `    <clip offset="${offset}s" name="${escapeXml(filename)}" duration="${duration}s">
       <media>
         <video>
           <file src="${escapeXml(clip.sourceUrl)}" />
         </video>
+      </media>\n`
+
+      if (effectsXML) {
+        videoClipXML += `      <effects>\n${effectsXML}      </effects>\n`
+      }
+
+      videoClipXML += `      <timeMap>
+        <timept value="0s" />
+        <timept value="${duration}s" />
+      </timeMap>
+    </clip>\n`
+    }
+  }
+
+  // Generate audio track clips
+  let audioClipXML = ''
+  for (const track of audioTracks) {
+    for (const clip of track.clips) {
+      const offset = msToFrames(clip.startTime, fps)
+      const duration = msToFrames(clip.duration, fps)
+      const filename = clip.sourceUrl.split('/').pop() || 'audio.mp3'
+
+      audioClipXML += `    <clip offset="${offset}s" name="${escapeXml(filename)}" duration="${duration}s">
+      <media>
+        <audio>
+          <file src="${escapeXml(clip.sourceUrl)}" />
+        </audio>
       </media>
       <timeMap>
         <timept value="0s" />
@@ -248,18 +292,50 @@ function generateFCPXMLContent(timeline: Timeline, fps: number = 30): string {
     }
   }
 
+  // Generate subtitle track clips
+  let subtitleClipXML = ''
+  for (const track of subtitleTracks) {
+    for (const clip of track.clips) {
+      const offset = msToFrames(clip.startTime, fps)
+      const duration = msToFrames(clip.duration, fps)
+      const filename = clip.sourceUrl.split('/').pop() || 'subtitle.srt'
+
+      subtitleClipXML += `    <clip offset="${offset}s" name="${escapeXml(filename)}" duration="${duration}s">
+      <media>
+        <text>
+          <file src="${escapeXml(clip.sourceUrl)}" />
+        </text>
+      </media>
+      <timeMap>
+        <timept value="0s" />
+        <timept value="${duration}s" />
+      </timeMap>
+    </clip>\n`
+    }
+  }
+
+  // Build spine with all track types
+  let spineXML = `      <spine>\n${videoClipXML}      </spine>`
+  if (audioClipXML) {
+    spineXML += `\n      <spine>\n${audioClipXML}      </spine>`
+  }
+  if (subtitleClipXML) {
+    spineXML += `\n      <spine>\n${subtitleClipXML}      </spine>`
+  }
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE fcpxml>
 <fcpxml version="1.11">
   <resources>
     <format id="r1" name="FFmpeg Image2" framerate="${fps}"/>
+    <effect id="e1" name="Opacity"/>
+    <effect id="e2" name="Speed"/>
   </resources>
   <library>
     <event name="Dramora Timeline">
       <project name="Export">
         <sequence format="r1" duration="${durationFrames}s">
-          <spine>
-${clipXML}          </spine>
+${spineXML}
         </sequence>
       </project>
     </event>
