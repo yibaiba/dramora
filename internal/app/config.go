@@ -27,6 +27,8 @@ type Config struct {
 	StripeWebhookSecret string
 	StripeSuccessURL    string
 	StripeCancelURL     string
+	// HeyGen AI video generation
+	HeyGenAPIKey string
 }
 
 func LoadConfig() (Config, error) {
@@ -63,6 +65,8 @@ func LoadConfig() (Config, error) {
 		StripeWebhookSecret: os.Getenv("MANMU_STRIPE_WEBHOOK_SECRET"),
 		StripeSuccessURL:    envString("MANMU_STRIPE_SUCCESS_URL", "http://localhost:5173/wallet?status=success"),
 		StripeCancelURL:     envString("MANMU_STRIPE_CANCEL_URL", "http://localhost:5173/wallet?status=cancel"),
+		// HeyGen
+		HeyGenAPIKey: os.Getenv("MANMU_HEYGEN_API_KEY"),
 	}, nil
 }
 

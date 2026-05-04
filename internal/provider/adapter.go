@@ -12,6 +12,7 @@ const (
 	TaskTypeFirstLast    TaskType = "first_last_frame_to_video"
 	TaskTypeTTS          TaskType = "tts"
 	TaskTypeLipSync      TaskType = "lip_sync"
+	TaskTypeAvatarVideo  TaskType = "avatar_video" // HeyGen virtual presenter
 )
 
 type Capability struct {
