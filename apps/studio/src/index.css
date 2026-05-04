@@ -6988,7 +6988,7 @@ p {
 
 .edit-modal-body {
   display: grid;
-  grid-template-columns: 1fr 280px;
+  grid-template-columns: 1fr 200px 280px;
   gap: var(--space-5);
   flex: 1;
   overflow: hidden;
@@ -7022,6 +7022,17 @@ p {
   border-radius: 4px;
   font-size: 0.8rem;
   color: var(--muted);
+}
+
+.edit-track-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-height: 0;
+  min-width: 200px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
 }
 
 .edit-property-section {

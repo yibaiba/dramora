@@ -4,6 +4,7 @@ import { useTimelineStore } from '../../lib/editor/timeline-store'
 import type { Timeline, Track } from '../../lib/editor/types'
 import { TimelineCanvas } from './TimelineCanvas'
 import { PropertyPanel } from './PropertyPanel'
+import { TrackPanel } from './TrackPanel'
 import { ExportDialog } from './ExportDialog'
 
 interface EditVideoModalProps {
@@ -25,6 +26,7 @@ export function EditVideoModal({
   onSave,
 }: EditVideoModalProps) {
   const timeline = useTimelineStore((state) => state.timeline)
+  const selectedTrackId = useTimelineStore((state) => state.selectedTrackId)
   const undo = useTimelineStore((state) => state.undo)
   const redo = useTimelineStore((state) => state.redo)
   const canUndo = useTimelineStore((state) => state.canUndo())
@@ -112,6 +114,11 @@ export function EditVideoModal({
                 <span className="timeline-duration">{(timeline.duration / 1000).toFixed(1)}s</span>
               </div>
               <TimelineCanvas />
+            </div>
+
+            {/* Track Panel */}
+            <div className="edit-track-section">
+              <TrackPanel tracks={timeline.tracks} selectedTrackId={selectedTrackId} />
             </div>
 
             {/* Property Panel */}
