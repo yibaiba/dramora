@@ -18,7 +18,7 @@ export default function ShortVideoPage() {
   const cancelBatchMutation = useCancelBatchSubmission()
 
   const [selectedTemplate, setSelectedTemplate] = useState<ShortVideoTemplate | null>(null)
-  const [parameters, setParameters] = useState<Record<string, any>>({})
+  const [parameters, setParameters] = useState<Record<string, unknown>>({})
   const [selectedAvatarId, setSelectedAvatarId] = useState<HeyGenAvatarId>('avatar_001')
   const [activeTab, setActiveTab] = useState<'create' | 'videos' | 'queue'>('create')
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false)
@@ -28,7 +28,7 @@ export default function ShortVideoPage() {
     setParameters(template.config || {})
   }, [])
 
-  const handleParametersChange = useCallback((newParams: Record<string, any>) => {
+  const handleParametersChange = useCallback((newParams: Record<string, unknown>) => {
     setParameters(newParams)
   }, [])
 
