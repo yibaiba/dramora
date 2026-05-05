@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { useReactTable, getCoreRowModel, getPaginationRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
-import { X, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { BatchSubmission } from '../../api/types'
 
 interface BatchQueueTableProps {
   batches: BatchSubmission[]
   isLoading?: boolean
   onCancel?: (batchId: string) => void
-  onRetry?: (batchId: string) => void
 }
 
 const getStatusBadge = (status: BatchSubmission['status']) => {
@@ -33,7 +32,7 @@ const getProgressPercentage = (batch: BatchSubmission): number => {
   return Math.round(((batch.completedCount + batch.failedCount + batch.cancelledCount) / batch.videoCount) * 100)
 }
 
-export default function BatchQueueTable({ batches, isLoading, onCancel, onRetry }: BatchQueueTableProps) {
+export default function BatchQueueTable({ batches, isLoading, onCancel }: BatchQueueTableProps) {
   const [pageIndex, setPageIndex] = useState(0)
   const pageSize = 10
 
@@ -104,7 +103,6 @@ export default function BatchQueueTable({ batches, isLoading, onCancel, onRetry 
       cell: (info) => {
         const batch = info.row.original
         const canCancel = batch.status !== 'completed' && batch.status !== 'cancelled'
-        const canRetry = batch.failedCount > 0
 
         return (
           <div className="flex items-center gap-2 justify-end">
@@ -118,16 +116,7 @@ export default function BatchQueueTable({ batches, isLoading, onCancel, onRetry 
                 <X size={16} />
               </button>
             )}
-            {canRetry && (
-              <button
-                onClick={() => onRetry?.(batch.id)}
-                className="p-1.5 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded transition-colors text-amber-600 dark:text-amber-400"
-                title="Retry failed videos"
-                aria-label="Retry failed videos"
-              >
-                <RotateCcw size={16} />
-              </button>
-            )}
+            {/* Retry button disabled for now - requires selecting specific videos in batch */}
           </div>
         )
       },

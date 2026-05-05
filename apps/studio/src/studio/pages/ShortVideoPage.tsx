@@ -22,6 +22,7 @@ export default function ShortVideoPage() {
   const [selectedAvatarId, setSelectedAvatarId] = useState<HeyGenAvatarId>('avatar_001')
   const [activeTab, setActiveTab] = useState<'create' | 'videos' | 'queue'>('create')
   const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   const handleSelectTemplate = useCallback((template: ShortVideoTemplate) => {
     setSelectedTemplate(template)
@@ -56,18 +57,24 @@ export default function ShortVideoPage() {
 
   const handleCreateBatch = useCallback(async (req: CreateBatchSubmissionRequest) => {
     try {
+      setErrorMessage(null)
       await createBatchMutation.mutateAsync(req)
       setIsCreateBatchDialogOpen(false)
     } catch (error) {
+      const msg = error instanceof Error ? error.message : '未知错误'
       console.error('Failed to create batch submission:', error)
+      setErrorMessage(`创建批量任务失败：${msg}`)
     }
   }, [createBatchMutation])
 
   const handleCancelBatch = useCallback(async (batchId: string) => {
     try {
+      setErrorMessage(null)
       await cancelBatchMutation.mutateAsync(batchId)
     } catch (error) {
+      const msg = error instanceof Error ? error.message : '未知错误'
       console.error('Failed to cancel batch:', error)
+      setErrorMessage(`取消批量任务失败：${msg}`)
     }
   }, [cancelBatchMutation])
 
@@ -242,6 +249,20 @@ export default function ShortVideoPage() {
 
         {activeTab === 'queue' && (
           <div className="space-y-4">
+            {errorMessage && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <div className="flex items-start justify-between">
+                  <p className="text-sm text-red-700">{errorMessage}</p>
+                  <button
+                    onClick={() => setErrorMessage(null)}
+                    className="text-red-700 hover:text-red-900"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+            )}
+
             <div className="flex justify-end">
               <button
                 onClick={() => setIsCreateBatchDialogOpen(true)}
@@ -264,6 +285,7 @@ export default function ShortVideoPage() {
             ) : (
               <BatchQueueTable
                 batches={batchesQuery.data?.data || []}
+                isLoading={false}
                 onCancel={handleCancelBatch}
               />
             )}

@@ -50,6 +50,7 @@ export default function CreateBatchSubmissionDialog({
         videoIds: Array.from(selectedVideoIds),
         concurrencyLimit,
         retryLimit,
+        parameters: {}, // Support for future parameter customization
       })
       // Reset form
       setSelectedVideoIds(new Set())
