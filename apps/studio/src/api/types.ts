@@ -1002,3 +1002,36 @@ export type CreateShortVideoRequest = {
   parameters: Record<string, any>
   heyGenAvatarId?: HeyGenAvatarId // Optional, defaults to avatar_001
 }
+
+// Batch Submission Types
+export type BatchSubmissionStatus = 'pending' | 'queued' | 'processing' | 'completed' | 'cancelled'
+
+export type BatchSubmission = {
+  id: string
+  organizationId: string
+  createdBy: string
+  status: BatchSubmissionStatus
+  videoCount: number
+  completedCount: number
+  failedCount: number
+  cancelledCount: number
+  concurrencyLimit: number
+  retryLimit: number
+  createdAt: string
+  startedAt?: string
+  completedAt?: string
+}
+
+export type CreateBatchSubmissionRequest = {
+  videoIds: string[]
+  concurrencyLimit: number // 1-8
+  retryLimit: number // 0-5
+  parameters?: Record<string, any>
+}
+
+export type ListBatchSubmissionsResponse = {
+  data: BatchSubmission[]
+  total: number
+  limit: number
+  offset: number
+}

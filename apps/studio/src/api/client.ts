@@ -71,6 +71,9 @@ import type {
   ShortVideo,
   CreateShortVideoTemplateRequest,
   CreateShortVideoRequest,
+  CreateBatchSubmissionRequest,
+  BatchSubmission,
+  ListBatchSubmissionsResponse,
 } from './types'
 
 
@@ -1013,5 +1016,33 @@ export async function getShortVideo(videoId: string): Promise<ShortVideo> {
 export async function deleteShortVideo(videoId: string): Promise<void> {
   await fetchJSON(`/api/v1/short-videos/${encodeURIComponent(videoId)}`, {
     method: 'DELETE',
+  })
+}
+
+// Batch Submission API functions
+export async function createBatchSubmission(req: CreateBatchSubmissionRequest): Promise<BatchSubmission> {
+  return fetchJSON('/api/v1/batch-submissions:create', {
+    body: JSON.stringify(req),
+    method: 'POST',
+  })
+}
+
+export async function listBatchSubmissions(limit = 20, offset = 0): Promise<ListBatchSubmissionsResponse> {
+  return fetchJSON(`/api/v1/batch-submissions?limit=${limit}&offset=${offset}`)
+}
+
+export async function getBatchSubmission(batchId: string): Promise<BatchSubmission> {
+  return fetchJSON(`/api/v1/batch-submissions/${encodeURIComponent(batchId)}`)
+}
+
+export async function cancelBatchSubmission(batchId: string): Promise<BatchSubmission> {
+  return fetchJSON(`/api/v1/batch-submissions/${encodeURIComponent(batchId)}:cancel`, {
+    method: 'POST',
+  })
+}
+
+export async function retryBatchVideo(batchId: string, videoId: string): Promise<void> {
+  await fetchJSON(`/api/v1/batch-submissions/${encodeURIComponent(batchId)}/videos/${encodeURIComponent(videoId)}:retry`, {
+    method: 'POST',
   })
 }

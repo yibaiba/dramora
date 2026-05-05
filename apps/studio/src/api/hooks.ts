@@ -93,6 +93,11 @@ import {
 	listShortVideos,
 	getShortVideo,
 	deleteShortVideo,
+	createBatchSubmission,
+	listBatchSubmissions,
+	getBatchSubmission,
+	cancelBatchSubmission,
+	retryBatchVideo,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
@@ -120,6 +125,7 @@ import type {
   GenerateRedemptionCodesRequest,
   CreateShortVideoTemplateRequest,
   CreateShortVideoRequest,
+  CreateBatchSubmissionRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -1059,6 +1065,59 @@ export function useDeleteShortVideo() {
     mutationFn: (videoId: string) => deleteShortVideo(videoId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['short-videos'] })
+    },
+  })
+}
+
+// Batch Submission hooks
+export function useBatchSubmissions(limit = 20, offset = 0) {
+  return useQuery({
+    queryKey: ['batch-submissions', limit, offset],
+    queryFn: () => listBatchSubmissions(limit, offset),
+    refetchInterval: 5000, // Refetch every 5 seconds
+  })
+}
+
+export function useBatchSubmission(batchId?: string) {
+  return useQuery({
+    queryKey: ['batch-submission', batchId],
+    queryFn: async () => {
+      if (!batchId) {
+        throw new Error('Batch ID is required')
+      }
+      return getBatchSubmission(batchId)
+    },
+    enabled: !!batchId,
+    refetchInterval: 2000, // Auto-refetch every 2 seconds for real-time status
+  })
+}
+
+export function useCreateBatchSubmission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (req: CreateBatchSubmissionRequest) => createBatchSubmission(req),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-submissions'] })
+    },
+  })
+}
+
+export function useCancelBatchSubmission() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (batchId: string) => cancelBatchSubmission(batchId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-submissions'] })
+    },
+  })
+}
+
+export function useRetryBatchVideo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ batchId, videoId }: { batchId: string; videoId: string }) => retryBatchVideo(batchId, videoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['batch-submissions'] })
     },
   })
 }
