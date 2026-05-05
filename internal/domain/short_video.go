@@ -56,6 +56,10 @@ type ShortVideo struct {
 	CreatedAt        time.Time         `json:"createdAt"`
 	UpdatedAt        time.Time         `json:"updatedAt"`
 	Version          int               `json:"version"` // For optimistic locking
+	// Batch generation fields
+	BatchID        *uuid.UUID `json:"batchId,omitempty"` // Reference to batch submission if created via batch
+	RetryCount     int        `json:"retryCount"`        // Number of retry attempts
+	CreatedByBatch bool       `json:"createdByBatch"`    // True if created as part of batch submission
 }
 
 // Validate checks if the short video has valid required fields.
@@ -79,6 +83,53 @@ const (
 	ShortVideoStatusCompleted  = "completed"
 	ShortVideoStatusFailed     = "failed"
 )
+
+// Batch submission status constants
+const (
+	BatchStatusPending    = "pending"    // Not yet started
+	BatchStatusQueued     = "queued"     // Queued for processing
+	BatchStatusProcessing = "processing" // Currently processing
+	BatchStatusCompleted  = "completed"  // All videos generated successfully
+	BatchStatusCancelled  = "cancelled"  // Cancelled by user
+	BatchStatusFailed     = "failed"     // Processing failed
+)
+
+// BatchSubmission represents a batch video generation request.
+type BatchSubmission struct {
+	ID               uuid.UUID  `json:"id"`
+	OrganizationID   uuid.UUID  `json:"organizationId"`
+	CreatedByUserID  uuid.UUID  `json:"createdByUserId"`
+	Name             string     `json:"name"`
+	Description      *string    `json:"description,omitempty"`
+	TotalCount       int        `json:"totalCount"`       // Total videos requested
+	CompletedCount   int        `json:"completedCount"`   // Successfully completed
+	FailedCount      int        `json:"failedCount"`      // Failed after retries
+	CancelledCount   int        `json:"cancelledCount"`   // User cancelled
+	Status           string     `json:"status"`           // pending, queued, processing, completed, cancelled, failed
+	ConcurrencyLimit int        `json:"concurrencyLimit"` // Max parallel workers (1-8)
+	RetryLimit       int        `json:"retryLimit"`       // Max retries per video (0-5)
+	CreatedAt        time.Time  `json:"createdAt"`
+	UpdatedAt        time.Time  `json:"updatedAt"`
+	StartedAt        *time.Time `json:"startedAt,omitempty"`
+	CompletedAt      *time.Time `json:"completedAt,omitempty"`
+}
+
+// Validate checks if the batch submission has valid required fields.
+func (b *BatchSubmission) Validate() error {
+	if b.Name == "" {
+		return ErrInvalidInput
+	}
+	if b.TotalCount <= 0 || b.TotalCount > 1000 {
+		return ErrInvalidInput
+	}
+	if b.ConcurrencyLimit < 1 || b.ConcurrencyLimit > 8 {
+		return ErrInvalidInput
+	}
+	if b.RetryLimit < 0 || b.RetryLimit > 5 {
+		return ErrInvalidInput
+	}
+	return nil
+}
 
 // IsTerminalStatus returns true if the status is a terminal state.
 func IsTerminalStatus(status string) bool {

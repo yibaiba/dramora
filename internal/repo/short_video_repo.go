@@ -225,8 +225,8 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 	}
 
 	query := `
-		INSERT INTO short_videos (id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, created_at, updated_at, version)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		INSERT INTO short_videos (id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, batch_id, retry_count, created_by_batch, created_at, updated_at, version)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 	`
 
 	err := r.pool.QueryRow(ctx, query,
@@ -239,6 +239,9 @@ func (r *PostgresShortVideoRepository) Create(ctx context.Context, video *domain
 		generationStatus,
 		video.Status,
 		video.ErrorMessage,
+		video.BatchID,
+		video.RetryCount,
+		video.CreatedByBatch,
 		video.CreatedAt,
 		video.UpdatedAt,
 		video.Version,
@@ -260,7 +263,7 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 	var result *string
 
 	query := `
-		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, batch_id, retry_count, created_by_batch, created_at, updated_at, version
 		FROM short_videos
 		WHERE id = $1 AND organization_id = $2
 	`
@@ -276,6 +279,9 @@ func (r *PostgresShortVideoRepository) GetByID(ctx context.Context, id uuid.UUID
 		&video.Status,
 		&video.ErrorMessage,
 		&result,
+		&video.BatchID,
+		&video.RetryCount,
+		&video.CreatedByBatch,
 		&video.CreatedAt,
 		&video.UpdatedAt,
 		&video.Version,
@@ -312,7 +318,7 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 
 	// Get paginated results
 	query := `
-		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, created_at, updated_at, version
+		SELECT id, organization_id, template_id, parameters, heygen_avatar_id, heygen_video_id, generation_status, status, error_message, result, batch_id, retry_count, created_by_batch, created_at, updated_at, version
 		FROM short_videos
 		WHERE organization_id = $1
 		ORDER BY created_at DESC
@@ -341,6 +347,9 @@ func (r *PostgresShortVideoRepository) ListByOrganization(ctx context.Context, o
 			&video.Status,
 			&video.ErrorMessage,
 			&result,
+			&video.BatchID,
+			&video.RetryCount,
+			&video.CreatedByBatch,
 			&video.CreatedAt,
 			&video.UpdatedAt,
 			&video.Version,
