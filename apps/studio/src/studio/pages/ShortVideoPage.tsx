@@ -1,21 +1,27 @@
-import { useShortVideoTemplates, useCreateShortVideo, useShortVideos } from '../../api/hooks'
-import type { ShortVideoTemplate, CreateShortVideoRequest, HeyGenAvatarId } from '../../api/types'
+import { useShortVideoTemplates, useCreateShortVideo, useShortVideos, useBatchSubmissions, useCreateBatchSubmission, useCancelBatchSubmission } from '../../api/hooks'
+import type { ShortVideoTemplate, CreateShortVideoRequest, HeyGenAvatarId, CreateBatchSubmissionRequest } from '../../api/types'
 import { HEYGEN_AVATARS } from '../../api/types'
 import { useCallback, useState } from 'react'
 import TemplateSelector from '../components/TemplateSelector'
 import ShortVideoForm from '../components/ShortVideoForm'
 import ShortVideoList from '../components/ShortVideoList'
+import BatchQueueTable from '../components/BatchQueueTable'
+import CreateBatchSubmissionDialog from '../components/CreateBatchSubmissionDialog'
 import { Loader2 } from 'lucide-react'
 
 export default function ShortVideoPage() {
   const templatesQuery = useShortVideoTemplates()
   const videosQuery = useShortVideos()
+  const batchesQuery = useBatchSubmissions()
   const createMutation = useCreateShortVideo()
+  const createBatchMutation = useCreateBatchSubmission()
+  const cancelBatchMutation = useCancelBatchSubmission()
 
   const [selectedTemplate, setSelectedTemplate] = useState<ShortVideoTemplate | null>(null)
   const [parameters, setParameters] = useState<Record<string, any>>({})
   const [selectedAvatarId, setSelectedAvatarId] = useState<HeyGenAvatarId>('avatar_001')
-  const [activeTab, setActiveTab] = useState<'create' | 'videos'>('create')
+  const [activeTab, setActiveTab] = useState<'create' | 'videos' | 'queue'>('create')
+  const [isCreateBatchDialogOpen, setIsCreateBatchDialogOpen] = useState(false)
 
   const handleSelectTemplate = useCallback((template: ShortVideoTemplate) => {
     setSelectedTemplate(template)
@@ -47,6 +53,23 @@ export default function ShortVideoPage() {
       console.error('Failed to create short video:', error)
     }
   }, [selectedTemplate, parameters, selectedAvatarId, createMutation])
+
+  const handleCreateBatch = useCallback(async (req: CreateBatchSubmissionRequest) => {
+    try {
+      await createBatchMutation.mutateAsync(req)
+      setIsCreateBatchDialogOpen(false)
+    } catch (error) {
+      console.error('Failed to create batch submission:', error)
+    }
+  }, [createBatchMutation])
+
+  const handleCancelBatch = useCallback(async (batchId: string) => {
+    try {
+      await cancelBatchMutation.mutateAsync(batchId)
+    } catch (error) {
+      console.error('Failed to cancel batch:', error)
+    }
+  }, [cancelBatchMutation])
 
   return (
     <div className="space-y-6 p-6">
@@ -80,6 +103,16 @@ export default function ShortVideoPage() {
             }`}
           >
             我的视频
+          </button>
+          <button
+            onClick={() => setActiveTab('queue')}
+            className={`px-4 py-2 font-medium text-sm border-b-2 ${
+              activeTab === 'queue'
+                ? 'border-blue-500 text-blue-600'
+                : 'border-transparent text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            队列管理
           </button>
         </div>
 
@@ -204,6 +237,43 @@ export default function ShortVideoPage() {
             ) : (
               <ShortVideoList videos={videosQuery.data?.videos || []} />
             )}
+          </div>
+        )}
+
+        {activeTab === 'queue' && (
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={() => setIsCreateBatchDialogOpen(true)}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                新建批量任务
+              </button>
+            </div>
+
+            {batchesQuery.isLoading ? (
+              <div className="rounded-lg border border-gray-200 p-12 flex items-center justify-center">
+                <Loader2 className="animate-spin text-gray-400" size={40} />
+              </div>
+            ) : batchesQuery.error ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                <p className="text-sm text-red-700">
+                  加载队列失败：{batchesQuery.error instanceof Error ? batchesQuery.error.message : '未知错误'}
+                </p>
+              </div>
+            ) : (
+              <BatchQueueTable
+                batches={batchesQuery.data?.data || []}
+                onCancel={handleCancelBatch}
+              />
+            )}
+
+            <CreateBatchSubmissionDialog
+              isOpen={isCreateBatchDialogOpen}
+              onClose={() => setIsCreateBatchDialogOpen(false)}
+              onSubmit={handleCreateBatch}
+              availableVideoIds={(videosQuery.data?.videos || []).map(v => v.id)}
+            />
           </div>
         )}
       </div>
