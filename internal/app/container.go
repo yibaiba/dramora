@@ -29,6 +29,7 @@ type Container struct {
 	PaymentService               *service.PaymentService
 	PendingBillingWorker         *service.PendingBillingWorker
 	ReportService                *service.ReportService
+	BatchSubmissionService       *service.BatchSubmissionService
 	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
 	ShortVideoRepository         repo.ShortVideoRepository
 	WebSocketManager             *httpapi.WebSocketManager
@@ -57,6 +58,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	var operationCostRepo repo.OperationCostRepository = repo.NewMemoryOperationCostRepository()
 	var shortVideoTemplateRepo repo.ShortVideoTemplateRepository = repo.NewMemoryShortVideoTemplateRepository()
 	var shortVideoRepo repo.ShortVideoRepository = repo.NewMemoryShortVideoRepository()
+	var batchSubmissionRepo repo.BatchSubmissionRepository = repo.NewMemoryBatchSubmissionRepository()
 
 	if cfg.DatabaseURL != "" {
 		openedDB, err := repo.OpenPostgres(ctx, cfg.DatabaseURL)
@@ -78,6 +80,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		operationCostRepo = repo.NewPostgresOperationCostRepository(openedDB.Pool)
 		shortVideoTemplateRepo = repo.NewPostgresShortVideoTemplateRepository(openedDB.Pool)
 		shortVideoRepo = repo.NewPostgresShortVideoRepository(openedDB.Pool)
+		batchSubmissionRepo = repo.NewPostgresBatchSubmissionRepository(openedDB.Pool)
 	} else {
 		dbPath := filepath.Join(cfg.DataDir, "data.db")
 		openedDB, err := repo.OpenSQLite(ctx, dbPath)
@@ -172,6 +175,9 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	wsManager := httpapi.NewWebSocketManager(logger)
 	productionSvc.SetWebSocketEventBroadcaster(wsManager)
 
+	// 初始化批量生成服务
+	batchSubmissionSvc := service.NewBatchSubmissionService(batchSubmissionRepo, shortVideoRepo, productionSvc)
+
 	return &Container{
 		cfg:                          cfg,
 		ctx:                          ctx,
@@ -190,6 +196,7 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 		ReportService:                reportSvc,
 		ShortVideoTemplateRepository: shortVideoTemplateRepo,
 		ShortVideoRepository:         shortVideoRepo,
+		BatchSubmissionService:       batchSubmissionSvc,
 		WebSocketManager:             wsManager,
 	}, nil
 }

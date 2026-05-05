@@ -31,6 +31,7 @@ type RouterConfig struct {
 	PaymentService               *service.PaymentService
 	ReportService                *service.ReportService
 	RedemptionCodeService        *service.RedemptionCodeService
+	BatchSubmissionService       *service.BatchSubmissionService
 	ShortCodeRepository          repo.ShortCodeRepository
 	ShortVideoTemplateRepository repo.ShortVideoTemplateRepository
 	ShortVideoRepository         repo.ShortVideoRepository
@@ -131,6 +132,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		svHandler := NewShortVideoHandler(api.shortVideoTemplateRepo, api.shortVideoRepo, api.productionService)
 		svHandler.RegisterRoutes(r)
 
+		// Batch submission routes
+		batchHandler := NewBatchSubmissionHandler(api.batchSubmissionService)
+		r.Post("/batch-submissions:create", batchHandler.CreateBatchSubmission)
+		r.Get("/batch-submissions", batchHandler.ListBatchSubmissions)
+		r.Get("/batch-submissions/{id}", batchHandler.GetBatchSubmission)
+		r.Post("/batch-submissions/{id}:cancel", batchHandler.CancelBatchSubmission)
+		r.Post("/batch-submissions/{id}/videos/{videoId}:retry", batchHandler.RetryVideo)
+
 		// admin routes (owner/admin role required for reads; owner-only for provider mutations)
 		r.Group(func(admin chi.Router) {
 			admin.Use(requireRole("owner", "admin"))
@@ -191,6 +200,7 @@ type api struct {
 	paymentService         *service.PaymentService
 	reportService          *service.ReportService
 	redemptionCodeService  *service.RedemptionCodeService
+	batchSubmissionService *service.BatchSubmissionService
 	shortCodeRepo          repo.ShortCodeRepository
 	shortVideoTemplateRepo repo.ShortVideoTemplateRepository
 	shortVideoRepo         repo.ShortVideoRepository
@@ -211,6 +221,7 @@ func newAPI(cfg RouterConfig) *api {
 		paymentService:         cfg.PaymentService,
 		reportService:          cfg.ReportService,
 		redemptionCodeService:  cfg.RedemptionCodeService,
+		batchSubmissionService: cfg.BatchSubmissionService,
 		shortCodeRepo:          cfg.ShortCodeRepository,
 		shortVideoTemplateRepo: cfg.ShortVideoTemplateRepository,
 		shortVideoRepo:         cfg.ShortVideoRepository,
