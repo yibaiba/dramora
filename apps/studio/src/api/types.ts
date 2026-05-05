@@ -88,6 +88,16 @@ export type InvitationAuditEvent = {
   created_at: string
 }
 
+export type Workspace = {
+  id: string
+  organization_id: string
+  name: string
+  description: string
+  members_count: number
+  projects_count: number
+  created_at: string
+}
+
 export type Project = {
   id: string
   organization_id: string

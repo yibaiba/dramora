@@ -74,6 +74,7 @@ import type {
   CreateBatchSubmissionRequest,
   BatchSubmission,
   ListBatchSubmissionsResponse,
+  Workspace,
 } from './types'
 
 
@@ -241,6 +242,11 @@ export async function revokeSession(sessionId: string): Promise<void> {
 export async function listProjects(): Promise<Project[]> {
   const payload = await fetchJSON<{ projects: Project[] }>('/api/v1/projects')
   return payload.projects
+}
+
+export async function listWorkspaces(): Promise<Workspace[]> {
+  const payload = await fetchJSON<{ workspaces: Workspace[] }>('/api/v1/workspaces')
+  return payload.workspaces
 }
 
 export async function createProject(request: CreateProjectRequest): Promise<Project> {

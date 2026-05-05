@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/yibaiba/dramora/internal/domain"
 	"github.com/yibaiba/dramora/internal/repo"
@@ -141,6 +142,55 @@ func (s *ProjectService) nextEpisodeNumber(ctx context.Context, projectID string
 		return 0, err
 	}
 	return len(episodes) + 1, nil
+}
+
+type Workspace struct {
+	ID             string
+	OrganizationID string
+	Name           string
+	Description    string
+	MembersCount   int
+	ProjectsCount  int
+	CreatedAt      time.Time
+}
+
+func (s *ProjectService) ListWorkspaces(ctx context.Context) ([]Workspace, error) {
+	orgID := s.organizationIDFromContext(ctx)
+	if orgID == "" {
+		return nil, fmt.Errorf("%w: organization id is required", domain.ErrInvalidInput)
+	}
+
+	// For now, we generate workspaces from projects as a derived data source.
+	// In a future phase, we can have real workspace entities in the database.
+	projects, err := s.projects.ListProjects(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+
+	workspaceMap := make(map[string]*Workspace)
+	for _, project := range projects {
+		wsID := project.ID // For now, use project ID as workspace ID
+		ws, exists := workspaceMap[wsID]
+		if !exists {
+			ws = &Workspace{
+				ID:             wsID,
+				OrganizationID: orgID,
+				Name:           project.Name,
+				Description:    project.Description,
+				MembersCount:   1, // Placeholder
+				ProjectsCount:  0,
+				CreatedAt:      project.CreatedAt,
+			}
+			workspaceMap[wsID] = ws
+		}
+		ws.ProjectsCount++
+	}
+
+	workspaces := make([]Workspace, 0, len(workspaceMap))
+	for _, ws := range workspaceMap {
+		workspaces = append(workspaces, *ws)
+	}
+	return workspaces, nil
 }
 
 func (s *ProjectService) organizationIDFromContext(ctx context.Context) string {

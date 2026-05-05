@@ -13,6 +13,7 @@ import {
   Mail,
   Settings,
   Video,
+  Package,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -32,6 +33,7 @@ export const studioRoutePaths = {
   wallet: '/wallet',
   transactions: '/transactions',
   workerMetrics: '/admin/worker-metrics',
+  workspaces: '/workspaces',
 } as const
 
 export type StudioNavItem = {
@@ -85,6 +87,13 @@ export const studioNavItems: StudioNavItem[] = [
     key: 'shortVideo',
     label: 'Short Video',
     path: studioRoutePaths.shortVideo,
+  },
+  {
+    description: '浏览团队工作空间，查看工作空间信息。',
+    icon: Package,
+    key: 'workspaces',
+    label: 'Workspaces',
+    path: studioRoutePaths.workspaces,
   },
   {
     description: '实时监控所有生成任务的进度和状态。',

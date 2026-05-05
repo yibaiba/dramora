@@ -24,6 +24,7 @@ import {
   listApprovalGates,
   listGenerationJobs,
   listProjects,
+  listWorkspaces,
   listProviderConfigs,
   listOrganizationInvitations,
   createOrganizationInvitation,
@@ -157,6 +158,13 @@ export function useProjects() {
   return useQuery({
     queryFn: listProjects,
     queryKey: ['projects'],
+  })
+}
+
+export function useWorkspaces() {
+  return useQuery({
+    queryFn: listWorkspaces,
+    queryKey: ['workspaces'],
   })
 }
 

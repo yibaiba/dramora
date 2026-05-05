@@ -70,6 +70,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/auth/me", api.currentSession)
 		r.Get("/auth/sessions", api.listSessions)
 		r.Post("/auth/sessions/{sessionId}:revoke", api.revokeSession)
+		r.Get("/workspaces", api.listWorkspaces)
 		r.Get("/projects", api.listProjects)
 		r.Post("/projects", api.createProject)
 		r.Get("/projects/{projectId}", api.getProject)
