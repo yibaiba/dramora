@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   getCurrentSession,
   login,
+  changePassword,
 	createEpisode,
+  createUserAPIKey,
 	createProject,
 	createStorySource,
   register,
@@ -26,12 +28,16 @@ import {
   listProjects,
   listWorkspaces,
   listProviderConfigs,
+  listOrganizationMembers,
   listOrganizationInvitations,
   createOrganizationInvitation,
+  updateOrganizationMemberRole,
+  removeOrganizationMember,
   revokeOrganizationInvitation,
   resendOrganizationInvitation,
   listInvitationAuditEvents,
   listSessions,
+  listUserAPIKeys,
   revokeSession,
   listStorySources,
   listStoryAnalyses,
@@ -93,21 +99,28 @@ import {
 	createShortVideo,
 	listShortVideos,
 	getShortVideo,
-	deleteShortVideo,
-	createBatchSubmission,
-	listBatchSubmissions,
-	getBatchSubmission,
-	cancelBatchSubmission,
-	retryBatchVideo,
+  deleteShortVideo,
+  deleteUserAPIKey,
+  createBatchSubmission,
+  listBatchSubmissions,
+  getBatchSubmission,
+  cancelBatchSubmission,
+  retryBatchVideo,
+  toggleUserAPIKey,
+  updateUserAPIKey,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
 import type {
+  ChangePasswordRequest,
   LoginRequest,
   RegisterRequest,
   CreateEpisodeRequest,
+  CreateUserAPIKeyRequest,
   CreateInvitationRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
+  OrganizationRole,
+  UpdateOrganizationMemberRoleRequest,
   UpdateOperationCostsRequest,
   Export,
   SaveProviderConfigRequest,
@@ -127,6 +140,8 @@ import type {
   CreateShortVideoTemplateRequest,
   CreateShortVideoRequest,
   CreateBatchSubmissionRequest,
+  ToggleUserAPIKeyRequest,
+  UpdateUserAPIKeyRequest,
 } from './types'
 
 export function useCurrentSession(enabled = true) {
@@ -668,6 +683,42 @@ export function useCreateInvitation() {
   })
 }
 
+type UpdateOrganizationMemberRoleInput = {
+  userId: string
+  role: OrganizationRole
+}
+
+export function useOrganizationMembers(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: listOrganizationMembers,
+    queryKey: ['organization-members'],
+  })
+}
+
+export function useUpdateOrganizationMemberRole() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ userId, role }: UpdateOrganizationMemberRoleInput) =>
+      updateOrganizationMemberRole(userId, { role } satisfies UpdateOrganizationMemberRoleRequest),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization-members'] })
+      queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+    },
+  })
+}
+
+export function useRemoveOrganizationMember() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (userId: string) => removeOrganizationMember(userId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organization-members'] })
+      queryClient.invalidateQueries({ queryKey: ['auth-session'] })
+    },
+  })
+}
+
 export function useRevokeInvitation() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -719,6 +770,54 @@ export function useRevokeSession() {
   return useMutation({
     mutationFn: (sessionId: string) => revokeSession(sessionId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['auth-sessions'] }),
+  })
+}
+
+export function useChangePassword() {
+  return useMutation({
+    mutationFn: (request: ChangePasswordRequest) => changePassword(request),
+  })
+}
+
+export function useUserAPIKeys(enabled = true) {
+  return useQuery({
+    enabled,
+    queryFn: listUserAPIKeys,
+    queryKey: ['user-api-keys'],
+  })
+}
+
+export function useCreateUserAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (request: CreateUserAPIKeyRequest) => createUserAPIKey(request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-api-keys'] }),
+  })
+}
+
+export function useUpdateUserAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ keyId, request }: { keyId: string; request: UpdateUserAPIKeyRequest }) =>
+      updateUserAPIKey(keyId, request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-api-keys'] }),
+  })
+}
+
+export function useToggleUserAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ keyId, request }: { keyId: string; request: ToggleUserAPIKeyRequest }) =>
+      toggleUserAPIKey(keyId, request),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-api-keys'] }),
+  })
+}
+
+export function useDeleteUserAPIKey() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (keyId: string) => deleteUserAPIKey(keyId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user-api-keys'] }),
   })
 }
 

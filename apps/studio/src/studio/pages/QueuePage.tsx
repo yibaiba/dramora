@@ -171,7 +171,7 @@ export function QueuePage() {
         // Get the first job's episode ID or use a default
         const episodeId = jobs[0]?.episode_id
         if (!episodeId) {
-          setNotification({ message: '没有可用的 Episode ID', type: 'error' })
+          setNotification({ message: '当前没有可用的剧集 ID', type: 'error' })
           return
         }
         await resumeMutation.mutateAsync(episodeId)
@@ -180,7 +180,7 @@ export function QueuePage() {
       } else {
         const episodeId = jobs[0]?.episode_id
         if (!episodeId) {
-          setNotification({ message: '没有可用的 Episode ID', type: 'error' })
+          setNotification({ message: '当前没有可用的剧集 ID', type: 'error' })
           return
         }
         await pauseMutation.mutateAsync(episodeId)
@@ -250,22 +250,22 @@ export function QueuePage() {
 
       <div className="dashboard-grid">
         <article className="surface-card">
-          <span className="section-kicker">Total jobs</span>
+          <span className="section-kicker">任务总数</span>
           <strong>{stats.all} 个任务</strong>
           <p>队列中的全部生成任务。</p>
         </article>
         <article className="surface-card">
-          <span className="section-kicker">In progress</span>
+          <span className="section-kicker">进行中</span>
           <strong>{stats.rendering} 个生成中</strong>
           <p>正在处理的生成任务数。</p>
         </article>
         <article className="surface-card">
-          <span className="section-kicker">Succeeded</span>
+          <span className="section-kicker">已成功</span>
           <strong>{stats.succeeded} 个成功</strong>
           <p>已完成的生成任务数。</p>
         </article>
         <article className="surface-card">
-          <span className="section-kicker">Failed</span>
+          <span className="section-kicker">失败任务</span>
           <strong>{stats.failed} 个失败</strong>
           <p>失败的生成任务数。</p>
         </article>
@@ -274,7 +274,7 @@ export function QueuePage() {
       <article className="surface-card">
         <div className="panel-title-row">
           <div>
-            <span>Queue</span>
+            <span>队列总览</span>
             <strong>生成队列 · {filtered.length} 个结果</strong>
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -617,16 +617,16 @@ function JobDetailPanel({ job, onClose }: { job: GenerationJob; onClose: () => v
           <div className="detail-section">
             <h3>项目关联</h3>
             <div className="detail-row">
-              <span className="detail-label">Project ID</span>
+              <span className="detail-label">项目 ID</span>
               <span className="detail-value">{job.project_id}</span>
             </div>
             <div className="detail-row">
-              <span className="detail-label">Episode ID</span>
+              <span className="detail-label">剧集 ID</span>
               <span className="detail-value">{job.episode_id}</span>
             </div>
             {job.workflow_run_id && (
               <div className="detail-row">
-                <span className="detail-label">Workflow Run ID</span>
+                <span className="detail-label">工作流运行 ID</span>
                 <span className="detail-value">{job.workflow_run_id}</span>
               </div>
             )}

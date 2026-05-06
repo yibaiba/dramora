@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { useReactTable, getCoreRowModel, getPaginationRowModel, flexRender, type ColumnDef } from '@tanstack/react-table'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { BatchSubmission } from '../../api/types'
+import { StatePlaceholder } from './StatePlaceholder'
 
 interface BatchQueueTableProps {
   batches: BatchSubmission[]
@@ -9,212 +9,117 @@ interface BatchQueueTableProps {
   onCancel?: (batchId: string) => void
 }
 
-const getStatusBadge = (status: BatchSubmission['status']) => {
-  const baseClasses = 'inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm font-medium'
+const PAGE_SIZE = 8
+
+function statusLabel(status: BatchSubmission['status']) {
   switch (status) {
     case 'pending':
-      return `${baseClasses} bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300`
+      return '待启动'
     case 'queued':
-      return `${baseClasses} bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300`
+      return '已排队'
     case 'processing':
-      return `${baseClasses} bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300`
+      return '处理中'
     case 'completed':
-      return `${baseClasses} bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300`
+      return '已完成'
     case 'cancelled':
-      return `${baseClasses} bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300`
-    default:
-      return baseClasses
+      return '已取消'
   }
 }
 
-const getProgressPercentage = (batch: BatchSubmission): number => {
+function getProgressPercentage(batch: BatchSubmission) {
   if (batch.videoCount === 0) return 0
-  return Math.round(((batch.completedCount + batch.failedCount + batch.cancelledCount) / batch.videoCount) * 100)
+  const processed = batch.completedCount + batch.failedCount + batch.cancelledCount
+  return Math.round((processed / batch.videoCount) * 100)
 }
 
 export default function BatchQueueTable({ batches, isLoading, onCancel }: BatchQueueTableProps) {
   const [pageIndex, setPageIndex] = useState(0)
-  const pageSize = 10
+  const pageCount = Math.max(1, Math.ceil(batches.length / PAGE_SIZE))
 
-  const columns: ColumnDef<BatchSubmission>[] = [
-    {
-      accessorKey: 'id',
-      header: 'Batch ID',
-      cell: (info) => (
-        <span className="font-mono text-sm text-slate-600 dark:text-slate-400">
-          {(info.getValue() as string).slice(0, 8)}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'status',
-      header: 'Status',
-      cell: (info) => {
-        const status = info.getValue() as BatchSubmission['status']
-        return <span className={getStatusBadge(status)}>{status}</span>
-      },
-    },
-    {
-      accessorKey: 'videoCount',
-      header: 'Videos',
-      cell: (info) => <span className="text-center">{info.getValue() as number}</span>,
-    },
-    {
-      header: 'Progress',
-      accessorFn: (row) => row,
-      cell: (info) => {
-        const batch = info.row.original
-        const progress = getProgressPercentage(batch)
-        return (
-          <div className="w-32">
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-500 transition-all" style={{ width: `${progress}%` }} />
-              </div>
-              <span className="text-sm text-slate-600 dark:text-slate-400">{progress}%</span>
-            </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {batch.completedCount + batch.failedCount + batch.cancelledCount}/{batch.videoCount}
-            </div>
-          </div>
-        )
-      },
-    },
-    {
-      accessorKey: 'concurrencyLimit',
-      header: 'Concurrency',
-      cell: (info) => <span className="text-center">{info.getValue() as number}</span>,
-    },
-    {
-      accessorKey: 'createdAt',
-      header: 'Created',
-      cell: (info) => {
-        const date = new Date(info.getValue() as string)
-        return (
-          <span className="text-sm text-slate-600 dark:text-slate-400">
-            {date.toLocaleDateString()} {date.toLocaleTimeString()}
-          </span>
-        )
-      },
-    },
-    {
-      id: 'actions',
-      header: 'Actions',
-      cell: (info) => {
-        const batch = info.row.original
-        const canCancel = batch.status !== 'completed' && batch.status !== 'cancelled'
-
-        return (
-          <div className="flex items-center gap-2 justify-end">
-            {canCancel && (
-              <button
-                onClick={() => onCancel?.(batch.id)}
-                className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors text-red-600 dark:text-red-400"
-                title="Cancel batch"
-                aria-label="Cancel batch"
-              >
-                <X size={16} />
-              </button>
-            )}
-            {/* Retry button disabled for now - requires selecting specific videos in batch */}
-          </div>
-        )
-      },
-    },
-  ]
-
-  const table = useReactTable({
-    data: batches,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    state: {
-      pagination: {
-        pageIndex,
-        pageSize,
-      },
-    },
-    onPaginationChange: (updater) => {
-      const newPageState = typeof updater === 'function' ? updater({ pageIndex, pageSize }) : updater
-      setPageIndex(newPageState.pageIndex)
-    },
-  })
+  const rows = useMemo(() => {
+    const start = pageIndex * PAGE_SIZE
+    return batches.slice(start, start + PAGE_SIZE)
+  }, [batches, pageIndex])
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64 border border-slate-200 dark:border-slate-700 rounded-lg">
-        <div className="text-slate-500 dark:text-slate-400">Loading batches...</div>
-      </div>
-    )
+    return <StatePlaceholder tone="loading" title="正在加载批量任务..." />
   }
 
-  if (!batches || batches.length === 0) {
+  if (batches.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 border border-slate-200 dark:border-slate-700 rounded-lg">
-        <div className="text-slate-500 dark:text-slate-400">No batch submissions yet</div>
-      </div>
+      <StatePlaceholder
+        tone="empty"
+        title="还没有批量任务"
+        description="先创建几条视频记录，再批量提交到生成队列。"
+      />
     )
   }
-
-  const { rows } = table.getRowModel()
-  const pageCount = table.getPageCount()
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
-        <table className="w-full">
-          <thead className="bg-slate-50 dark:bg-slate-800">
-            <tr className="border-b border-slate-200 dark:border-slate-700">
-              {table.getHeaderGroups()[0]?.headers.map((header) => (
-                <th
-                  key={header.id}
-                  className="text-left px-4 py-3 text-sm font-semibold text-slate-700 dark:text-slate-300"
-                >
-                  {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, idx) => (
-              <tr
-                key={row.id}
-                className={`border-b border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors ${
-                  idx % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-slate-50 dark:bg-slate-900/50'
-                }`}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-4 py-3 text-sm">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="short-video-batch-shell">
+      <div className="short-video-batch-table" role="table" aria-label="批量提交任务表">
+        <div className="short-video-batch-head" role="row">
+          <span>批次</span>
+          <span>状态</span>
+          <span>视频数</span>
+          <span>进度</span>
+          <span>并发</span>
+          <span>创建时间</span>
+          <span>动作</span>
+        </div>
+
+        {rows.map((batch) => {
+          const progress = getProgressPercentage(batch)
+          const canCancel = batch.status !== 'completed' && batch.status !== 'cancelled'
+          return (
+            <div key={batch.id} className="short-video-batch-row" role="row">
+              <span className="short-video-mono">{batch.id.slice(0, 8)}</span>
+              <span className={`short-video-status-badge status-${batch.status}`}>{statusLabel(batch.status)}</span>
+              <span>{batch.videoCount}</span>
+              <span>
+                <div className="short-video-inline-progress">
+                  <div className="short-video-progress-track">
+                    <div className="short-video-progress-fill" style={{ width: `${progress}%` }} />
+                  </div>
+                  <small>{progress}%</small>
+                </div>
+              </span>
+              <span>{batch.concurrencyLimit}</span>
+              <span>{new Date(batch.createdAt).toLocaleString('zh-CN')}</span>
+              <span>
+                {canCancel ? (
+                  <button type="button" className="btn btn-danger" onClick={() => onCancel?.(batch.id)}>
+                    <X size={14} aria-hidden="true" /> 取消
+                  </button>
+                ) : (
+                  '—'
+                )}
+              </span>
+            </div>
+          )
+        })}
       </div>
 
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <div className="text-sm text-slate-600 dark:text-slate-400">
-          Page {pageIndex + 1} of {pageCount} (Total: {batches.length} batches)
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="short-video-batch-pagination">
+        <span>
+          第 {pageIndex + 1} / {pageCount} 页 · 共 {batches.length} 条任务
+        </span>
+        <div className="short-video-batch-page-actions">
           <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            aria-label="Previous page"
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+            disabled={pageIndex === 0}
           >
-            <ChevronLeft size={18} />
+            <ChevronLeft size={16} aria-hidden="true" /> 上一页
           </button>
           <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            aria-label="Next page"
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setPageIndex((current) => Math.min(pageCount - 1, current + 1))}
+            disabled={pageIndex >= pageCount - 1}
           >
-            <ChevronRight size={18} />
+            下一页 <ChevronRight size={16} aria-hidden="true" />
           </button>
         </div>
       </div>

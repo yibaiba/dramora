@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X, Loader2 } from 'lucide-react'
+import { Loader2, X } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import type { CreateBatchSubmissionRequest } from '../../api/types'
 
 interface CreateBatchSubmissionDialogProps {
@@ -15,168 +15,152 @@ export default function CreateBatchSubmissionDialog({
   onSubmit,
   availableVideoIds,
 }: CreateBatchSubmissionDialogProps) {
-  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(new Set())
+  const [selectedVideoIds, setSelectedVideoIds] = useState<string[]>([])
   const [concurrencyLimit, setConcurrencyLimit] = useState(4)
   const [retryLimit, setRetryLimit] = useState(2)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const selectAllVideos = (selected: boolean) => {
-    if (selected) {
-      setSelectedVideoIds(new Set(availableVideoIds))
-    } else {
-      setSelectedVideoIds(new Set())
-    }
+  const allSelected = useMemo(
+    () => availableVideoIds.length > 0 && selectedVideoIds.length === availableVideoIds.length,
+    [availableVideoIds.length, selectedVideoIds.length],
+  )
+
+  if (!isOpen) return null
+
+  const resetForm = () => {
+    setSelectedVideoIds([])
+    setConcurrencyLimit(4)
+    setRetryLimit(2)
+    setError(null)
   }
 
   const toggleVideo = (videoId: string) => {
-    const newSet = new Set(selectedVideoIds)
-    if (newSet.has(videoId)) {
-      newSet.delete(videoId)
-    } else {
-      newSet.add(videoId)
-    }
-    setSelectedVideoIds(newSet)
+    setSelectedVideoIds((current) =>
+      current.includes(videoId) ? current.filter((item) => item !== videoId) : [...current, videoId],
+    )
   }
 
   const handleSubmit = async () => {
-    if (selectedVideoIds.size === 0) {
-      alert('Please select at least one video')
+    if (selectedVideoIds.length === 0) {
+      setError('至少选择一个视频后才能提交批量任务。')
       return
     }
 
     setIsSubmitting(true)
+    setError(null)
     try {
       await onSubmit({
-        videoIds: Array.from(selectedVideoIds),
+        videoIds: selectedVideoIds,
         concurrencyLimit,
         retryLimit,
-        parameters: {}, // Support for future parameter customization
+        parameters: {},
       })
-      // Reset form
-      setSelectedVideoIds(new Set())
-      setConcurrencyLimit(4)
-      setRetryLimit(2)
+      resetForm()
       onClose()
-    } catch (error) {
-      console.error('Failed to create batch submission:', error)
-      alert('Failed to create batch submission. Please try again.')
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : '创建批量任务失败')
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-lg shadow-lg max-w-2xl w-full max-h-96 flex flex-col">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-700 px-6 py-4">
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Create Batch Submission</h2>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting}
-            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded disabled:opacity-50"
-            aria-label="Close dialog"
-          >
-            <X size={20} />
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-          {/* Video Selection */}
+    <div className="batch-dialog-backdrop" role="presentation">
+      <div className="batch-dialog" role="dialog" aria-modal="true" aria-labelledby="batch-dialog-title">
+        <header className="batch-dialog-header">
           <div>
-            <label className="block text-sm font-medium text-slate-900 dark:text-white mb-3">
-              Select Videos ({selectedVideoIds.size} selected)
-            </label>
-            <div className="flex items-center gap-2 mb-3">
-              <input
-                type="checkbox"
-                id="select-all"
-                checked={selectedVideoIds.size === availableVideoIds.length && availableVideoIds.length > 0}
-                onChange={(e) => selectAllVideos(e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 dark:border-slate-600"
-              />
-              <label htmlFor="select-all" className="text-sm text-slate-700 dark:text-slate-300">
-                Select all
-              </label>
+            <h2 id="batch-dialog-title">创建批量任务</h2>
+            <p>选择多个视频并设置并发与重试策略。</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              resetForm()
+              onClose()
+            }}
+            disabled={isSubmitting}
+            aria-label="关闭对话框"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </header>
+
+        <div className="batch-dialog-body">
+          <section className="batch-dialog-section">
+            <div className="batch-dialog-section-title">
+              <strong>选择视频</strong>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSelectedVideoIds(allSelected ? [] : availableVideoIds)}
+                disabled={availableVideoIds.length === 0}
+              >
+                {allSelected ? '清空' : '全选'}
+              </button>
             </div>
-            <div className="space-y-2 max-h-48 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded p-3 bg-slate-50 dark:bg-slate-800/50">
+            <div className="batch-dialog-video-list">
               {availableVideoIds.length > 0 ? (
                 availableVideoIds.map((videoId) => (
-                  <label key={videoId} className="flex items-center gap-2 p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded cursor-pointer">
+                  <label key={videoId} className="batch-dialog-video-item">
                     <input
                       type="checkbox"
-                      checked={selectedVideoIds.has(videoId)}
+                      checked={selectedVideoIds.includes(videoId)}
                       onChange={() => toggleVideo(videoId)}
-                      className="w-4 h-4 rounded border-slate-300 dark:border-slate-600"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-300 font-mono">{videoId.slice(0, 12)}...</span>
+                    <span className="short-video-mono">{videoId.slice(0, 12)}</span>
                   </label>
                 ))
               ) : (
-                <div className="text-sm text-slate-500 dark:text-slate-400 p-2">No videos available</div>
+                <p className="batch-dialog-empty">暂无可供批量处理的视频。</p>
               )}
             </div>
-          </div>
+          </section>
 
-          {/* Settings */}
-          <div className="grid grid-cols-2 gap-4">
-            {/* Concurrency Limit */}
-            <div>
-              <label htmlFor="concurrency" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
-                Concurrency Limit (1-8)
-              </label>
+          <section className="batch-dialog-settings">
+            <label>
+              <span>并发上限</span>
               <input
                 type="number"
-                id="concurrency"
                 min={1}
                 max={8}
                 value={concurrencyLimit}
-                onChange={(e) => setConcurrencyLimit(Math.min(8, Math.max(1, parseInt(e.target.value) || 1)))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                onChange={(event) => setConcurrencyLimit(Math.min(8, Math.max(1, Number(event.target.value) || 1)))}
               />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">How many videos to generate in parallel</p>
-            </div>
-
-            {/* Retry Limit */}
-            <div>
-              <label htmlFor="retry" className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
-                Retry Limit (0-5)
-              </label>
+            </label>
+            <label>
+              <span>失败重试</span>
               <input
                 type="number"
-                id="retry"
                 min={0}
                 max={5}
                 value={retryLimit}
-                onChange={(e) => setRetryLimit(Math.min(5, Math.max(0, parseInt(e.target.value) || 0)))}
-                className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                onChange={(event) => setRetryLimit(Math.min(5, Math.max(0, Number(event.target.value) || 0)))}
               />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Failed videos will retry this many times</p>
-            </div>
-          </div>
+            </label>
+          </section>
+
+          {error ? <div className="form-error">{error}</div> : null}
         </div>
 
-        {/* Footer */}
-        <div className="border-t border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-end gap-3">
+        <footer className="batch-dialog-footer">
           <button
-            onClick={onClose}
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => {
+              resetForm()
+              onClose()
+            }}
             disabled={isSubmitting}
-            className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md disabled:opacity-50"
           >
-            Cancel
+            取消
           </button>
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting || selectedVideoIds.size === 0}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? 'Creating...' : 'Create Batch'}
+          <button type="button" className="btn btn-primary" onClick={() => void handleSubmit()} disabled={isSubmitting}>
+            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : null}
+            {isSubmitting ? '提交中...' : '创建批量任务'}
           </button>
-        </div>
+        </footer>
       </div>
     </div>
   )

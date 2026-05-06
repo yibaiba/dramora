@@ -1,8 +1,10 @@
 import {
   Activity,
+  ArrowRight,
   BookOpenText,
   Boxes,
   Clapperboard,
+  FolderPlus,
   Home,
   Layers3,
   MessageCircle,
@@ -33,6 +35,7 @@ import ChatDialog from '../components/ChatDialog'
 import { useStudioSelection } from '../hooks/useStudioSelection'
 import { buildStoryAnalysisReviewSnapshot } from '../reviewPersistence'
 import { studioNavItems, studioRoutePaths } from '../routes'
+import type { StudioNavItem } from '../routes'
 import type { StudioShot } from '../types'
 import {
   formatDuration,
@@ -42,6 +45,23 @@ import {
   statusLabel,
   mapDisplayShots,
 } from '../utils'
+
+const CORE_HOME_ITEM_KEYS = new Set([
+  'storyAnalysis',
+  'storyboard',
+  'assetsGraph',
+  'queue',
+  'shortVideo',
+  'timelineExport',
+])
+
+function focusShellInput(id: string) {
+  if (typeof document === 'undefined') return
+  const element = document.getElementById(id)
+  if (!(element instanceof HTMLElement)) return
+  element.focus()
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
 
 export function HomePage() {
   const { activeEpisode, selectedProject } = useStudioSelection()
@@ -87,19 +107,29 @@ export function HomePage() {
   const reviewRelayDescription = !reviewSnapshot
     ? '先完成一轮故事解析，导演台才会出现跨页 review relay。'
     : reviewSnapshot.feedbackSummary.needs_follow_up > 0
-      ? `Storyboard ${reviewSnapshot.surfaceSummary.storyboard.needs_follow_up} 条、Assets / Graph ${reviewSnapshot.surfaceSummary.assetsGraph.needs_follow_up} 条待跟进，建议直接回到解析或跳去对应页面继续处理。`
+      ? `分镜台 ${reviewSnapshot.surfaceSummary.storyboard.needs_follow_up} 条、资产图谱 ${reviewSnapshot.surfaceSummary.assetsGraph.needs_follow_up} 条待跟进，建议直接回到解析或跳去对应页面继续处理。`
       : reviewSnapshot.feedbackSummary.unmarked > 0
-        ? '本轮已有回传，但仍有未标记 Agent；先回 Story Analysis 完成标记，再决定是否收口。'
+        ? '本轮已有回传，但仍有未标记智能体；先回故事解析完成标记，再决定是否收口。'
         : reviewSnapshot.latestReturnedSummary
           ? `最近一次回传来自 ${reviewSnapshot.latestReturnedSummary.sourcePage} · ${reviewSnapshot.latestReturnedSummary.agentLabel} · ${agentFollowUpFeedbackLabel(reviewSnapshot.latestReturnedSummary.feedback)}。`
           : '当前没有跨页待跟进压力，可继续推进下一轮生产。'
+  const coreWorkflowItems = useMemo(
+    () => studioNavItems.filter((item): item is StudioNavItem => CORE_HOME_ITEM_KEYS.has(item.key)),
+    [],
+  )
 
   return (
     <section className="studio-page home-page" aria-labelledby="home-page-title">
       <div className="board-header">
         <div>
-          <h1 id="home-page-title">Studio Home</h1>
-          <span>把导演台拆成可扩展的多页面工作流。</span>
+          <h1 id="home-page-title">导演台首页</h1>
+          <span>
+            {selectedProject
+              ? activeEpisode
+                ? '围绕当前剧集把故事解析、分镜、资产和导出收束成一条更清晰的导演工作流。'
+                : '先为当前项目创建第一集，首页会自动切换到真正可推进的生产状态。'
+              : '先创建项目，再沿着 故事解析 → 分镜台 → 资产图谱 推进整条生产链。'}
+          </span>
         </div>
         <div className="board-actions">
           <Link className="hero-secondary-action" to={studioRoutePaths.storyAnalysis}>
@@ -127,6 +157,8 @@ export function HomePage() {
         gatesCount={gates.length}
         jobs={episodeJobs}
         nextHint={nextHint}
+        onFocusEpisodeInput={() => focusShellInput('quick-episode-title')}
+        onFocusProjectInput={() => focusShellInput('quick-project-name')}
         onSeedProduction={() => activeEpisode && seedProduction.mutate(activeEpisode.id)}
         onStartAnalysis={() => activeEpisode && startStoryAnalysis.mutate(activeEpisode.id)}
         onOpenChat={() => setIsChatOpen(true)}
@@ -160,15 +192,15 @@ export function HomePage() {
 
       <div className="dashboard-grid">
         <article className="surface-card">
-          <div className="panel-title-row">
-            <div>
-              <span>页面入口</span>
-              <strong>当前 4 页 MVP</strong>
+            <div className="panel-title-row">
+              <div>
+                <span>核心工作流</span>
+                <strong>从故事到导出的 6 个关键入口</strong>
+              </div>
             </div>
-          </div>
-          <div className="page-link-grid">
-            {studioNavItems.map((item) =>
-              item.disabled ? (
+            <div className="page-link-grid">
+              {coreWorkflowItems.map((item) =>
+                item.disabled ? (
                 <div className="page-link-card disabled" key={item.key}>
                   <item.icon aria-hidden="true" />
                   <strong>{item.label}</strong>
@@ -198,7 +230,7 @@ export function HomePage() {
         <article className="surface-card review-relay-card">
           <div className="panel-title-row">
             <div>
-              <span>Review relay</span>
+              <span>回传协同</span>
               <strong>{reviewRelayHeadline}</strong>
             </div>
           </div>
@@ -221,13 +253,13 @@ export function HomePage() {
             {reviewSnapshot?.surfaceSummary.storyboard.needs_follow_up ? (
               <Link className="hero-secondary-action" to={studioRoutePaths.storyboard}>
                 <Boxes aria-hidden="true" />
-                去 Storyboard
+                去分镜台
               </Link>
             ) : null}
             {reviewSnapshot?.surfaceSummary.assetsGraph.needs_follow_up ? (
               <Link className="hero-secondary-action" to={studioRoutePaths.assetsGraph}>
                 <Layers3 aria-hidden="true" />
-                去 Assets / Graph
+                去资产图谱
               </Link>
             ) : null}
           </div>
@@ -270,6 +302,8 @@ function WorkspaceHero({
   gatesCount,
   jobs,
   nextHint,
+  onFocusEpisodeInput,
+  onFocusProjectInput,
   onSeedProduction,
   onStartAnalysis,
   onOpenChat,
@@ -288,6 +322,8 @@ function WorkspaceHero({
   gatesCount: number
   jobs: GenerationJob[]
   nextHint: string
+  onFocusEpisodeInput: () => void
+  onFocusProjectInput: () => void
   onSeedProduction: () => void
   onStartAnalysis: () => void
   onOpenChat: () => void
@@ -347,15 +383,44 @@ function WorkspaceHero({
       value: `${gatesCount} 个审批点`,
     },
   ]
+  const needsProject = !project
+  const needsEpisode = Boolean(project) && !activeEpisode
+  const heroTitle = needsProject
+    ? '先创建项目，首页才会真正进入可推进状态。'
+    : needsEpisode
+      ? '给当前项目创建第一集，导演台就能开始滚动起来。'
+      : 'AI 漫剧导演台'
+  const heroDescription = needsProject
+    ? '当前左侧已经有快速创建项目入口。先定下项目，再用首页继续推进故事解析、分镜和资产图谱。'
+    : needsEpisode
+      ? '项目已经就绪，下一步只差第一集。创建剧集后，故事解析和一键生产都会从禁用态切换为可执行。'
+      : '把故事源、资产图谱、分镜卡、时间线和导出状态分流到独立页面，但在首页保留整条生产链的核心信号。'
+  const onboardingSteps = needsProject
+    ? [
+        '在左侧输入项目名，例如《九霄之上》。',
+        '项目创建后，首页会自动切换到真实工作流。',
+        '接着创建第一集，再启动故事解析。',
+      ]
+    : needsEpisode
+      ? [
+          '用顶部剧集输入框创建第一集。',
+          '进入故事解析录入故事源。',
+          '完成解析后即可一键推进生产链。',
+        ]
+      : [
+          '先用故事解析确认剧情与种子设定。',
+          '在分镜台与资产图谱收口镜头和参考素材。',
+          '最后回到时间线导出做剪辑与导出。',
+        ]
 
   return (
     <section className="workspace-hero" aria-label="导演工作台总览">
       <div className="hero-spotlight">
-        <span className="hero-kicker">Director cockpit</span>
+        <span className="hero-kicker">导演控制台</span>
         <div className="hero-title-row">
           <div>
-            <h2>AI 漫剧导演台</h2>
-            <p>把故事源、资产图谱、分镜卡、时间线和导出状态分流到独立页面，但在首页保留整条生产链的核心信号。</p>
+            <h2>{heroTitle}</h2>
+            <p>{heroDescription}</p>
           </div>
           <span
             className={
@@ -382,15 +447,27 @@ function WorkspaceHero({
           </span>
         </div>
         <div className="hero-action-row">
-          <button
-            className="hero-primary-action"
-            disabled={!canSeedProduction || productionPending}
-            onClick={onSeedProduction}
-            type="button"
-          >
-            <Sparkles aria-hidden="true" />
-            {productionPending ? '生产中...' : '一键生产分镜包'}
-          </button>
+          {needsProject ? (
+            <button className="hero-primary-action" onClick={onFocusProjectInput} type="button">
+              <FolderPlus aria-hidden="true" />
+              创建项目
+            </button>
+          ) : needsEpisode ? (
+            <button className="hero-primary-action" onClick={onFocusEpisodeInput} type="button">
+              <Clapperboard aria-hidden="true" />
+              创建第一集
+            </button>
+          ) : (
+            <button
+              className="hero-primary-action"
+              disabled={!canSeedProduction || productionPending}
+              onClick={onSeedProduction}
+              type="button"
+            >
+              <Sparkles aria-hidden="true" />
+              {productionPending ? '生产中...' : '一键生产分镜包'}
+            </button>
+          )}
           <button
             className="hero-secondary-action"
             disabled={!canStartAnalysis || startAnalysisPending}
@@ -407,7 +484,7 @@ function WorkspaceHero({
             title="打开 Chat 对话框"
           >
             <MessageCircle aria-hidden="true" />
-            Ask AI
+            问 AI
           </button>
           <Link className="hero-link-action" to={studioRoutePaths.timelineExport}>
             <Activity aria-hidden="true" />
@@ -428,7 +505,28 @@ function WorkspaceHero({
               </div>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div className="hero-empty-board">
+            <div>
+              <span>快速开始</span>
+              <strong>
+                {needsProject
+                  ? '三步搭好工作台骨架'
+                  : needsEpisode
+                    ? '先补齐第一集再推进 AI'
+                    : '当前剧集的首页推进建议'}
+              </strong>
+            </div>
+            <ol>
+              {onboardingSteps.map((step) => (
+                <li key={step}>
+                  <ArrowRight aria-hidden="true" />
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
 
       <div className="hero-stat-grid">
@@ -438,7 +536,7 @@ function WorkspaceHero({
           <p>
             {analysesCount > 0
               ? `已生成 ${analysesCount} 份剧情分析，可继续推资产与镜头。`
-              : '当前仍在演示态，可先录入故事源并启动多 Agent 解析。'}
+              : '当前仍在演示态，可先录入故事源并启动多智能体解析。'}
           </p>
           <div className="hero-stat-inline">
             <span>{assetsCount} 个候选资产</span>
@@ -497,12 +595,12 @@ function WorkflowRecoverySummaryCard({ workflowRun }: { workflowRun?: WorkflowRu
   return (
     <article
       className="surface-card"
-      aria-label="Workflow recovery summary"
+      aria-label="工作流恢复摘要"
       style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <span className="section-kicker">Recovery snapshot</span>
+          <span className="section-kicker">恢复快照</span>
           <strong style={{ display: 'block', marginTop: 4 }}>{headline}</strong>
         </div>
         <small className="muted" style={{ fontSize: 12 }}>

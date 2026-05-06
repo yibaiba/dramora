@@ -1,6 +1,9 @@
 import type {
   AuthSession,
   CreateEpisodeRequest,
+  ChangePasswordRequest,
+  CreateUserAPIKeyRequest,
+  CreatedUserAPIKey,
   CreateInvitationRequest,
   CreateProjectRequest,
   CreateStorySourceRequest,
@@ -18,6 +21,7 @@ import type {
   Project,
   ProviderConfig,
   LoginRequest,
+  OrganizationMember,
   OrganizationInvitation,
   InvitationAuditEvent,
   RegisterRequest,
@@ -69,11 +73,15 @@ import type {
   GenerateRedemptionCodesResponse,
   ShortVideoTemplate,
   ShortVideo,
+  ToggleUserAPIKeyRequest,
+  UpdateUserAPIKeyRequest,
   CreateShortVideoTemplateRequest,
+  UserAPIKey,
   CreateShortVideoRequest,
   CreateBatchSubmissionRequest,
   BatchSubmission,
   ListBatchSubmissionsResponse,
+  UpdateOrganizationMemberRoleRequest,
   Workspace,
 } from './types'
 
@@ -235,6 +243,54 @@ export async function listSessions(): Promise<Session[]> {
 
 export async function revokeSession(sessionId: string): Promise<void> {
   await fetchJSON<unknown>(`/api/v1/auth/sessions/${encodeURIComponent(sessionId)}:revoke`, {
+    method: 'POST',
+  })
+}
+
+export async function changePassword(request: ChangePasswordRequest): Promise<void> {
+  await fetchJSON<unknown>('/api/v1/account:change-password', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+}
+
+export async function listUserAPIKeys(): Promise<UserAPIKey[]> {
+  const payload = await fetchJSON<{ api_keys: UserAPIKey[] }>('/api/v1/account/api-keys')
+  return payload.api_keys ?? []
+}
+
+export async function createUserAPIKey(request: CreateUserAPIKeyRequest): Promise<CreatedUserAPIKey> {
+  const payload = await fetchJSON<{ api_key: CreatedUserAPIKey }>('/api/v1/account/api-keys', {
+    body: JSON.stringify(request),
+    method: 'POST',
+  })
+  return payload.api_key
+}
+
+export async function updateUserAPIKey(keyId: string, request: UpdateUserAPIKeyRequest): Promise<UserAPIKey> {
+  const payload = await fetchJSON<{ api_key: UserAPIKey }>(
+    `/api/v1/account/api-keys/${encodeURIComponent(keyId)}:update`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.api_key
+}
+
+export async function toggleUserAPIKey(keyId: string, request: ToggleUserAPIKeyRequest): Promise<UserAPIKey> {
+  const payload = await fetchJSON<{ api_key: UserAPIKey }>(
+    `/api/v1/account/api-keys/${encodeURIComponent(keyId)}:toggle`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.api_key
+}
+
+export async function deleteUserAPIKey(keyId: string): Promise<void> {
+  await fetchJSON<unknown>(`/api/v1/account/api-keys/${encodeURIComponent(keyId)}:delete`, {
     method: 'POST',
   })
 }
@@ -684,6 +740,31 @@ export async function resendOrganizationInvitation(invitationId: string): Promis
     { method: 'POST' },
   )
   return payload.invitation
+}
+
+export async function listOrganizationMembers(): Promise<OrganizationMember[]> {
+  const payload = await fetchJSON<{ members: OrganizationMember[] }>('/api/v1/organizations/members')
+  return payload.members ?? []
+}
+
+export async function updateOrganizationMemberRole(
+  userId: string,
+  request: UpdateOrganizationMemberRoleRequest,
+): Promise<OrganizationMember> {
+  const payload = await fetchJSON<{ member: OrganizationMember }>(
+    `/api/v1/organizations/members/${encodeURIComponent(userId)}/role`,
+    {
+      body: JSON.stringify(request),
+      method: 'POST',
+    },
+  )
+  return payload.member
+}
+
+export async function removeOrganizationMember(userId: string): Promise<void> {
+  await fetchJSON<unknown>(`/api/v1/organizations/members/${encodeURIComponent(userId)}:remove`, {
+    method: 'POST',
+  })
 }
 
 export type InvitationAuditFilter = {

@@ -5,6 +5,8 @@ import { useCurrentSession } from './api/hooks'
 import { useAuthStore } from './state/authStore'
 import { StudioShell } from './studio/layout/StudioShell'
 import { AdminSettingsPage } from './studio/pages/AdminSettingsPage'
+import { AdminUsersPage } from './studio/pages/AdminUsersPage'
+import { AccountSettingsPage } from './studio/pages/AccountSettingsPage'
 import { AssetsGraphPage } from './studio/pages/AssetsGraphPage'
 import { AuthPage } from './studio/pages/AuthPage'
 import { GalleryPage } from './studio/pages/GalleryPage'
@@ -81,8 +83,10 @@ function App() {
         <Route path="transactions" element={<TransactionHistoryPage />} />
         <Route path="notifications" element={<NotificationsPage />} />
         <Route path="admin/settings" element={<AdminSettingsPage />} />
+        <Route path="admin/users" element={<AdminUsersPage />} />
         <Route path="admin/invitations" element={<InvitationsPage />} />
         <Route path="admin/worker-metrics" element={<WorkerMetricsPage />} />
+        <Route path="account/settings" element={<AccountSettingsPage />} />
         <Route path="account/sessions" element={<SessionsPage />} />
         <Route path="short-video" element={<ShortVideoPage />} />
       </Route>

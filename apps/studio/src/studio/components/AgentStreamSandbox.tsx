@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { Sparkles, Plus, Trash2, Save, X } from 'lucide-react'
 import { streamAgentRun, type AgentStreamDoneFrame } from '../../api/agentStream'
+import { AgentTaskCenter } from './AgentTaskCenter'
+import { useAgentTaskCenterStore } from '../../state/agentTaskCenterStore'
+import { useStudioStore } from '../../state/studioStore'
 
 const ROLE_OPTIONS = [
   { value: 'story_analyst', label: '故事分析师' },
@@ -209,7 +212,15 @@ export function AgentStreamSandbox() {
   const [history, setHistory] = useState<RunHistoryEntry[]>(() => loadRunHistory())
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [diffSelection, setDiffSelection] = useState<string[]>([])
+  const selectedEpisodeId = useStudioStore((state) => state.selectedEpisodeId)
   const abortRef = useRef<AbortController | null>(null)
+  const activeTaskIdRef = useRef<string | null>(null)
+  const startTask = useAgentTaskCenterStore((state) => state.startTask)
+  const attachTaskRun = useAgentTaskCenterStore((state) => state.attachRun)
+  const appendTaskEvent = useAgentTaskCenterStore((state) => state.appendEvent)
+  const completeTask = useAgentTaskCenterStore((state) => state.completeTask)
+  const failTask = useAgentTaskCenterStore((state) => state.failTask)
+  const cancelTask = useAgentTaskCenterStore((state) => state.cancelTask)
 
   const toggleDiffSelection = (id: string) => {
     setDiffSelection((prev) => {
@@ -270,6 +281,9 @@ export function AgentStreamSandbox() {
   }
 
   const handleRun = async () => {
+    if (activeTaskIdRef.current) {
+      cancelTask(activeTaskIdRef.current)
+    }
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
@@ -281,23 +295,33 @@ export function AgentStreamSandbox() {
     const snapshotRole = role
     const snapshotSourceText = sourceText
     const snapshotEntries = contextEntries.map((e) => ({ key: e.key, value: e.value }))
+    const taskId = startTask({
+      role: snapshotRole,
+      sourceText: snapshotSourceText,
+      contextKeys: snapshotEntries.map((entry) => entry.key).filter((key) => key.trim() !== ''),
+      episodeId: selectedEpisodeId,
+    })
+    activeTaskIdRef.current = taskId
     try {
       await streamAgentRun(
-        { role, source_text: sourceText, context: buildContextMap() },
+        { role, source_text: sourceText, context: buildContextMap(), episode_id: selectedEpisodeId },
         {
+          onRunStarted: (runId) => attachTaskRun(taskId, runId),
+          onEvent: (event) => appendTaskEvent(taskId, event),
           onDelta: (chunk) => {
             accumulated += chunk
             setStreamedText((prev) => prev + chunk)
           },
           onDone: (frame) => {
             setDoneFrame(frame)
+            completeTask(taskId, frame)
             setHistory((prev) => {
               const next: RunHistoryEntry = {
                 id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
                 role: snapshotRole,
                 sourceText: snapshotSourceText,
                 contextEntries: snapshotEntries,
-                output: accumulated,
+                output: frame.output || accumulated,
                 durationMs: frame.duration_ms,
                 tokenCount: frame.token_count,
                 timestamp: new Date().toISOString(),
@@ -305,14 +329,23 @@ export function AgentStreamSandbox() {
               return [next, ...prev].slice(0, MAX_HISTORY_ENTRIES)
             })
           },
-          onError: (message) => setErrorMessage(message),
+          onError: (message) => {
+            if (controller.signal.aborted) return
+            setErrorMessage(message)
+            failTask(taskId, message)
+          },
         },
         controller.signal,
       )
     } catch (err) {
       if (controller.signal.aborted) return
-      setErrorMessage(err instanceof Error ? err.message : 'stream failed')
+      const message = err instanceof Error ? err.message : 'stream failed'
+      setErrorMessage(message)
+      failTask(taskId, message)
     } finally {
+      if (activeTaskIdRef.current === taskId) {
+        activeTaskIdRef.current = null
+      }
       setIsStreaming(false)
     }
   }
@@ -360,6 +393,9 @@ export function AgentStreamSandbox() {
   }
 
   const handleStop = () => {
+    if (activeTaskIdRef.current) {
+      cancelTask(activeTaskIdRef.current)
+    }
     abortRef.current?.abort()
     setIsStreaming(false)
   }
@@ -596,6 +632,7 @@ export function AgentStreamSandbox() {
           )}
         </div>
       )}
+      <AgentTaskCenter />
       <div className="sandbox-history">
         <input
           ref={importInputRef}

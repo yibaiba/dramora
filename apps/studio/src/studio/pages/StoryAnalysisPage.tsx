@@ -30,6 +30,7 @@ import type { AnalysisTemplate } from '../components/analysisTemplates'
 import { storyAnalysisTemplates } from '../components/analysisTemplates'
 import { AgentBoard, AgentPipeline, GlobalAgentIndicator } from '../components/AgentBoard'
 import { AgentFeedbackWorkspace } from '../components/AgentFeedbackWorkspace'
+import { AgentTaskCenter } from '../components/AgentTaskCenter'
 import { AgentOutputPanel } from '../components/AgentOutputPanel'
 import { ActionButton } from '../components/ActionButton'
 import { ProductionFlowPanel } from '../components/ProductionFlowPanel'
@@ -654,6 +655,14 @@ export function StoryAnalysisPage() {
             returnedFollowUpHistory={returnedFollowUpHistory}
             returnedFollowUpSummary={returnedFollowUpSummary}
             selectedRole={selectedAgent?.role}
+          />
+          <AgentTaskCenter
+            externalAgents={visibleAgentOutputs}
+            selectedExternalRole={selectedAgent?.role}
+            onSelectExternalRole={(role) => {
+              const agent = agentOutputs.find((candidate) => candidate.role === role)
+              if (agent) setSelectedAgent(agent)
+            }}
           />
           {visibleAgentOutputs.length > 0
             ? viewMode === 'board'

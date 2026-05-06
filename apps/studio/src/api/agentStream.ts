@@ -1,6 +1,6 @@
 // Lightweight SSE consumer for /api/v1/agents/stream.
 // Uses fetch + ReadableStream so we can carry the bearer token (EventSource cannot).
-import type { AuthSession } from './types'
+import type { AgentRunStatusResponse, AgentStreamEvent, AuthSession } from './types'
 
 const API_BASE_URL = import.meta.env.VITE_MANMU_API_BASE_URL ?? ''
 const AUTH_STORAGE_KEY = 'dramora-auth-session'
@@ -14,6 +14,8 @@ export type AgentStreamDoneFrame = {
 }
 
 export type AgentStreamCallbacks = {
+  onRunStarted?: (runId: string) => void
+  onEvent?: (event: AgentStreamEvent) => void
   onDelta?: (text: string) => void
   onDone?: (frame: AgentStreamDoneFrame) => void
   onError?: (message: string) => void
@@ -32,7 +34,7 @@ function readToken(): string | null {
 }
 
 export async function streamAgentRun(
-  body: { role: string; source_text: string; context?: Record<string, string> },
+  body: { role: string; source_text: string; context?: Record<string, string>; episode_id?: string },
   callbacks: AgentStreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
@@ -49,18 +51,90 @@ export async function streamAgentRun(
   })
 
   if (!response.ok || !response.body) {
-    let message = `Request failed with status ${response.status}`
-    try {
-      const payload = (await response.json()) as { error?: { message?: string } }
-      if (payload?.error?.message) message = payload.error.message
-    } catch {
-      // ignore parse failure, use default
-    }
-    callbacks.onError?.(message)
+    callbacks.onError?.(await readErrorMessage(response))
     return
   }
+  const runID = response.headers.get('X-Agent-Run-ID')
+  if (runID) callbacks.onRunStarted?.(runID)
+  await consumeAgentEventStream(response.body, callbacks)
+}
 
-  const reader = response.body.getReader()
+export async function getAgentRunStatus(runID: string): Promise<AgentRunStatusResponse> {
+  const token = readToken()
+  const response = await fetch(`${API_BASE_URL}/api/v1/agent-runs/${runID}`, {
+    method: 'GET',
+    headers: {
+      accept: 'application/json',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  })
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response))
+  }
+  return (await response.json()) as AgentRunStatusResponse
+}
+
+export async function reconnectAgentRun(
+  runID: string,
+  after: number,
+  callbacks: AgentStreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const token = readToken()
+  const response = await fetch(`${API_BASE_URL}/api/v1/agent-runs/${runID}/stream?after=${after}`, {
+    method: 'GET',
+    headers: {
+      accept: 'text/event-stream',
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+    signal,
+  })
+  if (!response.ok || !response.body) {
+    callbacks.onError?.(await readErrorMessage(response))
+    return
+  }
+  const responseRunID = response.headers.get('X-Agent-Run-ID')
+  callbacks.onRunStarted?.(responseRunID ?? runID)
+  await consumeAgentEventStream(response.body, callbacks)
+}
+
+async function readErrorMessage(response: Response): Promise<string> {
+  let message = `Request failed with status ${response.status}`
+  try {
+    const payload = (await response.json()) as { error?: { message?: string } }
+    if (payload?.error?.message) message = payload.error.message
+  } catch {
+    // ignore parse failure, use default
+  }
+  return message
+}
+
+function dispatchAgentEvent(event: AgentStreamEvent, callbacks: AgentStreamCallbacks) {
+  callbacks.onEvent?.(event)
+  if (event.type === 'CONTENT' && event.content) {
+    callbacks.onDelta?.(event.content)
+    return
+  }
+  if (event.type === 'DONE') {
+    callbacks.onDone?.({
+      role: event.role ?? '',
+      output: event.output ?? '',
+      highlights: event.highlights ?? [],
+      token_count: event.token_count ?? 0,
+      duration_ms: event.duration_ms ?? 0,
+    })
+    return
+  }
+  if (event.type === 'ERROR') {
+    callbacks.onError?.(event.error ?? 'stream error')
+  }
+}
+
+async function consumeAgentEventStream(
+  stream: ReadableStream<Uint8Array>,
+  callbacks: AgentStreamCallbacks,
+): Promise<void> {
+  const reader = stream.getReader()
   const decoder = new TextDecoder('utf-8')
   let buffer = ''
   let currentEvent = ''
@@ -88,6 +162,13 @@ export async function streamAgentRun(
       } catch {
         callbacks.onError?.('stream error')
       }
+      } else if (event === 'agent_event') {
+        try {
+          const parsed = JSON.parse(data) as AgentStreamEvent
+          dispatchAgentEvent(parsed, callbacks)
+        } catch {
+          callbacks.onError?.('failed to parse agent event frame')
+        }
     }
   }
 

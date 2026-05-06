@@ -1,7 +1,89 @@
+import type {
+  ShortVideoParameters,
+  ShortVideoParameterValue,
+  ShortVideoTemplateConfig,
+  ShortVideoTemplateField,
+} from '../../api/types'
+
 interface ShortVideoFormProps {
-  config: Record<string, any>
-  parameters: Record<string, any>
-  onChange: (parameters: Record<string, any>) => void
+  config: ShortVideoTemplateConfig
+  parameters: ShortVideoParameters
+  onChange: (parameters: ShortVideoParameters) => void
+}
+
+function updateParameters(
+  parameters: ShortVideoParameters,
+  fieldName: string,
+  value: ShortVideoParameterValue,
+) {
+  return {
+    ...parameters,
+    [fieldName]: value,
+  }
+}
+
+function renderField(
+  field: ShortVideoTemplateField,
+  value: ShortVideoParameterValue,
+  onValueChange: (next: ShortVideoParameterValue) => void,
+) {
+  const sharedProps = {
+    id: field.name,
+    required: field.required,
+  }
+
+  switch (field.type) {
+    case 'textarea':
+      return (
+        <textarea
+          {...sharedProps}
+          rows={4}
+          placeholder={field.placeholder}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) => onValueChange(event.target.value)}
+        />
+      )
+    case 'number':
+      return (
+        <input
+          {...sharedProps}
+          type="number"
+          min={field.min}
+          max={field.max}
+          placeholder={field.placeholder}
+          value={typeof value === 'number' ? value : ''}
+          onChange={(event) => {
+            const nextValue = event.target.value.trim()
+            onValueChange(nextValue === '' ? null : Number(nextValue))
+          }}
+        />
+      )
+    case 'select':
+      return (
+        <select
+          {...sharedProps}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) => onValueChange(event.target.value)}
+        >
+          <option value="">{field.placeholder ?? '请选择'}</option>
+          {(field.options ?? []).map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+      )
+    default:
+      return (
+        <input
+          {...sharedProps}
+          type="text"
+          placeholder={field.placeholder}
+          value={typeof value === 'string' ? value : ''}
+          onChange={(event) => onValueChange(event.target.value)}
+        />
+      )
+  }
 }
 
 export default function ShortVideoForm({
@@ -9,89 +91,25 @@ export default function ShortVideoForm({
   parameters,
   onChange,
 }: ShortVideoFormProps) {
-  const fields = config?.fields || []
-
-  const handleFieldChange = (fieldName: string, value: any) => {
-    onChange({
-      ...parameters,
-      [fieldName]: value,
-    })
-  }
+  const fields = config.fields ?? []
 
   if (fields.length === 0) {
-    return (
-      <div className="space-y-4">
-        <p className="text-sm text-gray-500">该模板暂无可配置参数</p>
-      </div>
-    )
+    return <p className="short-video-form-empty">该模板暂无可配置参数。</p>
   }
 
   return (
-    <div className="space-y-4">
-      {fields.map((field: any) => (
-        <div key={field.name} className="space-y-2">
-          <label htmlFor={field.name} className="text-sm font-medium text-gray-700">
+    <div className="short-video-form-grid">
+      {fields.map((field) => (
+        <label key={field.name} className={`short-video-form-field${field.type === 'textarea' ? ' is-full' : ''}`} htmlFor={field.name}>
+          <span>
             {field.label}
-            {field.required && <span className="text-red-500"> *</span>}
-          </label>
-
-          {field.type === 'text' && (
-            <input
-              id={field.name}
-              type="text"
-              placeholder={field.placeholder}
-              value={parameters[field.name] || ''}
-              onChange={(e) => handleFieldChange(field.name, e.target.value)}
-              required={field.required}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
+            {field.required ? <em> *</em> : null}
+          </span>
+          {renderField(field, parameters[field.name] ?? null, (nextValue) =>
+            onChange(updateParameters(parameters, field.name, nextValue)),
           )}
-
-          {field.type === 'number' && (
-            <input
-              id={field.name}
-              type="number"
-              placeholder={field.placeholder}
-              value={parameters[field.name] || ''}
-              onChange={(e) => handleFieldChange(field.name, parseFloat(e.target.value))}
-              min={field.min}
-              max={field.max}
-              required={field.required}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          )}
-
-          {field.type === 'textarea' && (
-            <textarea
-              id={field.name}
-              placeholder={field.placeholder}
-              value={parameters[field.name] || ''}
-              onChange={(e) => handleFieldChange(field.name, e.target.value)}
-              rows={4}
-              required={field.required}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          )}
-
-          {field.type === 'select' && (
-            <select
-              value={parameters[field.name] || ''}
-              onChange={(e) => handleFieldChange(field.name, e.target.value)}
-              className="w-full rounded border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              <option value="">{field.placeholder}</option>
-              {(field.options || []).map((option: any) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          )}
-
-          {field.description && (
-            <p className="text-xs text-gray-500">{field.description}</p>
-          )}
-        </div>
+          {field.description ? <small>{field.description}</small> : null}
+        </label>
       ))}
     </div>
   )

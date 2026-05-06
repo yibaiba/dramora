@@ -2,21 +2,17 @@ import { useCallback, useEffect, useState } from 'react'
 
 export type ThemeMode = 'dark' | 'light'
 
-const STORAGE_KEY = 'dramora.studio.themeMode'
+const STORAGE_KEY = 'dramora.studio.themeMode.v2'
+const LEGACY_STORAGE_KEY = 'dramora.studio.themeMode'
 
 function readInitialTheme(): ThemeMode {
   if (typeof window === 'undefined') return 'dark'
   try {
     const stored = window.localStorage.getItem(STORAGE_KEY)
     if (stored === 'dark' || stored === 'light') return stored
+    if (window.localStorage.getItem(LEGACY_STORAGE_KEY) === 'dark') return 'dark'
   } catch {
     // ignore storage failures
-  }
-  if (
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-color-scheme: light)').matches
-  ) {
-    return 'light'
   }
   return 'dark'
 }
@@ -37,6 +33,7 @@ export function useThemeMode() {
     applyTheme(mode)
     try {
       window.localStorage.setItem(STORAGE_KEY, mode)
+      window.localStorage.removeItem(LEGACY_STORAGE_KEY)
     } catch {
       // ignore storage failures
     }

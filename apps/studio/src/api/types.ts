@@ -19,6 +19,60 @@ export type GenerationJobStatus =
 export type AssetStatus = 'draft' | 'generating' | 'ready' | 'failed' | 'archived'
 export type ApprovalGateStatus = 'pending' | 'approved' | 'rejected' | 'changes_requested' | 'canceled'
 
+export type AgentStreamEventType =
+  | 'REASONING'
+  | 'CONTENT'
+  | 'TOOL_CALL'
+  | 'TOOL_FINISHED'
+  | 'DONE'
+  | 'ERROR'
+  | 'CANCELLED'
+
+export type AgentStreamToolCall = {
+  id: string
+  name: string
+  arguments: string
+}
+
+export type AgentStreamEvent = {
+  type: AgentStreamEventType
+  run_id?: string
+  sequence?: number
+  replay?: boolean
+  occurred_at?: string
+  role?: string
+  content?: string
+  output?: string
+  highlights?: string[]
+  token_count?: number
+  duration_ms?: number
+  error?: string
+  tool_calls?: AgentStreamToolCall[]
+  tool_call_id?: string
+  tool_name?: string
+  tool_status?: string
+  tool_result?: string
+  agent_name?: string
+  parent_tool_call_id?: string
+}
+
+export type AgentRunStatus = 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+export type AgentRunStatusResponse = {
+  run_id: string
+  role: string
+  episode_id?: string
+  status: AgentRunStatus
+  latest_sequence: number
+  started_at: string
+  completed_at?: string
+  output?: string
+  highlights?: string[]
+  token_count?: number
+  duration_ms?: number
+  error?: string
+}
+
 export type AuthUser = {
   id: string
   email: string
@@ -35,6 +89,8 @@ export type AuthSession = {
   refresh_expires_at?: string
   current_session_id?: string
 }
+
+export type OrganizationRole = 'owner' | 'admin' | 'editor' | 'viewer'
 
 export type Session = {
   id: string
@@ -60,7 +116,7 @@ export type OrganizationInvitation = {
   id: string
   organization_id: string
   email: string
-  role: 'owner' | 'admin' | 'editor' | 'viewer'
+  role: OrganizationRole
   token: string
   status: 'pending' | 'accepted' | 'revoked'
   invited_by_user_id?: string
@@ -72,7 +128,57 @@ export type OrganizationInvitation = {
 
 export type CreateInvitationRequest = {
   email: string
-  role?: 'owner' | 'admin' | 'editor' | 'viewer'
+  role?: OrganizationRole
+}
+
+export type OrganizationMember = {
+  user_id: string
+  organization_id: string
+  email: string
+  display_name: string
+  role: OrganizationRole
+  joined_at: string
+  last_activity_at: string
+}
+
+export type UpdateOrganizationMemberRoleRequest = {
+  role: OrganizationRole
+}
+
+export type ChangePasswordRequest = {
+  current_password: string
+  new_password: string
+}
+
+export type APIKeyScope = 'read-only' | 'write' | 'admin'
+
+export type UserAPIKey = {
+  id: string
+  name: string
+  token_preview: string
+  scope: APIKeyScope
+  is_active: boolean
+  expires_at?: string | null
+  last_used_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type CreateUserAPIKeyRequest = {
+  name: string
+  scope: APIKeyScope
+  expires_at?: string | null
+}
+
+export type UpdateUserAPIKeyRequest = CreateUserAPIKeyRequest
+
+export type ToggleUserAPIKeyRequest = {
+  is_active: boolean
+}
+
+export type CreatedUserAPIKey = {
+  key: UserAPIKey
+  token: string
 }
 
 export type InvitationAuditEvent = {
@@ -83,7 +189,7 @@ export type InvitationAuditEvent = {
   actor_user_id?: string
   actor_email?: string
   email: string
-  role: 'owner' | 'admin' | 'editor' | 'viewer'
+  role: OrganizationRole
   note?: string
   created_at: string
 }
@@ -755,7 +861,7 @@ export type Notification = {
   kind: NotificationKind
   title: string
   body: string
-  metadata?: Record<string, any>
+  metadata?: Record<string, unknown>
   read_at?: string
   created_at: string
 }
@@ -935,13 +1041,37 @@ export type GenerateRedemptionCodesResponse = {
 // Short Video Types
 export type ShortVideoTemplateStatus = 'product-focus' | 'promotion' | 'usage-scenario'
 
+export type ShortVideoParameterValue = string | number | boolean | null
+export type ShortVideoParameters = Record<string, ShortVideoParameterValue>
+
+export type ShortVideoTemplateFieldOption = {
+  label: string
+  value: string
+}
+
+export type ShortVideoTemplateField = {
+  name: string
+  label: string
+  type: 'text' | 'number' | 'textarea' | 'select'
+  placeholder?: string
+  required?: boolean
+  description?: string
+  min?: number
+  max?: number
+  options?: ShortVideoTemplateFieldOption[]
+}
+
+export type ShortVideoTemplateConfig = {
+  fields?: ShortVideoTemplateField[]
+}
+
 export type ShortVideoTemplate = {
   id: string
   organizationId: string
   name: string
   description: string
   category: ShortVideoTemplateStatus
-  config: Record<string, any>
+  config: ShortVideoTemplateConfig
   createdAt: string
   updatedAt: string
 }
@@ -959,7 +1089,7 @@ export type ShortVideo = {
   id: string
   organizationId: string
   templateId: string
-  parameters: Record<string, any>
+  parameters: ShortVideoParameters
   status: ShortVideoStatus
   heyGenAvatarId?: HeyGenAvatarId
   heyGenVideoId?: string
@@ -974,7 +1104,7 @@ export type CreateShortVideoTemplateRequest = {
   name: string
   description: string
   category: ShortVideoTemplateStatus
-  config: Record<string, any>
+  config: ShortVideoTemplateConfig
 }
 
 export type HeyGenAvatarId = 'avatar_001' | 'avatar_002' | 'avatar_003'
@@ -1009,7 +1139,7 @@ export const HEYGEN_AVATARS: Record<HeyGenAvatarId, HeyGenAvatar> = {
 
 export type CreateShortVideoRequest = {
   templateId: string
-  parameters: Record<string, any>
+  parameters: ShortVideoParameters
   heyGenAvatarId?: HeyGenAvatarId // Optional, defaults to avatar_001
 }
 
@@ -1036,7 +1166,7 @@ export type CreateBatchSubmissionRequest = {
   videoIds: string[]
   concurrencyLimit: number // 1-8
   retryLimit: number // 0-5
-  parameters?: Record<string, any>
+  parameters?: Record<string, unknown>
 }
 
 export type ListBatchSubmissionsResponse = {

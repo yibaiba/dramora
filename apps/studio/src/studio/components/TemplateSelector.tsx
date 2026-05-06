@@ -1,9 +1,17 @@
+import { Film } from 'lucide-react'
 import type { ShortVideoTemplate } from '../../api/types'
+import { StatePlaceholder } from './StatePlaceholder'
 
 interface TemplateSelectorProps {
   templates: ShortVideoTemplate[]
   selectedTemplate: ShortVideoTemplate | null
   onSelectTemplate: (template: ShortVideoTemplate) => void
+}
+
+const CATEGORY_LABELS: Record<ShortVideoTemplate['category'], string> = {
+  'product-focus': '产品主推',
+  promotion: '促销转化',
+  'usage-scenario': '场景种草',
 }
 
 export default function TemplateSelector({
@@ -13,35 +21,35 @@ export default function TemplateSelector({
 }: TemplateSelectorProps) {
   if (templates.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 p-6 text-center text-gray-500">
-        暂无可用模板
-      </div>
+      <StatePlaceholder
+        tone="empty"
+        title="暂无可用模板"
+        description="先补充模板配置，再开始批量生成电商短视频。"
+        icon={Film}
+      />
     )
   }
 
   return (
-    <div className="space-y-3">
-      {templates.map((template) => (
-        <div
-          key={template.id}
-          className={`rounded-lg border-2 p-4 cursor-pointer transition-all ${
-            selectedTemplate?.id === template.id
-              ? 'border-blue-500 bg-blue-50'
-              : 'border-gray-200 hover:border-gray-300'
-          }`}
-          onClick={() => onSelectTemplate(template)}
-        >
-          <div className="space-y-2">
-            <h3 className="font-semibold text-gray-900">{template.name}</h3>
-            <p className="text-sm text-gray-600 line-clamp-2">
-              {template.description}
-            </p>
-            <div className="inline-block rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">
-              {template.category}
+    <div className="short-video-template-list" role="list" aria-label="短视频模板列表">
+      {templates.map((template) => {
+        const selected = selectedTemplate?.id === template.id
+        return (
+          <button
+            key={template.id}
+            type="button"
+            className={`short-video-template-card${selected ? ' is-selected' : ''}`}
+            onClick={() => onSelectTemplate(template)}
+          >
+            <div className="short-video-template-topline">
+              <span className="short-video-pill">{CATEGORY_LABELS[template.category]}</span>
+              <span className="short-video-template-meta">{new Date(template.updatedAt).toLocaleDateString()}</span>
             </div>
-          </div>
-        </div>
-      ))}
+            <strong>{template.name}</strong>
+            <p>{template.description}</p>
+          </button>
+        )
+      })}
     </div>
   )
 }
