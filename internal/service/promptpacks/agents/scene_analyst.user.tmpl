@@ -1,0 +1,13 @@
+从以下故事中识别场景：
+
+{{ .SourceText }}{{ if .OutlinePlannerOutput }}
+
+大纲：
+{{ .OutlinePlannerOutput }}{{ end }}
+
+输出 JSON：
+{
+  "scenes": [
+    {"code": "S01", "name": "名称", "description": "描述"}
+  ]
+}

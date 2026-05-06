@@ -15,6 +15,7 @@ type MemoryIdentityRepository struct {
 	identities    map[string]AuthIdentity
 	emailIndex    map[string]string
 	organizations map[string]string // orgID -> name
+	userAPIKeys   map[string]map[string]domain.UserAPIKey
 	invitations   map[string]domain.OrganizationInvitation
 	tokenIndex    map[string]string // token -> invitationID
 	auditEvents   []domain.InvitationAuditEvent
@@ -25,6 +26,7 @@ func NewMemoryIdentityRepository() *MemoryIdentityRepository {
 		identities:    make(map[string]AuthIdentity),
 		emailIndex:    make(map[string]string),
 		organizations: make(map[string]string),
+		userAPIKeys:   make(map[string]map[string]domain.UserAPIKey),
 		invitations:   make(map[string]domain.OrganizationInvitation),
 		tokenIndex:    make(map[string]string),
 	}
@@ -80,6 +82,208 @@ func (r *MemoryIdentityRepository) GetAuthIdentityByUserID(_ context.Context, us
 		return AuthIdentity{}, domain.ErrNotFound
 	}
 	return identity, nil
+}
+
+func (r *MemoryIdentityRepository) UpdateUserPasswordHash(
+	_ context.Context,
+	userID, passwordHash string,
+	updatedAt time.Time,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	identity, ok := r.identities[userID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	identity.PasswordHash = passwordHash
+	identity.User.UpdatedAt = updatedAt.UTC()
+	r.identities[userID] = identity
+	return nil
+}
+
+func (r *MemoryIdentityRepository) ListUserAPIKeys(_ context.Context, userID string) ([]domain.UserAPIKey, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	keys := r.userAPIKeys[userID]
+	out := make([]domain.UserAPIKey, 0, len(keys))
+	for _, item := range keys {
+		out = append(out, cloneUserAPIKey(item))
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
+	return out, nil
+}
+
+func (r *MemoryIdentityRepository) CreateUserAPIKey(
+	_ context.Context,
+	params CreateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.identities[params.UserID]; !ok {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	if _, ok := r.userAPIKeys[params.UserID]; !ok {
+		r.userAPIKeys[params.UserID] = make(map[string]domain.UserAPIKey)
+	}
+	if _, exists := r.userAPIKeys[params.UserID][params.KeyID]; exists {
+		return domain.UserAPIKey{}, domain.ErrInvalidInput
+	}
+	item := domain.UserAPIKey{
+		ID:           params.KeyID,
+		UserID:       params.UserID,
+		Name:         params.Name,
+		TokenPreview: params.TokenPreview,
+		Scope:        params.Scope,
+		IsActive:     params.IsActive,
+		ExpiresAt:    cloneTimePtr(params.ExpiresAt),
+		CreatedAt:    params.CreatedAt.UTC(),
+		UpdatedAt:    params.UpdatedAt.UTC(),
+	}
+	r.userAPIKeys[params.UserID][params.KeyID] = item
+	return cloneUserAPIKey(item), nil
+}
+
+func (r *MemoryIdentityRepository) UpdateUserAPIKey(
+	_ context.Context,
+	params UpdateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	keys, ok := r.userAPIKeys[params.UserID]
+	if !ok {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	item, ok := keys[params.KeyID]
+	if !ok {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	item.Name = params.Name
+	item.Scope = params.Scope
+	item.ExpiresAt = cloneTimePtr(params.ExpiresAt)
+	item.UpdatedAt = params.UpdatedAt.UTC()
+	keys[params.KeyID] = item
+	return cloneUserAPIKey(item), nil
+}
+
+func (r *MemoryIdentityRepository) SetUserAPIKeyActive(
+	_ context.Context,
+	userID, keyID string,
+	isActive bool,
+	updatedAt time.Time,
+) (domain.UserAPIKey, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	keys, ok := r.userAPIKeys[userID]
+	if !ok {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	item, ok := keys[keyID]
+	if !ok {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	item.IsActive = isActive
+	item.UpdatedAt = updatedAt.UTC()
+	keys[keyID] = item
+	return cloneUserAPIKey(item), nil
+}
+
+func (r *MemoryIdentityRepository) DeleteUserAPIKey(_ context.Context, userID, keyID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	keys, ok := r.userAPIKeys[userID]
+	if !ok {
+		return domain.ErrNotFound
+	}
+	if _, exists := keys[keyID]; !exists {
+		return domain.ErrNotFound
+	}
+	delete(keys, keyID)
+	return nil
+}
+
+func (r *MemoryIdentityRepository) ListOrganizationMembers(
+	_ context.Context,
+	organizationID string,
+) ([]domain.OrganizationMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]domain.OrganizationMember, 0)
+	for _, identity := range r.identities {
+		if identity.OrganizationID != organizationID {
+			continue
+		}
+		out = append(out, domain.OrganizationMember{
+			OrganizationID: identity.OrganizationID,
+			UserID:         identity.User.ID,
+			Email:          identity.User.Email,
+			DisplayName:    identity.User.DisplayName,
+			Role:           identity.Role,
+			JoinedAt:       identity.User.CreatedAt.UTC(),
+			LastActivityAt: identity.User.UpdatedAt.UTC(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		left := organizationRoleRank(out[i].Role)
+		right := organizationRoleRank(out[j].Role)
+		if left != right {
+			return left < right
+		}
+		return strings.ToLower(out[i].Email) < strings.ToLower(out[j].Email)
+	})
+	return out, nil
+}
+
+func (r *MemoryIdentityRepository) GetOrganizationMember(
+	_ context.Context,
+	organizationID, userID string,
+) (domain.OrganizationMember, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	identity, ok := r.identities[userID]
+	if !ok || identity.OrganizationID != organizationID {
+		return domain.OrganizationMember{}, domain.ErrNotFound
+	}
+	return domain.OrganizationMember{
+		OrganizationID: identity.OrganizationID,
+		UserID:         identity.User.ID,
+		Email:          identity.User.Email,
+		DisplayName:    identity.User.DisplayName,
+		Role:           identity.Role,
+		JoinedAt:       identity.User.CreatedAt.UTC(),
+		LastActivityAt: identity.User.UpdatedAt.UTC(),
+	}, nil
+}
+
+func (r *MemoryIdentityRepository) UpdateOrganizationMemberRole(
+	_ context.Context,
+	organizationID, userID, role string,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	identity, ok := r.identities[userID]
+	if !ok || identity.OrganizationID != organizationID {
+		return domain.ErrNotFound
+	}
+	identity.Role = role
+	r.identities[userID] = identity
+	return nil
+}
+
+func (r *MemoryIdentityRepository) RemoveOrganizationMember(
+	_ context.Context,
+	organizationID, userID string,
+) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	identity, ok := r.identities[userID]
+	if !ok || identity.OrganizationID != organizationID {
+		return domain.ErrNotFound
+	}
+	delete(r.identities, userID)
+	delete(r.emailIndex, strings.ToLower(strings.TrimSpace(identity.User.Email)))
+	return nil
 }
 
 func (r *MemoryIdentityRepository) CreateOrganization(_ context.Context, params CreateOrganizationParams) error {
@@ -242,4 +446,31 @@ func (r *MemoryIdentityRepository) ListInvitationAuditEvents(
 		end = len(matched)
 	}
 	return InvitationAuditPage{Events: append([]domain.InvitationAuditEvent(nil), matched[offset:end]...), HasMore: hasMore}, nil
+}
+
+func organizationRoleRank(role string) int {
+	switch role {
+	case "owner":
+		return 0
+	case "admin":
+		return 1
+	case "editor":
+		return 2
+	default:
+		return 3
+	}
+}
+
+func cloneUserAPIKey(item domain.UserAPIKey) domain.UserAPIKey {
+	item.ExpiresAt = cloneTimePtr(item.ExpiresAt)
+	item.LastUsedAt = cloneTimePtr(item.LastUsedAt)
+	return item
+}
+
+func cloneTimePtr(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	cloned := value.UTC()
+	return &cloned
 }

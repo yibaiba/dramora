@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/yibaiba/dramora/internal/jobs"
+	"github.com/yibaiba/dramora/internal/realtime"
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
@@ -70,6 +71,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/auth/me", api.currentSession)
 		r.Get("/auth/sessions", api.listSessions)
 		r.Post("/auth/sessions/{sessionId}:revoke", api.revokeSession)
+		r.Post("/account:change-password", api.changeAccountPassword)
+		r.Get("/account/api-keys", api.listAccountAPIKeys)
+		r.Post("/account/api-keys", api.createAccountAPIKey)
+		r.Post("/account/api-keys/{keyId}:update", api.updateAccountAPIKey)
+		r.Post("/account/api-keys/{keyId}:toggle", api.toggleAccountAPIKey)
+		r.Post("/account/api-keys/{keyId}:delete", api.deleteAccountAPIKey)
 		r.Get("/workspaces", api.listWorkspaces)
 		r.Get("/projects", api.listProjects)
 		r.Post("/projects", api.createProject)
@@ -121,6 +128,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/episodes/{episodeId}/timeline", api.getEpisodeTimeline)
 		r.Get("/events/stream", streamEventsHandler)
 		r.Post("/agents/stream", api.streamAgentRun)
+		r.Get("/agent-runs/{runId}", api.getAgentRun)
+		r.Get("/agent-runs/{runId}/stream", api.reconnectAgentRunStream)
 		r.Get("/wallet", api.getWallet)
 		r.Get("/wallet/transactions", api.listWalletTransactions)
 		r.Post("/wallet:charge", api.handleChargeWallet)
@@ -157,6 +166,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			admin.Post("/admin/billing-reports:generate", api.generateAdminBillingReport)
 			admin.Get("/admin/billing-reports/{reportID}", api.getAdminBillingReportByID)
 			admin.Get("/admin/billing-reports/{reportID}/summary", api.getAdminBillingReportSummary)
+			admin.Get("/organizations/members", api.listOrganizationMembers)
+			admin.Post("/organizations/members/{userId}/role", api.updateOrganizationMemberRole)
+			admin.Post("/organizations/members/{userId}:remove", api.removeOrganizationMember)
 			admin.Post("/organizations/invitations", api.createInvitation)
 			admin.Get("/organizations/invitations", api.listInvitations)
 			admin.Get("/organizations/invitations/audit", api.listInvitationAudit)
@@ -196,6 +208,7 @@ type api struct {
 	productionService      *service.ProductionService
 	providerService        *service.ProviderService
 	agentService           *service.AgentService
+	agentRunManager        *realtime.AgentRunManager
 	walletService          *service.WalletService
 	notificationService    *service.NotificationService
 	paymentService         *service.PaymentService
@@ -217,6 +230,7 @@ func newAPI(cfg RouterConfig) *api {
 		productionService:      cfg.ProductionService,
 		providerService:        cfg.ProviderService,
 		agentService:           cfg.AgentService,
+		agentRunManager:        realtime.NewAgentRunManager(),
 		walletService:          cfg.WalletService,
 		notificationService:    cfg.NotificationService,
 		paymentService:         cfg.PaymentService,

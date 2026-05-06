@@ -10,6 +10,50 @@ INSERT INTO organization_members (organization_id, user_id, role)
 VALUES ($1::uuid, $2::uuid, $3)
 `
 
+const organizationMemberSelect = `
+SELECT
+    organization_members.organization_id::text,
+    users.id::text,
+    users.email,
+    users.display_name,
+    organization_members.role,
+    organization_members.created_at,
+    users.updated_at
+FROM organization_members
+JOIN users ON users.id = organization_members.user_id
+`
+
+const listOrganizationMembersSQL = organizationMemberSelect + `
+WHERE organization_members.organization_id = $1::uuid
+ORDER BY
+    CASE organization_members.role
+        WHEN 'owner' THEN 0
+        WHEN 'admin' THEN 1
+        WHEN 'editor' THEN 2
+        ELSE 3
+    END,
+    lower(users.email) ASC
+`
+
+const getOrganizationMemberSQL = organizationMemberSelect + `
+WHERE organization_members.organization_id = $1::uuid
+  AND users.id = $2::uuid
+LIMIT 1
+`
+
+const updateOrganizationMemberRoleSQL = `
+UPDATE organization_members
+SET role = $3
+WHERE organization_id = $1::uuid
+  AND user_id = $2::uuid
+`
+
+const removeOrganizationMemberSQL = `
+DELETE FROM organization_members
+WHERE organization_id = $1::uuid
+  AND user_id = $2::uuid
+`
+
 const authIdentitySelect = `
 SELECT
     users.id::text,
@@ -34,6 +78,100 @@ const getAuthIdentityByUserIDSQL = authIdentitySelect + `
 WHERE users.id = $1::uuid
 ORDER BY organization_members.created_at ASC
 LIMIT 1
+`
+
+const updateUserPasswordHashSQL = `
+UPDATE users
+SET password_hash = $2,
+    updated_at = $3
+WHERE id = $1::uuid
+`
+
+const userAPIKeySelect = `
+SELECT
+    id::text,
+    user_id::text,
+    name,
+    token_preview,
+    scope,
+    is_active,
+    expires_at,
+    last_used_at,
+    created_at,
+    updated_at
+FROM user_api_keys
+`
+
+const listUserAPIKeysSQL = userAPIKeySelect + `
+WHERE user_id = $1::uuid
+ORDER BY created_at DESC
+`
+
+const createUserAPIKeySQL = `
+INSERT INTO user_api_keys (
+    id, user_id, name, token_hash, token_preview,
+    scope, is_active, expires_at, created_at, updated_at
+) VALUES (
+    $1::uuid, $2::uuid, $3, $4, $5,
+    $6, $7, $8, $9, $10
+)
+RETURNING
+    id::text,
+    user_id::text,
+    name,
+    token_preview,
+    scope,
+    is_active,
+    expires_at,
+    last_used_at,
+    created_at,
+    updated_at
+`
+
+const updateUserAPIKeySQL = `
+UPDATE user_api_keys
+SET name = $3,
+    scope = $4,
+    expires_at = $5,
+    updated_at = $6
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
+RETURNING
+    id::text,
+    user_id::text,
+    name,
+    token_preview,
+    scope,
+    is_active,
+    expires_at,
+    last_used_at,
+    created_at,
+    updated_at
+`
+
+const setUserAPIKeyActiveSQL = `
+UPDATE user_api_keys
+SET is_active = $3,
+    updated_at = $4
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
+RETURNING
+    id::text,
+    user_id::text,
+    name,
+    token_preview,
+    scope,
+    is_active,
+    expires_at,
+    last_used_at,
+    created_at,
+    updated_at
+`
+
+const deleteUserAPIKeySQL = `
+DELETE FROM user_api_keys
+WHERE id = $1::uuid
+  AND user_id = $2::uuid
 `
 
 const createOrganizationSQL = `

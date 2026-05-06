@@ -3,6 +3,7 @@ package httpapi
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/yibaiba/dramora/internal/domain"
+	"github.com/yibaiba/dramora/internal/realtime"
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/service"
 )
@@ -94,6 +96,10 @@ func TestStreamAgentRunEmitsDeltaAndDone(t *testing.T) {
 	if got := rec.Header().Get("Content-Type"); got != "text/event-stream" {
 		t.Fatalf("expected text/event-stream, got %q", got)
 	}
+	runID := rec.Header().Get("X-Agent-Run-ID")
+	if runID == "" {
+		t.Fatal("expected X-Agent-Run-ID header")
+	}
 
 	var events []string
 	scanner := bufio.NewScanner(rec.Body)
@@ -107,12 +113,15 @@ func TestStreamAgentRunEmitsDeltaAndDone(t *testing.T) {
 
 	deltaCount := 0
 	hasDone := false
+	agentEventCount := 0
 	for _, e := range events {
 		switch e {
 		case "delta":
 			deltaCount++
 		case "done":
 			hasDone = true
+		case "agent_event":
+			agentEventCount++
 		}
 	}
 	if deltaCount < 2 {
@@ -120,6 +129,46 @@ func TestStreamAgentRunEmitsDeltaAndDone(t *testing.T) {
 	}
 	if !hasDone {
 		t.Fatalf("expected done event, got %v", events)
+	}
+	if agentEventCount < 3 {
+		t.Fatalf("expected >=3 agent_event frames, got %d (%v)", agentEventCount, events)
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/v1/agent-runs/"+runID, nil)
+	statusRec := httptest.NewRecorder()
+	authenticatedRouter.ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", statusRec.Code, statusRec.Body.String())
+	}
+	var snapshot map[string]any
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &snapshot); err != nil {
+		t.Fatalf("failed to decode status response: %v", err)
+	}
+	if snapshot["run_id"] != runID {
+		t.Fatalf("expected run_id %q, got %#v", runID, snapshot["run_id"])
+	}
+	if snapshot["status"] != string(realtime.AgentRunStatusSucceeded) {
+		t.Fatalf("expected succeeded status, got %#v", snapshot["status"])
+	}
+	if snapshot["latest_sequence"] != float64(3) {
+		t.Fatalf("expected latest_sequence 3, got %#v", snapshot["latest_sequence"])
+	}
+
+	reconnectReq := httptest.NewRequest(http.MethodGet, "/api/v1/agent-runs/"+runID+"/stream?after=1", nil)
+	reconnectRec := httptest.NewRecorder()
+	authenticatedRouter.ServeHTTP(reconnectRec, reconnectReq)
+	if reconnectRec.Code != http.StatusOK {
+		t.Fatalf("expected reconnect 200, got %d: %s", reconnectRec.Code, reconnectRec.Body.String())
+	}
+	if reconnectRec.Header().Get("X-Agent-Run-ID") != runID {
+		t.Fatalf("expected reconnect header %q, got %q", runID, reconnectRec.Header().Get("X-Agent-Run-ID"))
+	}
+	reconnectBody := reconnectRec.Body.String()
+	if !strings.Contains(reconnectBody, `"replay":true`) {
+		t.Fatalf("expected replay frames, got %s", reconnectBody)
+	}
+	if !strings.Contains(reconnectBody, `"sequence":2`) || !strings.Contains(reconnectBody, `"sequence":3`) {
+		t.Fatalf("expected replayed sequences 2 and 3, got %s", reconnectBody)
 	}
 }
 
@@ -146,6 +195,7 @@ func TestStreamAgentRunRejectsInvalidRequests(t *testing.T) {
 	}{
 		{"missing role", `{"source_text":"x"}`},
 		{"missing source", `{"role":"story_analyst"}`},
+		{"invalid role", `{"role":"unknown_role","source_text":"x"}`},
 		{"invalid json", `{not json`},
 	}
 	for _, tc := range cases {

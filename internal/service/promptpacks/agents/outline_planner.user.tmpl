@@ -1,0 +1,16 @@
+将以下故事拆分为四个情节点：
+
+{{ .SourceText }}{{ if .StoryAnalystOutput }}
+
+故事分析结果：
+{{ .StoryAnalystOutput }}{{ end }}
+
+输出 JSON：
+{
+  "beats": [
+    {"code": "B01", "title": "开端", "summary": "...", "visual_goal": "..."},
+    {"code": "B02", "title": "发展", "summary": "...", "visual_goal": "..."},
+    {"code": "B03", "title": "转折", "summary": "...", "visual_goal": "..."},
+    {"code": "B04", "title": "高潮", "summary": "...", "visual_goal": "..."}
+  ]
+}

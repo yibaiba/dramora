@@ -199,6 +199,148 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/APIErrorEnvelope"
+  /api/v1/account:change-password:
+    post:
+      summary: Change the authenticated user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "204":
+          description: Password updated successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Current password incorrect or auth missing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
+  /api/v1/account/api-keys:
+    get:
+      summary: List the authenticated user's personal API keys
+      responses:
+        "200":
+          description: Personal API key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_keys:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/UserAPIKey"
+    post:
+      summary: Create a new personal API key
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertUserAPIKeyRequest"
+      responses:
+        "201":
+          description: API key created; token is only returned once
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_key:
+                    $ref: "#/components/schemas/CreatedUserAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+  "/api/v1/account/api-keys/{keyId}:update":
+    post:
+      summary: Update a personal API key's metadata
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertUserAPIKeyRequest"
+      responses:
+        "200":
+          description: Updated API key
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_key:
+                    $ref: "#/components/schemas/UserAPIKey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
+  "/api/v1/account/api-keys/{keyId}:toggle":
+    post:
+      summary: Enable or disable a personal API key
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_active
+              properties:
+                is_active:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated API key state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  api_key:
+                    $ref: "#/components/schemas/UserAPIKey"
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
+  "/api/v1/account/api-keys/{keyId}:delete":
+    post:
+      summary: Delete a personal API key
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: API key deleted
+        "404":
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIErrorEnvelope"
   /api/v1/organizations/invitations:
     get:
       summary: List invitations for the current organization (owner/admin only)
@@ -241,6 +383,90 @@ paths:
               schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
         "403":
           description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  /api/v1/organizations/members:
+    get:
+      summary: List organization members for the current organization (owner/admin only)
+      responses:
+        "200":
+          description: Member list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  members:
+                    type: array
+                    items: { $ref: "#/components/schemas/OrganizationMember" }
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  "/api/v1/organizations/members/{userId}/role":
+    post:
+      summary: Update an organization member role (owner/admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateOrganizationMemberRoleRequest" }
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  member: { $ref: "#/components/schemas/OrganizationMember" }
+        "400":
+          description: Invalid role or protected last-owner action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "404":
+          description: Member not found in current organization
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+  "/api/v1/organizations/members/{userId}:remove":
+    post:
+      summary: Remove an organization member (owner/admin only)
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Member removed
+        "400":
+          description: Invalid request or protected last-owner action
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "403":
+          description: Caller lacks owner/admin role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
+        "404":
+          description: Member not found in current organization
           content:
             application/json:
               schema: { $ref: "#/components/schemas/APIErrorEnvelope" }
@@ -1444,8 +1670,15 @@ paths:
         Body must include `role` and `source_text`. Optional `context` map injects
         prior agent outputs (keyed by role) so dependent agents (e.g. screenwriter)
         can run without spinning up the full workflow. The response is an
-        `text/event-stream` with frames `event: delta` (incremental tokens),
-        `event: done` (final result), or `event: error`.
+        `text/event-stream` with canonical frames `event: agent_event`, where the
+        JSON payload `type` is one of `REASONING`, `CONTENT`, `TOOL_CALL`,
+        `TOOL_FINISHED`, `DONE`, `ERROR`, or `CANCELLED`. Canonical event payloads
+        also include `run_id`, monotonic `sequence`, optional `replay`, and
+        `occurred_at` timestamps. The current single-agent
+        implementation emits `CONTENT`, `DONE`, and `ERROR`. Legacy frames
+        `event: delta`, `event: done`, and `event: error` are still emitted for
+        backward compatibility. Successful responses include `X-Agent-Run-ID`
+        so clients can query status or reconnect the stream later.
       requestBody:
         required: true
         content:
@@ -1466,6 +1699,11 @@ paths:
       responses:
         "200":
           description: SSE stream of agent tokens followed by a final done frame
+          headers:
+            X-Agent-Run-ID:
+              schema:
+                type: string
+              description: Stable in-memory run id for reconnect/status requests.
           content:
             text/event-stream:
               schema:
@@ -1474,6 +1712,86 @@ paths:
           description: Invalid request body
         "503":
           description: Agent service is not configured
+  /api/v1/agent-runs/{runId}:
+    get:
+      summary: Get the status snapshot for a previously started agent stream run
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent run status snapshot
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                  role:
+                    type: string
+                  episode_id:
+                    type: string
+                  status:
+                    type: string
+                    enum: [running, succeeded, failed, cancelled]
+                  latest_sequence:
+                    type: integer
+                  started_at:
+                    type: string
+                    format: date-time
+                  completed_at:
+                    type: string
+                    format: date-time
+                  output:
+                    type: string
+                  highlights:
+                    type: array
+                    items:
+                      type: string
+                  token_count:
+                    type: integer
+                  duration_ms:
+                    type: integer
+                  error:
+                    type: string
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /api/v1/agent-runs/{runId}/stream:
+    get:
+      summary: Reconnect to an existing agent stream and replay events after a sequence
+      parameters:
+        - name: runId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: after
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 0
+          description: Replay only events with sequence strictly greater than this cursor.
+      responses:
+        "200":
+          description: Canonical `agent_event` SSE replay, followed by live events while the run is still active.
+          headers:
+            X-Agent-Run-ID:
+              schema:
+                type: string
+              description: Stable in-memory run id for reconnect/status requests.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /api/v1/admin/providers:
     get:
       summary: List configured provider endpoints
@@ -2213,6 +2531,24 @@ components:
         accepted_at: { type: string, format: date-time, nullable: true }
         accepted_by_user_id: { type: string, format: uuid, nullable: true }
         created_at: { type: string, format: date-time }
+    OrganizationMember:
+      type: object
+      required: [user_id, organization_id, email, display_name, role, joined_at, last_activity_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        organization_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        role: { type: string, enum: [owner, admin, editor, viewer] }
+        joined_at: { type: string, format: date-time }
+        last_activity_at: { type: string, format: date-time }
+    UpdateOrganizationMemberRoleRequest:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [owner, admin, editor, viewer]
     CreateInvitationRequest:
       type: object
       required: [email]
@@ -2345,6 +2681,78 @@ components:
           format: date-time
           nullable: true
         replaced_by_id:
+          type: string
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+        new_password:
+          type: string
+          minLength: 8
+    UpsertUserAPIKeyRequest:
+      type: object
+      required:
+        - name
+        - scope
+      properties:
+        name:
+          type: string
+        scope:
+          type: string
+          enum: [read-only, write, admin]
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    UserAPIKey:
+      type: object
+      required:
+        - id
+        - name
+        - token_preview
+        - scope
+        - is_active
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        token_preview:
+          type: string
+        scope:
+          type: string
+          enum: [read-only, write, admin]
+        is_active:
+          type: boolean
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreatedUserAPIKey:
+      type: object
+      required:
+        - key
+        - token
+      properties:
+        key:
+          $ref: "#/components/schemas/UserAPIKey"
+        token:
           type: string
     Project:
       type: object

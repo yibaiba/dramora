@@ -41,6 +41,21 @@ func TestLoadConfigParsesInlineWorkerOverride(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDefaultsBootstrapAdminForLocalEnv(t *testing.T) {
+	isolateConfigEnv(t)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if !cfg.BootstrapAdminEnabled {
+		t.Fatal("expected bootstrap admin enabled by default in local env")
+	}
+	if cfg.BootstrapAdminEmail != "admin@local.dev" {
+		t.Fatalf("expected default bootstrap admin email, got %q", cfg.BootstrapAdminEmail)
+	}
+}
+
 func TestLoadConfigRejectsInvalidInlineWorkerOverride(t *testing.T) {
 	isolateConfigEnv(t)
 	t.Setenv("MANMU_INLINE_WORKER", "sometimes")
@@ -53,6 +68,10 @@ func TestLoadConfigRejectsInvalidInlineWorkerOverride(t *testing.T) {
 func isolateConfigEnv(t *testing.T) {
 	t.Helper()
 	for _, key := range []string{
+		"MANMU_BOOTSTRAP_ADMIN",
+		"MANMU_BOOTSTRAP_ADMIN_DISPLAY_NAME",
+		"MANMU_BOOTSTRAP_ADMIN_EMAIL",
+		"MANMU_BOOTSTRAP_ADMIN_PASSWORD",
 		"MANMU_DATABASE_URL",
 		"MANMU_ENV",
 		"MANMU_HTTP_ADDR",

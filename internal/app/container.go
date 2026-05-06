@@ -152,6 +152,9 @@ func NewContainer(ctx context.Context, cfg Config, logger *slog.Logger) (*Contai
 	}
 	authService := service.NewAuthService(identityRepo, cfg.JWTSecret, notificationSvc)
 	authService.SetRefreshTokenRepository(refreshRepo)
+	if err := ensureLocalBootstrapAdmin(ctx, cfg, logger, identityRepo, authService); err != nil {
+		return nil, err
+	}
 
 	walletSvc := service.NewWalletService(walletRepo, notificationSvc)
 	walletSvc.SetPendingBillingRepository(pendingBillingRepo)

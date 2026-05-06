@@ -1,0 +1,17 @@
+为以下剧集规划视觉连续性和镜头路线：
+
+{{ .SourceText }}{{ if .ScreenwriterOutput }}
+
+编剧脚本：
+{{ .ScreenwriterOutput }}{{ end }}
+
+输出 JSON：
+{
+  "visual_plan": {
+    "continuity_notes": ["一致性要点1", "一致性要点2"],
+    "key_frames": [
+      {"scene": "SC01", "shot": "关键帧描述", "mood": "情绪基调"}
+    ],
+    "transition_notes": "场景转场建议"
+  }
+}

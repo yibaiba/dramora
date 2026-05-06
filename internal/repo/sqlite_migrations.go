@@ -412,6 +412,23 @@ var sqliteMigrations = []string{
 	`CREATE INDEX IF NOT EXISTS idx_auth_refresh_tokens_user_active
 		ON auth_refresh_tokens (user_id, revoked_at)`,
 
+	// AccountSettingsPage: user API keys（仅创建时显示原始 key，库里仅保存 hash + preview）。
+	`CREATE TABLE IF NOT EXISTS user_api_keys (
+		id TEXT PRIMARY KEY,
+		user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name TEXT NOT NULL,
+		token_hash TEXT NOT NULL UNIQUE,
+		token_preview TEXT NOT NULL,
+		scope TEXT NOT NULL,
+		is_active INTEGER NOT NULL DEFAULT 1,
+		expires_at TEXT,
+		last_used_at TEXT,
+		created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+		updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+	)`,
+	`CREATE INDEX IF NOT EXISTS idx_user_api_keys_user_created
+		ON user_api_keys (user_id, created_at DESC)`,
+
 	// PR8: 邀请审计事件 — 记录 created/accepted/revoked/resent 关键动作。
 	`CREATE TABLE IF NOT EXISTS organization_invitation_events (
 		id TEXT PRIMARY KEY,

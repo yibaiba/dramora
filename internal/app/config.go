@@ -11,16 +11,20 @@ import (
 const Version = "dev"
 
 type Config struct {
-	Env               string
-	HTTPAddr          string
-	ReadHeaderTimeout time.Duration
-	ShutdownTimeout   time.Duration
-	DatabaseURL       string
-	DataDir           string
-	MediaDir          string
-	JWTSecret         string
-	InlineWorker      bool
-	WorkerQueues      []string
+	Env                       string
+	HTTPAddr                  string
+	ReadHeaderTimeout         time.Duration
+	ShutdownTimeout           time.Duration
+	DatabaseURL               string
+	DataDir                   string
+	MediaDir                  string
+	JWTSecret                 string
+	InlineWorker              bool
+	WorkerQueues              []string
+	BootstrapAdminEnabled     bool
+	BootstrapAdminEmail       string
+	BootstrapAdminPassword    string
+	BootstrapAdminDisplayName string
 	// Payment gateway configuration
 	PaymentProvider     string // "stripe" (default) / "alipay" / "wechat"
 	StripeSecretKey     string
@@ -47,18 +51,26 @@ func LoadConfig() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	bootstrapAdminEnabled, err := envBool("MANMU_BOOTSTRAP_ADMIN", env == "local")
+	if err != nil {
+		return Config{}, err
+	}
 
 	return Config{
-		Env:               env,
-		HTTPAddr:          envString("MANMU_HTTP_ADDR", ":8080"),
-		ReadHeaderTimeout: readHeaderTimeout,
-		ShutdownTimeout:   shutdownTimeout,
-		DatabaseURL:       os.Getenv("MANMU_DATABASE_URL"),
-		DataDir:           envString("MANMU_DATA_DIR", defaultDataDir()),
-		MediaDir:          envString("MANMU_MEDIA_DIR", ""),
-		JWTSecret:         envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
-		InlineWorker:      inlineWorker,
-		WorkerQueues:      envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
+		Env:                       env,
+		HTTPAddr:                  envString("MANMU_HTTP_ADDR", ":8080"),
+		ReadHeaderTimeout:         readHeaderTimeout,
+		ShutdownTimeout:           shutdownTimeout,
+		DatabaseURL:               os.Getenv("MANMU_DATABASE_URL"),
+		DataDir:                   envString("MANMU_DATA_DIR", defaultDataDir()),
+		MediaDir:                  envString("MANMU_MEDIA_DIR", ""),
+		JWTSecret:                 envString("MANMU_JWT_SECRET", "dramora-local-dev-secret"),
+		InlineWorker:              inlineWorker,
+		WorkerQueues:              envCSV("MANMU_WORKER_QUEUES", []string{"default"}),
+		BootstrapAdminEnabled:     bootstrapAdminEnabled,
+		BootstrapAdminEmail:       envString("MANMU_BOOTSTRAP_ADMIN_EMAIL", "admin@local.dev"),
+		BootstrapAdminPassword:    envString("MANMU_BOOTSTRAP_ADMIN_PASSWORD", "strongpass123"),
+		BootstrapAdminDisplayName: envString("MANMU_BOOTSTRAP_ADMIN_DISPLAY_NAME", "Local Admin"),
 		// Payment gateway
 		PaymentProvider:     envString("MANMU_PAYMENT_PROVIDER", "stripe"),
 		StripeSecretKey:     os.Getenv("MANMU_STRIPE_SECRET_KEY"),

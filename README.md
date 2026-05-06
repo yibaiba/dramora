@@ -23,6 +23,22 @@ Run the API:
 go run ./apps/api
 ```
 
+In local mode, the API now bootstraps a default owner account on startup unless you disable it:
+
+```text
+email:    admin@local.dev
+password: strongpass123
+```
+
+Optional overrides:
+
+```bash
+export MANMU_BOOTSTRAP_ADMIN=false
+export MANMU_BOOTSTRAP_ADMIN_EMAIL='admin@local.dev'
+export MANMU_BOOTSTRAP_ADMIN_PASSWORD='strongpass123'
+export MANMU_BOOTSTRAP_ADMIN_DISPLAY_NAME='Local Admin'
+```
+
 In local mode, the API also runs an inline worker by default so Studio can auto-complete queued story analysis and export jobs. Set `MANMU_INLINE_WORKER=false` to disable that behavior, or set it to `true` outside local mode when you intentionally want one process to run both API and worker loops.
 
 Run the worker:

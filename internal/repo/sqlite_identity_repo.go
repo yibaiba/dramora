@@ -52,7 +52,7 @@ func (r *SQLiteIdentityRepository) CreateUserWithMembership(
 		return AuthIdentity{}, fmt.Errorf("create organization member: %w", err)
 	}
 
-	identity, err := scanAuthIdentity(tx.QueryRowContext(ctx, sqliteGetAuthIdentityByUserIDSQL, params.UserID))
+	identity, err := scanSQLiteAuthIdentity(tx.QueryRowContext(ctx, sqliteGetAuthIdentityByUserIDSQL, params.UserID))
 	if err == sql.ErrNoRows {
 		return AuthIdentity{}, domain.ErrNotFound
 	}
@@ -66,7 +66,7 @@ func (r *SQLiteIdentityRepository) CreateUserWithMembership(
 }
 
 func (r *SQLiteIdentityRepository) GetAuthIdentityByEmail(ctx context.Context, email string) (AuthIdentity, error) {
-	identity, err := scanAuthIdentity(r.db.QueryRowContext(ctx, sqliteGetAuthIdentityByEmailSQL, email))
+	identity, err := scanSQLiteAuthIdentity(r.db.QueryRowContext(ctx, sqliteGetAuthIdentityByEmailSQL, email))
 	if err == sql.ErrNoRows {
 		return AuthIdentity{}, domain.ErrNotFound
 	}
@@ -74,11 +74,247 @@ func (r *SQLiteIdentityRepository) GetAuthIdentityByEmail(ctx context.Context, e
 }
 
 func (r *SQLiteIdentityRepository) GetAuthIdentityByUserID(ctx context.Context, userID string) (AuthIdentity, error) {
-	identity, err := scanAuthIdentity(r.db.QueryRowContext(ctx, sqliteGetAuthIdentityByUserIDSQL, userID))
+	identity, err := scanSQLiteAuthIdentity(r.db.QueryRowContext(ctx, sqliteGetAuthIdentityByUserIDSQL, userID))
 	if err == sql.ErrNoRows {
 		return AuthIdentity{}, domain.ErrNotFound
 	}
 	return identity, err
+}
+
+func scanSQLiteAuthIdentity(scanner sqliteScanner) (AuthIdentity, error) {
+	var (
+		identity  AuthIdentity
+		createdAt string
+		updatedAt string
+	)
+	err := scanner.Scan(
+		&identity.User.ID,
+		&identity.User.Email,
+		&identity.User.DisplayName,
+		&identity.PasswordHash,
+		&identity.OrganizationID,
+		&identity.Role,
+		&createdAt,
+		&updatedAt,
+	)
+	if err != nil {
+		return AuthIdentity{}, err
+	}
+	if identity.User.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return AuthIdentity{}, err
+	}
+	if identity.User.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return AuthIdentity{}, err
+	}
+	return identity, nil
+}
+
+func (r *SQLiteIdentityRepository) UpdateUserPasswordHash(
+	ctx context.Context,
+	userID, passwordHash string,
+	updatedAt time.Time,
+) error {
+	res, err := r.db.ExecContext(
+		ctx,
+		sqliteUpdateUserPasswordHashSQL,
+		passwordHash,
+		updatedAt.UTC().Format(time.RFC3339Nano),
+		userID,
+	)
+	if err != nil {
+		return fmt.Errorf("update user password hash: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update user password hash rows affected: %w", err)
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *SQLiteIdentityRepository) ListUserAPIKeys(ctx context.Context, userID string) ([]domain.UserAPIKey, error) {
+	rows, err := r.db.QueryContext(ctx, sqliteListUserAPIKeysSQL, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user api keys: %w", err)
+	}
+	defer rows.Close()
+	out := make([]domain.UserAPIKey, 0)
+	for rows.Next() {
+		item, scanErr := scanSQLiteUserAPIKey(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan user api key: %w", scanErr)
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *SQLiteIdentityRepository) CreateUserAPIKey(
+	ctx context.Context,
+	params CreateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	_, err := r.db.ExecContext(
+		ctx,
+		sqliteCreateUserAPIKeySQL,
+		params.KeyID,
+		params.UserID,
+		params.Name,
+		params.TokenHash,
+		params.TokenPreview,
+		params.Scope,
+		boolToSQLiteInt(params.IsActive),
+		nullableTimeString(params.ExpiresAt),
+		params.CreatedAt.UTC().Format(time.RFC3339Nano),
+		params.UpdatedAt.UTC().Format(time.RFC3339Nano),
+	)
+	if err != nil {
+		if isSQLiteFKViolation(err) {
+			return domain.UserAPIKey{}, domain.ErrNotFound
+		}
+		if isSQLiteUniqueViolation(err) {
+			return domain.UserAPIKey{}, domain.ErrInvalidInput
+		}
+		return domain.UserAPIKey{}, fmt.Errorf("create user api key: %w", err)
+	}
+	return r.getUserAPIKeyByID(ctx, params.UserID, params.KeyID)
+}
+
+func (r *SQLiteIdentityRepository) UpdateUserAPIKey(
+	ctx context.Context,
+	params UpdateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	res, err := r.db.ExecContext(
+		ctx,
+		sqliteUpdateUserAPIKeySQL,
+		params.Name,
+		params.Scope,
+		nullableTimeString(params.ExpiresAt),
+		params.UpdatedAt.UTC().Format(time.RFC3339Nano),
+		params.KeyID,
+		params.UserID,
+	)
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("update user api key: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("update user api key rows affected: %w", err)
+	}
+	if affected == 0 {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	return r.getUserAPIKeyByID(ctx, params.UserID, params.KeyID)
+}
+
+func (r *SQLiteIdentityRepository) SetUserAPIKeyActive(
+	ctx context.Context,
+	userID, keyID string,
+	isActive bool,
+	updatedAt time.Time,
+) (domain.UserAPIKey, error) {
+	res, err := r.db.ExecContext(
+		ctx,
+		sqliteSetUserAPIKeyActiveSQL,
+		boolToSQLiteInt(isActive),
+		updatedAt.UTC().Format(time.RFC3339Nano),
+		keyID,
+		userID,
+	)
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("set user api key active: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("set user api key active rows affected: %w", err)
+	}
+	if affected == 0 {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	return r.getUserAPIKeyByID(ctx, userID, keyID)
+}
+
+func (r *SQLiteIdentityRepository) DeleteUserAPIKey(ctx context.Context, userID, keyID string) error {
+	res, err := r.db.ExecContext(ctx, sqliteDeleteUserAPIKeySQL, keyID, userID)
+	if err != nil {
+		return fmt.Errorf("delete user api key: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete user api key rows affected: %w", err)
+	}
+	if affected == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *SQLiteIdentityRepository) ListOrganizationMembers(
+	ctx context.Context,
+	organizationID string,
+) ([]domain.OrganizationMember, error) {
+	rows, err := r.db.QueryContext(ctx, sqliteListOrganizationMembersSQL, organizationID)
+	if err != nil {
+		return nil, fmt.Errorf("list organization members: %w", err)
+	}
+	defer rows.Close()
+	out := make([]domain.OrganizationMember, 0)
+	for rows.Next() {
+		member, scanErr := scanOrganizationMember(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan organization member: %w", scanErr)
+		}
+		out = append(out, member)
+	}
+	return out, rows.Err()
+}
+
+func (r *SQLiteIdentityRepository) GetOrganizationMember(
+	ctx context.Context,
+	organizationID, userID string,
+) (domain.OrganizationMember, error) {
+	member, err := scanOrganizationMember(r.db.QueryRowContext(ctx, sqliteGetOrganizationMemberSQL, organizationID, userID))
+	if err == sql.ErrNoRows {
+		return domain.OrganizationMember{}, domain.ErrNotFound
+	}
+	return member, err
+}
+
+func (r *SQLiteIdentityRepository) UpdateOrganizationMemberRole(
+	ctx context.Context,
+	organizationID, userID, role string,
+) error {
+	res, err := r.db.ExecContext(ctx, sqliteUpdateOrganizationMemberRoleSQL, role, organizationID, userID)
+	if err != nil {
+		return fmt.Errorf("update organization member role: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update organization member role rows affected: %w", err)
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *SQLiteIdentityRepository) RemoveOrganizationMember(
+	ctx context.Context,
+	organizationID, userID string,
+) error {
+	res, err := r.db.ExecContext(ctx, sqliteRemoveOrganizationMemberSQL, organizationID, userID)
+	if err != nil {
+		return fmt.Errorf("remove organization member: %w", err)
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("remove organization member rows affected: %w", err)
+	}
+	if rows == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
 }
 
 func (r *SQLiteIdentityRepository) CreateOrganization(ctx context.Context, params CreateOrganizationParams) error {
@@ -177,6 +413,78 @@ func nullableString(value string) any {
 		return nil
 	}
 	return value
+}
+
+func nullableTimeString(value *time.Time) any {
+	if value == nil {
+		return nil
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func boolToSQLiteInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func sqliteIntToBool(value int) bool {
+	return value != 0
+}
+
+func scanSQLiteUserAPIKey(scanner sqliteScanner) (domain.UserAPIKey, error) {
+	var item domain.UserAPIKey
+	var expiresAt string
+	var lastUsedAt string
+	var isActive int
+	err := scanner.Scan(
+		&item.ID,
+		&item.UserID,
+		&item.Name,
+		&item.TokenPreview,
+		&item.Scope,
+		&isActive,
+		&expiresAt,
+		&lastUsedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return domain.UserAPIKey{}, err
+	}
+	item.IsActive = sqliteIntToBool(isActive)
+	item.CreatedAt = item.CreatedAt.UTC()
+	item.UpdatedAt = item.UpdatedAt.UTC()
+	if expiresAt != "" {
+		t, parseErr := parseSQLiteTime(expiresAt)
+		if parseErr != nil {
+			return domain.UserAPIKey{}, fmt.Errorf("parse api key expires_at: %w", parseErr)
+		}
+		item.ExpiresAt = &t
+	}
+	if lastUsedAt != "" {
+		t, parseErr := parseSQLiteTime(lastUsedAt)
+		if parseErr != nil {
+			return domain.UserAPIKey{}, fmt.Errorf("parse api key last_used_at: %w", parseErr)
+		}
+		item.LastUsedAt = &t
+	}
+	return item, nil
+}
+
+func (r *SQLiteIdentityRepository) getUserAPIKeyByID(
+	ctx context.Context,
+	userID, keyID string,
+) (domain.UserAPIKey, error) {
+	item, err := scanSQLiteUserAPIKey(r.db.QueryRowContext(ctx, sqliteGetUserAPIKeyByIDSQL, keyID, userID))
+	if err == sql.ErrNoRows {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("get user api key by id: %w", err)
+	}
+	return item, nil
 }
 
 func (r *SQLiteIdentityRepository) AppendInvitationAuditEvent(

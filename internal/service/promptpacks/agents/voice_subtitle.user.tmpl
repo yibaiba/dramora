@@ -1,0 +1,20 @@
+为以下剧集生成配音脚本和字幕片段：
+
+{{ .SourceText }}{{ if .ScreenwriterOutput }}
+
+编剧脚本：
+{{ .ScreenwriterOutput }}{{ end }}
+
+输出 JSON：
+{
+  "voice_segments": [
+    {
+      "scene": "SC01",
+      "character": "角色名",
+      "text": "配音文字",
+      "style": "配音风格（如：低沉/激昂/温柔）",
+      "subtitle": "字幕文字",
+      "duration_hint_ms": 3000
+    }
+  ]
+}

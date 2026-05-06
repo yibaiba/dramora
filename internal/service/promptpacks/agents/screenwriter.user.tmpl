@@ -1,0 +1,30 @@
+将以下故事转化为剧集脚本，包含场景分解、角色对白和旁白：
+
+{{ .SourceText }}{{ if .OutlinePlannerOutput }}
+
+大纲：
+{{ .OutlinePlannerOutput }}{{ end }}{{ if .CharacterAnalystOutput }}
+
+character_analyst 产出：
+{{ .CharacterAnalystOutput }}{{ end }}{{ if .SceneAnalystOutput }}
+
+scene_analyst 产出：
+{{ .SceneAnalystOutput }}{{ end }}{{ if .PropAnalystOutput }}
+
+prop_analyst 产出：
+{{ .PropAnalystOutput }}{{ end }}
+
+输出 JSON：
+{
+  "scenes": [
+    {
+      "code": "SC01",
+      "title": "场景标题",
+      "setting": "场景描述",
+      "dialogues": [
+        {"character": "角色名", "line": "台词", "direction": "表演指导"}
+      ],
+      "narration": "旁白文字"
+    }
+  ]
+}

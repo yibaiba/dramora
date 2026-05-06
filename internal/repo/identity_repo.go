@@ -2,6 +2,7 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,10 +30,42 @@ type CreateUserWithMembershipParams struct {
 	Role           string
 }
 
+type CreateUserAPIKeyParams struct {
+	KeyID        string
+	UserID       string
+	Name         string
+	TokenHash    string
+	TokenPreview string
+	Scope        string
+	IsActive     bool
+	ExpiresAt    *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type UpdateUserAPIKeyParams struct {
+	KeyID     string
+	UserID    string
+	Name      string
+	Scope     string
+	ExpiresAt *time.Time
+	UpdatedAt time.Time
+}
+
 type IdentityRepository interface {
 	CreateUserWithMembership(ctx context.Context, params CreateUserWithMembershipParams) (AuthIdentity, error)
 	GetAuthIdentityByEmail(ctx context.Context, email string) (AuthIdentity, error)
 	GetAuthIdentityByUserID(ctx context.Context, userID string) (AuthIdentity, error)
+	UpdateUserPasswordHash(ctx context.Context, userID, passwordHash string, updatedAt time.Time) error
+	ListUserAPIKeys(ctx context.Context, userID string) ([]domain.UserAPIKey, error)
+	CreateUserAPIKey(ctx context.Context, params CreateUserAPIKeyParams) (domain.UserAPIKey, error)
+	UpdateUserAPIKey(ctx context.Context, params UpdateUserAPIKeyParams) (domain.UserAPIKey, error)
+	SetUserAPIKeyActive(ctx context.Context, userID, keyID string, isActive bool, updatedAt time.Time) (domain.UserAPIKey, error)
+	DeleteUserAPIKey(ctx context.Context, userID, keyID string) error
+	ListOrganizationMembers(ctx context.Context, organizationID string) ([]domain.OrganizationMember, error)
+	GetOrganizationMember(ctx context.Context, organizationID, userID string) (domain.OrganizationMember, error)
+	UpdateOrganizationMemberRole(ctx context.Context, organizationID, userID, role string) error
+	RemoveOrganizationMember(ctx context.Context, organizationID, userID string) error
 
 	CreateOrganization(ctx context.Context, params CreateOrganizationParams) error
 	CreateInvitation(ctx context.Context, params CreateInvitationParams) (domain.OrganizationInvitation, error)
@@ -165,6 +198,184 @@ func (r *PostgresIdentityRepository) GetAuthIdentityByUserID(ctx context.Context
 	return identity, err
 }
 
+func (r *PostgresIdentityRepository) UpdateUserPasswordHash(
+	ctx context.Context,
+	userID, passwordHash string,
+	updatedAt time.Time,
+) error {
+	tag, err := r.pool.Exec(ctx, updateUserPasswordHashSQL, userID, passwordHash, updatedAt.UTC())
+	if err != nil {
+		return fmt.Errorf("update user password hash: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresIdentityRepository) ListUserAPIKeys(ctx context.Context, userID string) ([]domain.UserAPIKey, error) {
+	rows, err := r.pool.Query(ctx, listUserAPIKeysSQL, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list user api keys: %w", err)
+	}
+	defer rows.Close()
+	out := make([]domain.UserAPIKey, 0)
+	for rows.Next() {
+		item, scanErr := scanUserAPIKey(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan user api key: %w", scanErr)
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *PostgresIdentityRepository) CreateUserAPIKey(
+	ctx context.Context,
+	params CreateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	item, err := scanUserAPIKey(r.pool.QueryRow(
+		ctx,
+		createUserAPIKeySQL,
+		params.KeyID,
+		params.UserID,
+		params.Name,
+		params.TokenHash,
+		params.TokenPreview,
+		params.Scope,
+		params.IsActive,
+		params.ExpiresAt,
+		params.CreatedAt.UTC(),
+		params.UpdatedAt.UTC(),
+	))
+	if isForeignKeyViolation(err) {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	if isUniqueViolation(err) {
+		return domain.UserAPIKey{}, domain.ErrInvalidInput
+	}
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("create user api key: %w", err)
+	}
+	return item, nil
+}
+
+func (r *PostgresIdentityRepository) UpdateUserAPIKey(
+	ctx context.Context,
+	params UpdateUserAPIKeyParams,
+) (domain.UserAPIKey, error) {
+	item, err := scanUserAPIKey(r.pool.QueryRow(
+		ctx,
+		updateUserAPIKeySQL,
+		params.KeyID,
+		params.UserID,
+		params.Name,
+		params.Scope,
+		params.ExpiresAt,
+		params.UpdatedAt.UTC(),
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("update user api key: %w", err)
+	}
+	return item, nil
+}
+
+func (r *PostgresIdentityRepository) SetUserAPIKeyActive(
+	ctx context.Context,
+	userID, keyID string,
+	isActive bool,
+	updatedAt time.Time,
+) (domain.UserAPIKey, error) {
+	item, err := scanUserAPIKey(r.pool.QueryRow(
+		ctx,
+		setUserAPIKeyActiveSQL,
+		keyID,
+		userID,
+		isActive,
+		updatedAt.UTC(),
+	))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.UserAPIKey{}, domain.ErrNotFound
+	}
+	if err != nil {
+		return domain.UserAPIKey{}, fmt.Errorf("set user api key active: %w", err)
+	}
+	return item, nil
+}
+
+func (r *PostgresIdentityRepository) DeleteUserAPIKey(ctx context.Context, userID, keyID string) error {
+	tag, err := r.pool.Exec(ctx, deleteUserAPIKeySQL, keyID, userID)
+	if err != nil {
+		return fmt.Errorf("delete user api key: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresIdentityRepository) ListOrganizationMembers(
+	ctx context.Context,
+	organizationID string,
+) ([]domain.OrganizationMember, error) {
+	rows, err := r.pool.Query(ctx, listOrganizationMembersSQL, organizationID)
+	if err != nil {
+		return nil, fmt.Errorf("list organization members: %w", err)
+	}
+	defer rows.Close()
+	out := make([]domain.OrganizationMember, 0)
+	for rows.Next() {
+		member, scanErr := scanOrganizationMember(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan organization member: %w", scanErr)
+		}
+		out = append(out, member)
+	}
+	return out, rows.Err()
+}
+
+func (r *PostgresIdentityRepository) GetOrganizationMember(
+	ctx context.Context,
+	organizationID, userID string,
+) (domain.OrganizationMember, error) {
+	member, err := scanOrganizationMember(r.pool.QueryRow(ctx, getOrganizationMemberSQL, organizationID, userID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.OrganizationMember{}, domain.ErrNotFound
+	}
+	return member, err
+}
+
+func (r *PostgresIdentityRepository) UpdateOrganizationMemberRole(
+	ctx context.Context,
+	organizationID, userID, role string,
+) error {
+	tag, err := r.pool.Exec(ctx, updateOrganizationMemberRoleSQL, organizationID, userID, role)
+	if err != nil {
+		return fmt.Errorf("update organization member role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
+func (r *PostgresIdentityRepository) RemoveOrganizationMember(
+	ctx context.Context,
+	organizationID, userID string,
+) error {
+	tag, err := r.pool.Exec(ctx, removeOrganizationMemberSQL, organizationID, userID)
+	if err != nil {
+		return fmt.Errorf("remove organization member: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNotFound
+	}
+	return nil
+}
+
 type sqliteScanner interface {
 	Scan(dest ...any) error
 }
@@ -182,6 +393,57 @@ func scanAuthIdentity(scanner sqliteScanner) (AuthIdentity, error) {
 		&identity.User.UpdatedAt,
 	)
 	return identity, err
+}
+
+func scanOrganizationMember(scanner sqliteScanner) (domain.OrganizationMember, error) {
+	var member domain.OrganizationMember
+	err := scanner.Scan(
+		&member.OrganizationID,
+		&member.UserID,
+		&member.Email,
+		&member.DisplayName,
+		&member.Role,
+		&member.JoinedAt,
+		&member.LastActivityAt,
+	)
+	if err != nil {
+		return domain.OrganizationMember{}, err
+	}
+	member.JoinedAt = member.JoinedAt.UTC()
+	member.LastActivityAt = member.LastActivityAt.UTC()
+	return member, nil
+}
+
+func scanUserAPIKey(scanner sqliteScanner) (domain.UserAPIKey, error) {
+	var item domain.UserAPIKey
+	var expiresAt sql.NullTime
+	var lastUsedAt sql.NullTime
+	err := scanner.Scan(
+		&item.ID,
+		&item.UserID,
+		&item.Name,
+		&item.TokenPreview,
+		&item.Scope,
+		&item.IsActive,
+		&expiresAt,
+		&lastUsedAt,
+		&item.CreatedAt,
+		&item.UpdatedAt,
+	)
+	if err != nil {
+		return domain.UserAPIKey{}, err
+	}
+	item.CreatedAt = item.CreatedAt.UTC()
+	item.UpdatedAt = item.UpdatedAt.UTC()
+	if expiresAt.Valid {
+		t := expiresAt.Time.UTC()
+		item.ExpiresAt = &t
+	}
+	if lastUsedAt.Valid {
+		t := lastUsedAt.Time.UTC()
+		item.LastUsedAt = &t
+	}
+	return item, nil
 }
 
 func (r *PostgresIdentityRepository) CreateOrganization(ctx context.Context, params CreateOrganizationParams) error {

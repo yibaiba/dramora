@@ -10,6 +10,35 @@ type User struct {
 	UpdatedAt   time.Time
 }
 
+type OrganizationMember struct {
+	OrganizationID string
+	UserID         string
+	Email          string
+	DisplayName    string
+	Role           string
+	JoinedAt       time.Time
+	LastActivityAt time.Time
+}
+
+const (
+	APIKeyScopeReadOnly = "read-only"
+	APIKeyScopeWrite    = "write"
+	APIKeyScopeAdmin    = "admin"
+)
+
+type UserAPIKey struct {
+	ID           string
+	UserID       string
+	Name         string
+	TokenPreview string
+	Scope        string
+	IsActive     bool
+	ExpiresAt    *time.Time
+	LastUsedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
 const (
 	InvitationStatusPending  = "pending"
 	InvitationStatusAccepted = "accepted"

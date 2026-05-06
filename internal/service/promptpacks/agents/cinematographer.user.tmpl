@@ -1,0 +1,21 @@
+为以下剧集的每个场景规划镜头语言：
+
+{{ .SourceText }}{{ if .ScreenwriterOutput }}
+
+编剧脚本：
+{{ .ScreenwriterOutput }}{{ end }}
+
+输出 JSON：
+{
+  "shots": [
+    {
+      "scene": "SC01",
+      "shot_size": "MCU",
+      "camera_angle": "eye-level",
+      "camera_movement": "push-in",
+      "composition": "rule-of-thirds",
+      "lighting": "侧光 暖色调",
+      "note": "镜头备注"
+    }
+  ]
+}

@@ -7,13 +7,13 @@ import (
 )
 
 type workspaceResponse struct {
-	ID              string `json:"id"`
-	OrganizationID  string `json:"organization_id"`
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	MembersCount    int    `json:"members_count"`
-	ProjectsCount   int    `json:"projects_count"`
-	CreatedAt       string `json:"created_at"`
+	ID             string `json:"id"`
+	OrganizationID string `json:"organization_id"`
+	Name           string `json:"name"`
+	Description    string `json:"description"`
+	MembersCount   int    `json:"members_count"`
+	ProjectsCount  int    `json:"projects_count"`
+	CreatedAt      string `json:"created_at"`
 }
 
 func workspaceDTO(ws service.Workspace) workspaceResponse {

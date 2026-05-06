@@ -25,6 +25,8 @@ var ErrUnauthorized = errors.New("unauthorized")
 const (
 	defaultAccessTokenTTL  = 1 * time.Hour
 	defaultRefreshTokenTTL = 30 * 24 * time.Hour
+	defaultInvitationRole  = "editor"
+	userAPIKeySecretBytes  = 24
 )
 
 type AuthSession struct {
@@ -453,6 +455,70 @@ type CreateInvitationInput struct {
 	Role  string
 }
 
+type OrganizationMemberInfo struct {
+	UserID         string
+	OrganizationID string
+	Email          string
+	DisplayName    string
+	Role           string
+	JoinedAt       time.Time
+	LastActivityAt time.Time
+}
+
+type ChangePasswordInput struct {
+	CurrentPassword string
+	NewPassword     string
+}
+
+type UserAPIKeyInfo struct {
+	ID           string
+	Name         string
+	TokenPreview string
+	Scope        string
+	IsActive     bool
+	ExpiresAt    *time.Time
+	LastUsedAt   *time.Time
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type CreateUserAPIKeyInput struct {
+	Name      string
+	Scope     string
+	ExpiresAt *time.Time
+}
+
+type UpdateUserAPIKeyInput struct {
+	Name      string
+	Scope     string
+	ExpiresAt *time.Time
+}
+
+type CreatedUserAPIKey struct {
+	Key   UserAPIKeyInfo
+	Token string
+}
+
+func isSupportedOrganizationRole(role string) bool {
+	switch role {
+	case "owner", "admin", "editor", "viewer":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeOrganizationRole(role string) (string, error) {
+	role = strings.TrimSpace(strings.ToLower(role))
+	if role == "" {
+		return "", fmt.Errorf("role is required: %w", domain.ErrInvalidInput)
+	}
+	if !isSupportedOrganizationRole(role) {
+		return "", fmt.Errorf("role must be one of owner/admin/editor/viewer: %w", domain.ErrInvalidInput)
+	}
+	return role, nil
+}
+
 func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitationInput) (domain.OrganizationInvitation, error) {
 	auth, ok := RequestAuthFromContext(ctx)
 	if !ok || auth.OrganizationID == "" {
@@ -464,11 +530,9 @@ func (s *AuthService) CreateInvitation(ctx context.Context, input CreateInvitati
 		return domain.OrganizationInvitation{}, fmt.Errorf("email is required: %w", domain.ErrInvalidInput)
 	}
 	if role == "" {
-		role = "editor"
+		role = defaultInvitationRole
 	}
-	switch role {
-	case "owner", "admin", "editor", "viewer":
-	default:
+	if !isSupportedOrganizationRole(role) {
 		return domain.OrganizationInvitation{}, fmt.Errorf("role must be one of owner/admin/editor/viewer: %w", domain.ErrInvalidInput)
 	}
 
@@ -682,4 +746,360 @@ func (s *AuthService) RevokeSession(ctx context.Context, sessionID string) error
 		return nil
 	}
 	return s.refreshRepo.Revoke(ctx, sessionID, nil)
+}
+
+func (s *AuthService) ListOrganizationMembers(ctx context.Context) ([]OrganizationMemberInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return nil, ErrUnauthorized
+	}
+	members, err := s.identityRepo.ListOrganizationMembers(ctx, auth.OrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	return s.enrichOrganizationMembers(ctx, members)
+}
+
+func (s *AuthService) UpdateOrganizationMemberRole(
+	ctx context.Context,
+	userID, role string,
+) (OrganizationMemberInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return OrganizationMemberInfo{}, ErrUnauthorized
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return OrganizationMemberInfo{}, fmt.Errorf("user id is required: %w", domain.ErrInvalidInput)
+	}
+	normalizedRole, err := normalizeOrganizationRole(role)
+	if err != nil {
+		return OrganizationMemberInfo{}, err
+	}
+	members, err := s.identityRepo.ListOrganizationMembers(ctx, auth.OrganizationID)
+	if err != nil {
+		return OrganizationMemberInfo{}, err
+	}
+	target, found := findOrganizationMember(members, userID)
+	if !found {
+		return OrganizationMemberInfo{}, domain.ErrNotFound
+	}
+	if target.Role == normalizedRole {
+		return s.enrichOrganizationMemberActivity(ctx, target)
+	}
+	if target.Role == "owner" && normalizedRole != "owner" && countOrganizationOwners(members) == 1 {
+		return OrganizationMemberInfo{}, fmt.Errorf("cannot change the last owner role: %w", domain.ErrInvalidInput)
+	}
+	if err := s.identityRepo.UpdateOrganizationMemberRole(ctx, auth.OrganizationID, userID, normalizedRole); err != nil {
+		return OrganizationMemberInfo{}, err
+	}
+	updated, err := s.identityRepo.GetOrganizationMember(ctx, auth.OrganizationID, userID)
+	if err != nil {
+		return OrganizationMemberInfo{}, err
+	}
+	return s.enrichOrganizationMemberActivity(ctx, updated)
+}
+
+func (s *AuthService) RemoveOrganizationMember(ctx context.Context, userID string) error {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.OrganizationID == "" {
+		return ErrUnauthorized
+	}
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return fmt.Errorf("user id is required: %w", domain.ErrInvalidInput)
+	}
+	members, err := s.identityRepo.ListOrganizationMembers(ctx, auth.OrganizationID)
+	if err != nil {
+		return err
+	}
+	target, found := findOrganizationMember(members, userID)
+	if !found {
+		return domain.ErrNotFound
+	}
+	if target.Role == "owner" && countOrganizationOwners(members) == 1 {
+		return fmt.Errorf("cannot remove the last owner: %w", domain.ErrInvalidInput)
+	}
+	return s.identityRepo.RemoveOrganizationMember(ctx, auth.OrganizationID, userID)
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, input ChangePasswordInput) error {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return ErrUnauthorized
+	}
+	currentPassword := strings.TrimSpace(input.CurrentPassword)
+	newPassword := strings.TrimSpace(input.NewPassword)
+	if currentPassword == "" || newPassword == "" {
+		return fmt.Errorf("current_password and new_password are required: %w", domain.ErrInvalidInput)
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("new password must be at least 8 characters: %w", domain.ErrInvalidInput)
+	}
+	identity, err := s.identityRepo.GetAuthIdentityByUserID(ctx, auth.UserID)
+	if err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(identity.PasswordHash), []byte(currentPassword)); err != nil {
+		return fmt.Errorf("current password is incorrect: %w", ErrUnauthorized)
+	}
+	passwordHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	return s.identityRepo.UpdateUserPasswordHash(ctx, auth.UserID, string(passwordHash), time.Now().UTC())
+}
+
+func (s *AuthService) ListUserAPIKeys(ctx context.Context) ([]UserAPIKeyInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return nil, ErrUnauthorized
+	}
+	keys, err := s.identityRepo.ListUserAPIKeys(ctx, auth.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]UserAPIKeyInfo, 0, len(keys))
+	for _, item := range keys {
+		out = append(out, userAPIKeyInfoDTO(item))
+	}
+	return out, nil
+}
+
+func (s *AuthService) CreateUserAPIKey(ctx context.Context, input CreateUserAPIKeyInput) (CreatedUserAPIKey, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return CreatedUserAPIKey{}, ErrUnauthorized
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return CreatedUserAPIKey{}, fmt.Errorf("name is required: %w", domain.ErrInvalidInput)
+	}
+	scope, err := normalizeUserAPIKeyScope(input.Scope)
+	if err != nil {
+		return CreatedUserAPIKey{}, err
+	}
+	expiresAt, err := normalizeUserAPIKeyExpiresAt(input.ExpiresAt)
+	if err != nil {
+		return CreatedUserAPIKey{}, err
+	}
+	token, preview, hash, err := generateUserAPIKeySecret()
+	if err != nil {
+		return CreatedUserAPIKey{}, err
+	}
+	now := time.Now().UTC()
+	key, err := s.identityRepo.CreateUserAPIKey(ctx, repo.CreateUserAPIKeyParams{
+		KeyID:        uuid.NewString(),
+		UserID:       auth.UserID,
+		Name:         name,
+		TokenHash:    hash,
+		TokenPreview: preview,
+		Scope:        scope,
+		IsActive:     true,
+		ExpiresAt:    expiresAt,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	})
+	if err != nil {
+		return CreatedUserAPIKey{}, err
+	}
+	return CreatedUserAPIKey{
+		Key:   userAPIKeyInfoDTO(key),
+		Token: token,
+	}, nil
+}
+
+func (s *AuthService) UpdateUserAPIKey(
+	ctx context.Context,
+	keyID string,
+	input UpdateUserAPIKeyInput,
+) (UserAPIKeyInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return UserAPIKeyInfo{}, ErrUnauthorized
+	}
+	keyID = strings.TrimSpace(keyID)
+	if keyID == "" {
+		return UserAPIKeyInfo{}, fmt.Errorf("key id is required: %w", domain.ErrInvalidInput)
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return UserAPIKeyInfo{}, fmt.Errorf("name is required: %w", domain.ErrInvalidInput)
+	}
+	scope, err := normalizeUserAPIKeyScope(input.Scope)
+	if err != nil {
+		return UserAPIKeyInfo{}, err
+	}
+	expiresAt, err := normalizeUserAPIKeyExpiresAt(input.ExpiresAt)
+	if err != nil {
+		return UserAPIKeyInfo{}, err
+	}
+	key, err := s.identityRepo.UpdateUserAPIKey(ctx, repo.UpdateUserAPIKeyParams{
+		KeyID:     keyID,
+		UserID:    auth.UserID,
+		Name:      name,
+		Scope:     scope,
+		ExpiresAt: expiresAt,
+		UpdatedAt: time.Now().UTC(),
+	})
+	if err != nil {
+		return UserAPIKeyInfo{}, err
+	}
+	return userAPIKeyInfoDTO(key), nil
+}
+
+func (s *AuthService) ToggleUserAPIKey(ctx context.Context, keyID string, isActive bool) (UserAPIKeyInfo, error) {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return UserAPIKeyInfo{}, ErrUnauthorized
+	}
+	keyID = strings.TrimSpace(keyID)
+	if keyID == "" {
+		return UserAPIKeyInfo{}, fmt.Errorf("key id is required: %w", domain.ErrInvalidInput)
+	}
+	key, err := s.identityRepo.SetUserAPIKeyActive(ctx, auth.UserID, keyID, isActive, time.Now().UTC())
+	if err != nil {
+		return UserAPIKeyInfo{}, err
+	}
+	return userAPIKeyInfoDTO(key), nil
+}
+
+func (s *AuthService) DeleteUserAPIKey(ctx context.Context, keyID string) error {
+	auth, ok := RequestAuthFromContext(ctx)
+	if !ok || auth.UserID == "" {
+		return ErrUnauthorized
+	}
+	keyID = strings.TrimSpace(keyID)
+	if keyID == "" {
+		return fmt.Errorf("key id is required: %w", domain.ErrInvalidInput)
+	}
+	return s.identityRepo.DeleteUserAPIKey(ctx, auth.UserID, keyID)
+}
+
+func findOrganizationMember(members []domain.OrganizationMember, userID string) (domain.OrganizationMember, bool) {
+	for _, member := range members {
+		if member.UserID == userID {
+			return member, true
+		}
+	}
+	return domain.OrganizationMember{}, false
+}
+
+func countOrganizationOwners(members []domain.OrganizationMember) int {
+	total := 0
+	for _, member := range members {
+		if member.Role == "owner" {
+			total++
+		}
+	}
+	return total
+}
+
+func (s *AuthService) enrichOrganizationMembers(
+	ctx context.Context,
+	members []domain.OrganizationMember,
+) ([]OrganizationMemberInfo, error) {
+	out := make([]OrganizationMemberInfo, 0, len(members))
+	for _, member := range members {
+		item, err := s.enrichOrganizationMemberActivity(ctx, member)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, nil
+}
+
+func (s *AuthService) enrichOrganizationMemberActivity(
+	ctx context.Context,
+	member domain.OrganizationMember,
+) (OrganizationMemberInfo, error) {
+	lastActivity := member.LastActivityAt.UTC()
+	if s.refreshRepo != nil {
+		sessions, err := s.refreshRepo.ListByUserID(ctx, member.UserID)
+		if err != nil {
+			return OrganizationMemberInfo{}, err
+		}
+		for _, session := range sessions {
+			if session.CreatedAt.After(lastActivity) {
+				lastActivity = session.CreatedAt.UTC()
+			}
+		}
+	}
+	return OrganizationMemberInfo{
+		UserID:         member.UserID,
+		OrganizationID: member.OrganizationID,
+		Email:          member.Email,
+		DisplayName:    member.DisplayName,
+		Role:           member.Role,
+		JoinedAt:       member.JoinedAt.UTC(),
+		LastActivityAt: lastActivity,
+	}, nil
+}
+
+func userAPIKeyInfoDTO(item domain.UserAPIKey) UserAPIKeyInfo {
+	return UserAPIKeyInfo{
+		ID:           item.ID,
+		Name:         item.Name,
+		TokenPreview: item.TokenPreview,
+		Scope:        item.Scope,
+		IsActive:     item.IsActive,
+		ExpiresAt:    cloneTimePointer(item.ExpiresAt),
+		LastUsedAt:   cloneTimePointer(item.LastUsedAt),
+		CreatedAt:    item.CreatedAt.UTC(),
+		UpdatedAt:    item.UpdatedAt.UTC(),
+	}
+}
+
+func normalizeUserAPIKeyScope(scope string) (string, error) {
+	switch strings.TrimSpace(strings.ToLower(scope)) {
+	case domain.APIKeyScopeReadOnly:
+		return domain.APIKeyScopeReadOnly, nil
+	case domain.APIKeyScopeWrite:
+		return domain.APIKeyScopeWrite, nil
+	case domain.APIKeyScopeAdmin:
+		return domain.APIKeyScopeAdmin, nil
+	default:
+		return "", fmt.Errorf("scope must be one of read-only/write/admin: %w", domain.ErrInvalidInput)
+	}
+}
+
+func normalizeUserAPIKeyExpiresAt(expiresAt *time.Time) (*time.Time, error) {
+	if expiresAt == nil {
+		return nil, nil
+	}
+	normalized := expiresAt.UTC()
+	if !normalized.After(time.Now().UTC()) {
+		return nil, fmt.Errorf("expires_at must be in the future: %w", domain.ErrInvalidInput)
+	}
+	return &normalized, nil
+}
+
+func generateUserAPIKeySecret() (token string, preview string, tokenHash string, err error) {
+	secretBytes := make([]byte, userAPIKeySecretBytes)
+	if _, err = rand.Read(secretBytes); err != nil {
+		return "", "", "", fmt.Errorf("generate api key secret: %w", err)
+	}
+	secret := base64.RawURLEncoding.EncodeToString(secretBytes)
+	token = "drm_" + secret
+	preview = token
+	if len(preview) > 8 {
+		preview = preview[:8]
+	}
+	preview += "..." + token[len(token)-4:]
+	tokenHash = hashOpaqueToken(token)
+	return token, preview, tokenHash, nil
+}
+
+func hashOpaqueToken(token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(sum[:])
+}
+
+func cloneTimePointer(value *time.Time) *time.Time {
+	if value == nil {
+		return nil
+	}
+	cloned := value.UTC()
+	return &cloned
 }
