@@ -127,9 +127,12 @@ export function RecoveryPanel({
 
 function relativeFromNow(iso?: string): string {
   if (!iso) return '—'
-  const t = new Date(iso).getTime()
+  const date = new Date(iso)
+  const t = date.getTime()
   if (Number.isNaN(t)) return '—'
+  if (date.getUTCFullYear() <= 1) return '—'
   const diffMs = Date.now() - t
+  if (diffMs <= 0) return '刚刚'
   const minutes = Math.floor(diffMs / 60000)
   if (minutes < 1) return '刚刚'
   if (minutes < 60) return `${minutes} 分钟前`

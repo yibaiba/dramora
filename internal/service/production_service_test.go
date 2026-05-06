@@ -173,6 +173,26 @@ func TestProductionServiceSeedEpisodeProductionSQLite(t *testing.T) {
 	if timeline.Tracks[0].Clips[0].AssetID != assets[0].ID {
 		t.Fatalf("expected timeline clip asset %q, got %+v", assets[0].ID, timeline.Tracks[0].Clips[0])
 	}
+
+	createdExport, err := productionService.StartEpisodeExport(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("start episode export: %v", err)
+	}
+	summary, err := productionService.ProcessQueuedExports(ctx, jobs.DefaultExecutionLimit)
+	if err != nil {
+		t.Fatalf("process queued exports: %v", err)
+	}
+	if summary.Processed != 1 || summary.Succeeded != 1 || summary.Failed != 0 {
+		t.Fatalf("unexpected export summary: %+v", summary)
+	}
+
+	export, err := productionService.GetExport(ctx, createdExport.ID)
+	if err != nil {
+		t.Fatalf("get export: %v", err)
+	}
+	if export.Status != domain.ExportStatusSucceeded {
+		t.Fatalf("expected succeeded export, got %+v", export)
+	}
 }
 
 func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {

@@ -949,6 +949,43 @@ func scanSQLiteTimelineClip(row rowScanner) (domain.TimelineClip, error) {
 	return item, nil
 }
 
+func scanSQLiteExports(rows *sql.Rows) ([]domain.Export, error) {
+	items := make([]domain.Export, 0)
+	for rows.Next() {
+		item, err := scanSQLiteExport(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteExport(row rowScanner) (domain.Export, error) {
+	var (
+		item                 domain.Export
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.TimelineID,
+		&item.Status,
+		&item.Format,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Export{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Export{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Export{}, err
+	}
+	return item, nil
+}
+
 func (r *SQLiteProductionRepository) SaveStoryMap(ctx context.Context, params SaveStoryMapParams) (StoryMap, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1260,7 +1297,7 @@ func (r *SQLiteProductionRepository) CreateExport(ctx context.Context, params Cr
 }
 
 func (r *SQLiteProductionRepository) GetExport(ctx context.Context, exportID string) (domain.Export, error) {
-	export, err := scanExport(r.db.QueryRowContext(ctx, sqliteGetExportSQL, exportID))
+	export, err := scanSQLiteExport(r.db.QueryRowContext(ctx, sqliteGetExportSQL, exportID))
 	if err == sql.ErrNoRows {
 		return domain.Export{}, domain.ErrNotFound
 	}
@@ -1273,7 +1310,7 @@ func (r *SQLiteProductionRepository) ListExportsByStatus(ctx context.Context, st
 		return nil, err
 	}
 	defer rows.Close()
-	return scanExports(rows)
+	return scanSQLiteExports(rows)
 }
 
 func (r *SQLiteProductionRepository) AdvanceExportStatus(ctx context.Context, params AdvanceExportStatusParams) (domain.Export, error) {
