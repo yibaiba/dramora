@@ -263,6 +263,17 @@ func TestStoryAnalysisReadRoutes(t *testing.T) {
 	if len(workflowPayload.WorkflowRun.NodeRuns) < 5 {
 		t.Fatalf("expected workflow node runs, got %+v", workflowPayload.WorkflowRun.NodeRuns)
 	}
+	if workflowPayload.WorkflowRun.CheckpointSummary.BlackboardRoles == nil {
+		t.Fatalf("expected non-nil blackboard roles, got %+v", workflowPayload.WorkflowRun.CheckpointSummary)
+	}
+	for _, node := range workflowPayload.WorkflowRun.NodeRuns {
+		if node.Highlights == nil {
+			t.Fatalf("expected non-nil highlights, got %+v", node)
+		}
+		if node.UpstreamNodeIDs == nil {
+			t.Fatalf("expected non-nil upstream ids, got %+v", node)
+		}
+	}
 }
 
 func TestCoreProductionMapStoryboardTimelineAndExportRoutes(t *testing.T) {

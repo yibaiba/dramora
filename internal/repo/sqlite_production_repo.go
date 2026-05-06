@@ -367,11 +367,11 @@ func (r *SQLiteProductionRepository) ListApprovalGates(ctx context.Context, epis
 		return nil, err
 	}
 	defer rows.Close()
-	return scanApprovalGates(rows)
+	return scanSQLiteApprovalGates(rows)
 }
 
 func (r *SQLiteProductionRepository) GetApprovalGate(ctx context.Context, gateID string) (domain.ApprovalGate, error) {
-	gate, err := scanApprovalGate(r.db.QueryRowContext(ctx, sqliteGetApprovalGateSQL, gateID))
+	gate, err := scanSQLiteApprovalGate(r.db.QueryRowContext(ctx, sqliteGetApprovalGateSQL, gateID))
 	if err == sql.ErrNoRows {
 		return domain.ApprovalGate{}, domain.ErrNotFound
 	}
@@ -386,7 +386,18 @@ func (r *SQLiteProductionRepository) SaveApprovalGate(ctx context.Context, param
 	if err != nil {
 		return domain.ApprovalGate{}, sqliteMapFK(err)
 	}
-	return r.GetApprovalGate(ctx, params.ID)
+	gate, err := scanSQLiteApprovalGate(r.db.QueryRowContext(
+		ctx,
+		sqliteGetApprovalGateByKeySQL,
+		params.EpisodeID,
+		params.GateType,
+		params.SubjectType,
+		params.SubjectID,
+	))
+	if err == sql.ErrNoRows {
+		return domain.ApprovalGate{}, domain.ErrNotFound
+	}
+	return gate, err
 }
 
 func (r *SQLiteProductionRepository) ReviewApprovalGate(ctx context.Context, params ReviewApprovalGateParams) (domain.ApprovalGate, error) {
@@ -541,6 +552,298 @@ func scanSQLiteStoryAnalysis(row rowScanner) (domain.StoryAnalysis, error) {
 	return analysis, nil
 }
 
+func scanSQLiteApprovalGates(rows *sql.Rows) ([]domain.ApprovalGate, error) {
+	items := make([]domain.ApprovalGate, 0)
+	for rows.Next() {
+		item, err := scanSQLiteApprovalGate(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteApprovalGate(row rowScanner) (domain.ApprovalGate, error) {
+	var (
+		item                             domain.ApprovalGate
+		reviewedAt, createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.WorkflowRunID,
+		&item.GateType,
+		&item.SubjectType,
+		&item.SubjectID,
+		&item.Status,
+		&item.ReviewedBy,
+		&item.ReviewNote,
+		&reviewedAt,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	var err error
+	if item.ReviewedAt, err = parseSQLiteTime(reviewedAt); err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.ApprovalGate{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteCharacters(rows *sql.Rows) ([]domain.Character, error) {
+	items := make([]domain.Character, 0)
+	for rows.Next() {
+		item, err := scanSQLiteCharacter(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteCharacter(row rowScanner) (domain.Character, error) {
+	var (
+		item                 domain.Character
+		characterBible       []byte
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.StoryAnalysisID,
+		&item.Code,
+		&item.Name,
+		&item.Description,
+		&characterBible,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Character{}, err
+	}
+	bible, err := decodeCharacterBible(characterBible)
+	if err != nil {
+		return domain.Character{}, err
+	}
+	item.CharacterBible = bible
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Character{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Character{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteScenes(rows *sql.Rows) ([]domain.Scene, error) {
+	items := make([]domain.Scene, 0)
+	for rows.Next() {
+		item, err := scanSQLiteScene(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteScene(row rowScanner) (domain.Scene, error) {
+	var (
+		item                 domain.Scene
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.StoryAnalysisID,
+		&item.Code,
+		&item.Name,
+		&item.Description,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Scene{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Scene{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Scene{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteProps(rows *sql.Rows) ([]domain.Prop, error) {
+	items := make([]domain.Prop, 0)
+	for rows.Next() {
+		item, err := scanSQLiteProp(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteProp(row rowScanner) (domain.Prop, error) {
+	var (
+		item                 domain.Prop
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.StoryAnalysisID,
+		&item.Code,
+		&item.Name,
+		&item.Description,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Prop{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Prop{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Prop{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteAssets(rows *sql.Rows) ([]domain.Asset, error) {
+	items := make([]domain.Asset, 0)
+	for rows.Next() {
+		item, err := scanSQLiteAsset(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteAsset(row rowScanner) (domain.Asset, error) {
+	var (
+		item                 domain.Asset
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.Kind,
+		&item.Purpose,
+		&item.URI,
+		&item.Status,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Asset{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Asset{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Asset{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteStoryboardShots(rows *sql.Rows) ([]domain.StoryboardShot, error) {
+	items := make([]domain.StoryboardShot, 0)
+	for rows.Next() {
+		item, err := scanSQLiteStoryboardShot(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteStoryboardShot(row rowScanner) (domain.StoryboardShot, error) {
+	var (
+		item                 domain.StoryboardShot
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.ProjectID,
+		&item.EpisodeID,
+		&item.StoryAnalysisID,
+		&item.SceneID,
+		&item.Code,
+		&item.Title,
+		&item.Description,
+		&item.Prompt,
+		&item.Position,
+		&item.DurationMS,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.StoryboardShot{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.StoryboardShot{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.StoryboardShot{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteShotPromptPack(row rowScanner) (domain.ShotPromptPack, error) {
+	var (
+		item                                  domain.ShotPromptPack
+		timeSlices, referenceBindings, params []byte
+		createdAt, updatedAt                  string
+	)
+	err := row.Scan(
+		&item.ID, &item.ProjectID, &item.EpisodeID, &item.ShotID, &item.Provider,
+		&item.Model, &item.Preset, &item.TaskType, &item.DirectPrompt,
+		&item.NegativePrompt, &item.IPAdapterStrength, &item.LoRAWeight, &item.LoRACombinationWeight,
+		&timeSlices, &referenceBindings, &params,
+		&createdAt, &updatedAt,
+	)
+	if err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(timeSlices, &item.TimeSlices); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(referenceBindings, &item.ReferenceBindings); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	if err := json.Unmarshal(params, &item.Params); err != nil {
+		return domain.ShotPromptPack{}, err
+	}
+	var parseErr error
+	if item.CreatedAt, parseErr = parseSQLiteTime(createdAt); parseErr != nil {
+		return domain.ShotPromptPack{}, parseErr
+	}
+	if item.UpdatedAt, parseErr = parseSQLiteTime(updatedAt); parseErr != nil {
+		return domain.ShotPromptPack{}, parseErr
+	}
+	return item, nil
+}
+
 func (r *SQLiteProductionRepository) SaveStoryMap(ctx context.Context, params SaveStoryMapParams) (StoryMap, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -582,7 +885,7 @@ func (r *SQLiteProductionRepository) GetStoryMap(ctx context.Context, episodeID 
 		return StoryMap{}, err
 	}
 	defer charRows.Close()
-	characters, err := scanCharacters(charRows)
+	characters, err := scanSQLiteCharacters(charRows)
 	if err != nil {
 		return StoryMap{}, err
 	}
@@ -592,7 +895,7 @@ func (r *SQLiteProductionRepository) GetStoryMap(ctx context.Context, episodeID 
 		return StoryMap{}, err
 	}
 	defer sceneRows.Close()
-	scenes, err := scanScenes(sceneRows)
+	scenes, err := scanSQLiteScenes(sceneRows)
 	if err != nil {
 		return StoryMap{}, err
 	}
@@ -602,7 +905,7 @@ func (r *SQLiteProductionRepository) GetStoryMap(ctx context.Context, episodeID 
 		return StoryMap{}, err
 	}
 	defer propRows.Close()
-	props, err := scanProps(propRows)
+	props, err := scanSQLiteProps(propRows)
 	if err != nil {
 		return StoryMap{}, err
 	}
@@ -611,7 +914,7 @@ func (r *SQLiteProductionRepository) GetStoryMap(ctx context.Context, episodeID 
 }
 
 func (r *SQLiteProductionRepository) GetCharacter(ctx context.Context, characterID string) (domain.Character, error) {
-	character, err := scanCharacter(r.db.QueryRowContext(ctx, sqliteGetCharacterSQL, characterID))
+	character, err := scanSQLiteCharacter(r.db.QueryRowContext(ctx, sqliteGetCharacterSQL, characterID))
 	if err == sql.ErrNoRows {
 		return domain.Character{}, domain.ErrNotFound
 	}
@@ -626,7 +929,7 @@ func (r *SQLiteProductionRepository) SaveCharacterBible(
 	if err != nil {
 		return domain.Character{}, err
 	}
-	character, err := scanCharacter(r.db.QueryRowContext(ctx, sqliteSaveCharacterBibleSQL, payload, params.CharacterID))
+	character, err := scanSQLiteCharacter(r.db.QueryRowContext(ctx, sqliteSaveCharacterBibleSQL, payload, params.CharacterID))
 	if err == sql.ErrNoRows {
 		return domain.Character{}, domain.ErrNotFound
 	}
@@ -664,11 +967,11 @@ func (r *SQLiteProductionRepository) ListStoryboardShots(ctx context.Context, ep
 		return nil, err
 	}
 	defer rows.Close()
-	return scanStoryboardShots(rows)
+	return scanSQLiteStoryboardShots(rows)
 }
 
 func (r *SQLiteProductionRepository) GetStoryboardShot(ctx context.Context, shotID string) (domain.StoryboardShot, error) {
-	shot, err := scanStoryboardShot(r.db.QueryRowContext(ctx, sqliteGetStoryboardShotSQL, shotID))
+	shot, err := scanSQLiteStoryboardShot(r.db.QueryRowContext(ctx, sqliteGetStoryboardShotSQL, shotID))
 	if err == sql.ErrNoRows {
 		return domain.StoryboardShot{}, domain.ErrNotFound
 	}
@@ -702,7 +1005,7 @@ func (r *SQLiteProductionRepository) SaveShotPromptPack(ctx context.Context, par
 }
 
 func (r *SQLiteProductionRepository) GetShotPromptPack(ctx context.Context, shotID string) (domain.ShotPromptPack, error) {
-	pack, err := scanShotPromptPack(r.db.QueryRowContext(ctx, sqliteGetShotPromptPackSQL, shotID))
+	pack, err := scanSQLiteShotPromptPack(r.db.QueryRowContext(ctx, sqliteGetShotPromptPackSQL, shotID))
 	if err == sql.ErrNoRows {
 		return domain.ShotPromptPack{}, domain.ErrNotFound
 	}
@@ -720,11 +1023,11 @@ func (r *SQLiteProductionRepository) ListAssetsByEpisode(ctx context.Context, ep
 		return nil, err
 	}
 	defer rows.Close()
-	return scanAssets(rows)
+	return scanSQLiteAssets(rows)
 }
 
 func (r *SQLiteProductionRepository) GetAsset(ctx context.Context, assetID string) (domain.Asset, error) {
-	asset, err := scanAsset(r.db.QueryRowContext(ctx, sqliteGetAssetSQL, assetID))
+	asset, err := scanSQLiteAsset(r.db.QueryRowContext(ctx, sqliteGetAssetSQL, assetID))
 	if err == sql.ErrNoRows {
 		return domain.Asset{}, domain.ErrNotFound
 	}
@@ -740,7 +1043,7 @@ func (r *SQLiteProductionRepository) LockAsset(ctx context.Context, assetID stri
 	if n == 0 {
 		return domain.Asset{}, domain.ErrNotFound
 	}
-	asset, err := scanAsset(r.db.QueryRowContext(ctx, sqliteGetAssetSQL, assetID))
+	asset, err := scanSQLiteAsset(r.db.QueryRowContext(ctx, sqliteGetAssetSQL, assetID))
 	if err == sql.ErrNoRows {
 		return domain.Asset{}, domain.ErrNotFound
 	}
@@ -917,7 +1220,7 @@ type sqliteExecer interface {
 }
 
 func sqliteCreateAssetTx(ctx context.Context, db sqliteExecer, params CreateAssetParams) (domain.Asset, error) {
-	existing, err := scanAsset(db.QueryRowContext(ctx, sqliteGetExistingAssetSQL,
+	existing, err := scanSQLiteAsset(db.QueryRowContext(ctx, sqliteGetExistingAssetSQL,
 		params.EpisodeID, params.Kind, params.Purpose, params.URI,
 	))
 	if err == nil {
@@ -930,9 +1233,9 @@ func sqliteCreateAssetTx(ctx context.Context, db sqliteExecer, params CreateAsse
 	if err != nil {
 		return domain.Asset{}, sqliteMapFK(err)
 	}
-	asset, err := scanAsset(db.QueryRowContext(ctx, sqliteGetAssetSQL, params.ID))
+	asset, err := scanSQLiteAsset(db.QueryRowContext(ctx, sqliteGetAssetSQL, params.ID))
 	if err == sql.ErrNoRows {
-		return scanAsset(db.QueryRowContext(ctx, sqliteGetExistingAssetSQL,
+		return scanSQLiteAsset(db.QueryRowContext(ctx, sqliteGetExistingAssetSQL,
 			params.EpisodeID, params.Kind, params.Purpose, params.URI,
 		))
 	}

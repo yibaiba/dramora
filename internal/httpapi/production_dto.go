@@ -40,6 +40,13 @@ type workflowNodeRunResponse struct {
 	UpstreamNodeIDs []string                     `json:"upstream_node_ids"`
 }
 
+func nonNilStrings(values []string) []string {
+	if len(values) == 0 {
+		return []string{}
+	}
+	return append([]string(nil), values...)
+}
+
 type generationJobResponse struct {
 	ID            string                     `json:"id"`
 	ProjectID     string                     `json:"project_id"`
@@ -312,7 +319,7 @@ func workflowRunDTO(
 			RunningNodes:    checkpoint.RunningNodes,
 			FailedNodes:     checkpoint.FailedNodes,
 			SkippedNodes:    checkpoint.SkippedNodes,
-			BlackboardRoles: append([]string(nil), checkpoint.BlackboardRoles...),
+			BlackboardRoles: nonNilStrings(checkpoint.BlackboardRoles),
 		}
 	}
 	nodeRunResponses := make([]workflowNodeRunResponse, 0, len(nodeRuns))
@@ -322,9 +329,9 @@ func workflowRunDTO(
 			Kind:            string(nodeRun.Kind),
 			Status:          nodeRun.Status,
 			Summary:         nodeRun.Summary,
-			Highlights:      append([]string(nil), nodeRun.Highlights...),
+			Highlights:      nonNilStrings(nodeRun.Highlights),
 			ErrorMessage:    nodeRun.ErrorMessage,
-			UpstreamNodeIDs: append([]string(nil), nodeRun.UpstreamNodeIDs...),
+			UpstreamNodeIDs: nonNilStrings(nodeRun.UpstreamNodeIDs),
 		})
 	}
 	return workflowRunResponse{

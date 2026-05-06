@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"path/filepath"
 	"sync"
 	"testing"
 
@@ -11,6 +12,126 @@ import (
 	"github.com/yibaiba/dramora/internal/repo"
 	"github.com/yibaiba/dramora/internal/workflow"
 )
+
+func TestProductionServiceSeedEpisodeProductionSQLite(t *testing.T) {
+	t.Parallel()
+
+	sqliteDB, err := repo.OpenSQLite(context.Background(), filepath.Join(t.TempDir(), "production-service.db"))
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	defer sqliteDB.Close()
+
+	ctx := testAuthCtx()
+	identityRepo := repo.NewSQLiteIdentityRepository(sqliteDB.DB)
+	if err := identityRepo.CreateOrganization(ctx, repo.CreateOrganizationParams{
+		OrganizationID: testOrganizationID,
+		Name:           "SQLite Service Org",
+	}); err != nil {
+		t.Fatalf("create organization: %v", err)
+	}
+
+	projectRepo := repo.NewSQLiteProjectRepository(sqliteDB.DB)
+	projectService := NewProjectService(projectRepo)
+	productionRepo := repo.NewSQLiteProductionRepository(sqliteDB.DB)
+	productionService := NewProductionService(productionRepo, nil)
+
+	project, err := projectService.CreateProject(ctx, CreateProjectInput{Name: "SQLite Production"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	episode, err := projectService.CreateEpisode(ctx, CreateEpisodeInput{
+		ProjectID: project.ID,
+		Title:     "SQLite 聚合生产",
+	})
+	if err != nil {
+		t.Fatalf("create episode: %v", err)
+	}
+
+	if _, err := productionService.StartStoryAnalysis(ctx, episode); err != nil {
+		t.Fatalf("start story analysis: %v", err)
+	}
+	if _, err := productionService.ProcessQueuedGenerationJobs(ctx, jobs.DefaultExecutionLimit); err != nil {
+		t.Fatalf("process story analysis job: %v", err)
+	}
+
+	if _, err := productionService.SeedStoryMap(ctx, episode); err != nil {
+		t.Fatalf("seed story map: %v", err)
+	}
+	if _, err := productionService.SeedEpisodeAssets(ctx, episode); err != nil {
+		t.Fatalf("seed assets: %v", err)
+	}
+	if _, err := productionService.SeedStoryboardShots(ctx, episode); err != nil {
+		t.Fatalf("seed storyboard shots: %v", err)
+	}
+	if _, err := productionService.SeedEpisodeApprovalGates(ctx, episode); err != nil {
+		t.Fatalf("seed approval gates: %v", err)
+	}
+
+	if _, err := productionService.SeedStoryMap(ctx, episode); err != nil {
+		t.Fatalf("seed story map again: %v", err)
+	}
+	if _, err := productionService.SeedEpisodeAssets(ctx, episode); err != nil {
+		t.Fatalf("seed assets again: %v", err)
+	}
+	if _, err := productionService.SeedStoryboardShots(ctx, episode); err != nil {
+		t.Fatalf("seed storyboard shots again: %v", err)
+	}
+	if _, err := productionService.SeedEpisodeApprovalGates(ctx, episode); err != nil {
+		t.Fatalf("seed approval gates again: %v", err)
+	}
+
+	if _, err := productionService.SeedEpisodeProduction(ctx, episode); err != nil {
+		t.Fatalf("seed production aggregate: %v", err)
+	}
+
+	shots, err := productionRepo.ListStoryboardShots(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("list storyboard shots: %v", err)
+	}
+	if len(shots) == 0 {
+		t.Fatal("expected storyboard shots after production seed")
+	}
+	if _, err := productionRepo.SaveShotPromptPack(ctx, repo.SaveShotPromptPackParams{
+		ID:                    "pack-1",
+		ProjectID:             project.ID,
+		EpisodeID:             episode.ID,
+		ShotID:                shots[0].ID,
+		Provider:              "seedance",
+		Model:                 "sd2.1",
+		Preset:                "sd2_fast",
+		TaskType:              "image",
+		DirectPrompt:          "cinematic frame",
+		NegativePrompt:        "blur",
+		IPAdapterStrength:     0.5,
+		LoRAWeight:            0.6,
+		LoRACombinationWeight: 1,
+		TimeSlices: []domain.PromptTimeSlice{{
+			StartMS:     0,
+			EndMS:       3000,
+			Prompt:      "intro beat",
+			CameraWork:  "push in",
+			ShotSize:    "medium",
+			VisualFocus: "hero",
+		}},
+		ReferenceBindings: []domain.PromptReferenceBinding{{
+			Token: "hero_ref",
+			Role:  "character",
+			Kind:  "character",
+		}},
+		Params: map[string]any{"steps": 20},
+	}); err != nil {
+		t.Fatalf("save shot prompt pack: %v", err)
+	}
+
+	workspace, err := productionService.GetStoryboardWorkspace(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("get storyboard workspace: %v", err)
+	}
+	if len(workspace.StoryboardShots) == 0 || workspace.StoryboardShots[0].PromptPack == nil {
+		t.Fatalf("expected workspace prompt pack summary, got %+v", workspace.StoryboardShots)
+	}
+}
 
 func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
 	t.Parallel()

@@ -179,6 +179,14 @@ FROM approval_gates
 WHERE id = ?
 `
 
+const sqliteGetApprovalGateByKeySQL = `
+SELECT id, project_id, episode_id, COALESCE(workflow_run_id, ''),
+       gate_type, subject_type, subject_id, status, reviewed_by, review_note,
+       COALESCE(reviewed_at, '0001-01-01T00:00:00Z'), created_at, updated_at
+FROM approval_gates
+WHERE episode_id = ? AND gate_type = ? AND subject_type = ? AND subject_id = ?
+`
+
 const sqliteUpsertApprovalGateSQL = `
 INSERT INTO approval_gates (
     id, project_id, episode_id, workflow_run_id, gate_type, subject_type, subject_id, status

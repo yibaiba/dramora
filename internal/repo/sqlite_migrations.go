@@ -318,6 +318,9 @@ var sqliteMigrations = []string{
 		task_type TEXT NOT NULL,
 		direct_prompt TEXT NOT NULL,
 		negative_prompt TEXT NOT NULL DEFAULT '',
+		ip_adapter_strength REAL NOT NULL DEFAULT 0.5,
+		lora_weight REAL NOT NULL DEFAULT 0.5,
+		lora_combination_weight REAL NOT NULL DEFAULT 1.0,
 		time_slices TEXT NOT NULL DEFAULT '[]',
 		reference_bindings TEXT NOT NULL DEFAULT '[]',
 		params TEXT NOT NULL DEFAULT '{}',
@@ -326,6 +329,9 @@ var sqliteMigrations = []string{
 		UNIQUE (shot_id, preset)
 	)`,
 	`CREATE INDEX IF NOT EXISTS idx_shot_prompt_packs_episode ON shot_prompt_packs (episode_id, updated_at)`,
+	`ALTER TABLE shot_prompt_packs ADD COLUMN ip_adapter_strength REAL NOT NULL DEFAULT 0.5`,
+	`ALTER TABLE shot_prompt_packs ADD COLUMN lora_weight REAL NOT NULL DEFAULT 0.5`,
+	`ALTER TABLE shot_prompt_packs ADD COLUMN lora_combination_weight REAL NOT NULL DEFAULT 1.0`,
 
 	// approval_gates
 	`CREATE TABLE IF NOT EXISTS approval_gates (
