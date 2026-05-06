@@ -10,6 +10,11 @@ function msToFrames(ms: number): number {
   return Math.round(ms / MS_PER_FRAME)
 }
 
+function framesToFCPXMLDuration(frames: number): string {
+  if (frames <= 0) return '0s'
+  return `${frames}/${FRAMERATE}s`
+}
+
 /**
  * 生成 FCPXML 格式字符串
  * @param timeline 时间线数据
@@ -28,12 +33,13 @@ export function generateFCPXML(timeline: Timeline, assets: Map<string, Asset> = 
       const asset = assets.get(clip.asset_id)
       const durationFrames = msToFrames(clip.duration_ms)
       const startFrames = msToFrames(clip.start_ms)
+      const clipName = clip.asset_id || clip.id
 
       // 获取媒体路径（如果有资源）
-      const mediaPath = asset?.uri ?? `asset://${clip.asset_id}`
+      const mediaPath = asset?.uri ?? `asset://${clipName}`
 
       clipsXml += `
-    <clip name="${escapeXml(clip.asset_id)}" duration="${durationFrames}s" start="${startFrames}s">
+    <clip name="${escapeXml(clipName)}" duration="${framesToFCPXMLDuration(durationFrames)}" start="${framesToFCPXMLDuration(startFrames)}">
       <media>
         <video>
           <media-rep path="${escapeXml(mediaPath)}"/>
@@ -53,7 +59,7 @@ export function generateFCPXML(timeline: Timeline, assets: Map<string, Asset> = 
   <library>
     <event name="Dramora Timeline">
       <project name="Export">
-        <sequence format="r1" duration="${totalDurationFrames}s">
+        <sequence format="r1" duration="${framesToFCPXMLDuration(totalDurationFrames)}">
           <spine>${clipsXml}
           </spine>
         </sequence>
