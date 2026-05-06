@@ -80,6 +80,7 @@ func NewPostgresProductionRepository(pool *pgxpool.Pool) *PostgresProductionRepo
 - SD2/Seedance prompt packs are stored in `shot_prompt_packs` as the source-of-truth prompt artifact before video generation jobs are submitted.
 - `generation_jobs.prompt`, `generation_jobs.params`, `generation_jobs.provider_task_id`, and `generation_jobs.result_asset_id` must be loaded by worker-facing repository reads so provider execution can resume from durable state.
 - Nullable UUIDs exposed to API read models are normalized to empty string until typed nullable DTOs are introduced.
+- SQLite local-dev repos store timestamps as TEXT and may omit PostgreSQL-only queue fields, so SQLite repository reads must use sqlite-specific scanners/parsers instead of generic pg-oriented row mappings.
 - Generated flexible story analysis output uses JSONB seed arrays first; promote to normalized character/scene/prop tables in later slices.
 - Story source input is stored in `story_sources`; `story_analyses.story_source_id`, `outline`, and `agent_outputs` link deterministic or provider-backed analysis output to the source text.
 

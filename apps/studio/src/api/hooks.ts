@@ -110,6 +110,7 @@ import {
   updateUserAPIKey,
 } from './client'
 import type { InvitationAuditFilter, InvitationAuditPage } from './client'
+import { useAuthStore } from '../state/authStore'
 import type {
   ChangePasswordRequest,
   LoginRequest,
@@ -143,6 +144,13 @@ import type {
   ToggleUserAPIKeyRequest,
   UpdateUserAPIKeyRequest,
 } from './types'
+
+function shouldRetryAuthedQuery(failureCount: number, error: unknown): boolean {
+  if (error instanceof Error && error.message.toLowerCase().includes('authentication required')) {
+    return false
+  }
+  return failureCount < 2
+}
 
 export function useCurrentSession(enabled = true) {
   return useQuery({
@@ -213,10 +221,13 @@ export function useCreateEpisode(projectId?: string) {
 }
 
 export function useGenerationJobs(options?: { refetchInterval?: number }) {
+  const hasSession = useAuthStore((state) => Boolean(state.session?.token))
   return useQuery({
+    enabled: hasSession,
     queryFn: listGenerationJobs,
     queryKey: ['generation-jobs'],
     refetchInterval: options?.refetchInterval ?? 10_000,
+    retry: shouldRetryAuthedQuery,
   })
 }
 
@@ -865,11 +876,13 @@ export function useNotifications(
   params: { limit?: number; offset?: number; unread_only?: boolean } = {},
   enabled = true,
 ) {
+  const hasSession = useAuthStore((state) => Boolean(state.session?.token))
   return useQuery({
-    enabled,
+    enabled: enabled && hasSession,
     queryFn: () => fetchNotifications(params),
     queryKey: ['notifications', params.limit ?? 50, params.offset ?? 0, params.unread_only ?? false],
     refetchInterval: 15000,
+    retry: shouldRetryAuthedQuery,
   })
 }
 

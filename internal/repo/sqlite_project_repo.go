@@ -41,7 +41,7 @@ func (r *SQLiteProjectRepository) CreateProject(ctx context.Context, params Crea
 
 func (r *SQLiteProjectRepository) GetProject(ctx context.Context, organizationID string, projectID string) (domain.Project, error) {
 	row := r.db.QueryRowContext(ctx, sqliteGetProjectSQL, projectID, organizationID)
-	project, err := scanProject(row)
+	project, err := scanSQLiteProject(row)
 	if err == sql.ErrNoRows {
 		return domain.Project{}, domain.ErrNotFound
 	}
@@ -50,7 +50,7 @@ func (r *SQLiteProjectRepository) GetProject(ctx context.Context, organizationID
 
 func (r *SQLiteProjectRepository) LookupProjectByID(ctx context.Context, projectID string) (domain.Project, error) {
 	row := r.db.QueryRowContext(ctx, sqliteLookupProjectByIDSQL, projectID)
-	project, err := scanProject(row)
+	project, err := scanSQLiteProject(row)
 	if err == sql.ErrNoRows {
 		return domain.Project{}, domain.ErrNotFound
 	}
@@ -85,7 +85,7 @@ func (r *SQLiteProjectRepository) CreateEpisode(ctx context.Context, params Crea
 
 func (r *SQLiteProjectRepository) GetEpisode(ctx context.Context, episodeID string) (domain.Episode, error) {
 	row := r.db.QueryRowContext(ctx, sqliteGetEpisodeSQL, episodeID)
-	episode, err := scanEpisode(row)
+	episode, err := scanSQLiteEpisode(row)
 	if err == sql.ErrNoRows {
 		return domain.Episode{}, domain.ErrNotFound
 	}
@@ -95,7 +95,7 @@ func (r *SQLiteProjectRepository) GetEpisode(ctx context.Context, episodeID stri
 func sqliteScanProjects(rows *sql.Rows) ([]domain.Project, error) {
 	projects := make([]domain.Project, 0)
 	for rows.Next() {
-		project, err := scanProject(rows)
+		project, err := scanSQLiteProject(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -107,11 +107,65 @@ func sqliteScanProjects(rows *sql.Rows) ([]domain.Project, error) {
 func sqliteScanEpisodes(rows *sql.Rows) ([]domain.Episode, error) {
 	episodes := make([]domain.Episode, 0)
 	for rows.Next() {
-		episode, err := scanEpisode(rows)
+		episode, err := scanSQLiteEpisode(rows)
 		if err != nil {
 			return nil, err
 		}
 		episodes = append(episodes, episode)
 	}
 	return episodes, rows.Err()
+}
+
+func scanSQLiteProject(row rowScanner) (domain.Project, error) {
+	var (
+		project   domain.Project
+		createdAt string
+		updatedAt string
+	)
+	if err := row.Scan(
+		&project.ID,
+		&project.OrganizationID,
+		&project.Name,
+		&project.Description,
+		&project.Status,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Project{}, fmt.Errorf("scan project: %w", err)
+	}
+	var err error
+	if project.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Project{}, err
+	}
+	if project.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Project{}, err
+	}
+	return project, nil
+}
+
+func scanSQLiteEpisode(row rowScanner) (domain.Episode, error) {
+	var (
+		episode   domain.Episode
+		createdAt string
+		updatedAt string
+	)
+	if err := row.Scan(
+		&episode.ID,
+		&episode.ProjectID,
+		&episode.Number,
+		&episode.Title,
+		&episode.Status,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Episode{}, fmt.Errorf("scan episode: %w", err)
+	}
+	var err error
+	if episode.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Episode{}, err
+	}
+	if episode.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Episode{}, err
+	}
+	return episode, nil
 }

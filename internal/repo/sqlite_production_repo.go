@@ -57,7 +57,7 @@ func (r *SQLiteProductionRepository) CreateStoryAnalysisRun(ctx context.Context,
 	if err != nil {
 		return StoryAnalysisRun{}, err
 	}
-	run, err := scanWorkflowRun(tx.QueryRowContext(ctx, sqliteGetWorkflowRunSQL, params.WorkflowRunID))
+	run, err := scanSQLiteWorkflowRun(tx.QueryRowContext(ctx, sqliteGetWorkflowRunSQL, params.WorkflowRunID))
 	if err != nil {
 		return StoryAnalysisRun{}, err
 	}
@@ -69,7 +69,7 @@ func (r *SQLiteProductionRepository) CreateStoryAnalysisRun(ctx context.Context,
 	if err != nil {
 		return StoryAnalysisRun{}, err
 	}
-	job, err := scanGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobSQL, params.GenerationJobID))
+	job, err := scanSQLiteGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobSQL, params.GenerationJobID))
 	if err != nil {
 		return StoryAnalysisRun{}, err
 	}
@@ -85,7 +85,7 @@ func (r *SQLiteProductionRepository) CreateStoryAnalysisRun(ctx context.Context,
 }
 
 func (r *SQLiteProductionRepository) GetWorkflowRun(ctx context.Context, workflowRunID string) (domain.WorkflowRun, error) {
-	run, err := scanWorkflowRun(r.db.QueryRowContext(ctx, sqliteGetWorkflowRunSQL, workflowRunID))
+	run, err := scanSQLiteWorkflowRun(r.db.QueryRowContext(ctx, sqliteGetWorkflowRunSQL, workflowRunID))
 	if err == sql.ErrNoRows {
 		return domain.WorkflowRun{}, domain.ErrNotFound
 	}
@@ -124,7 +124,7 @@ func (r *SQLiteProductionRepository) ListGenerationJobs(ctx context.Context) ([]
 		return nil, err
 	}
 	defer rows.Close()
-	return scanGenerationJobs(rows)
+	return scanSQLiteGenerationJobs(rows)
 }
 
 func (r *SQLiteProductionRepository) ListGenerationJobsByStatus(ctx context.Context, status domain.GenerationJobStatus, limit int) ([]domain.GenerationJob, error) {
@@ -133,11 +133,11 @@ func (r *SQLiteProductionRepository) ListGenerationJobsByStatus(ctx context.Cont
 		return nil, err
 	}
 	defer rows.Close()
-	return scanGenerationJobs(rows)
+	return scanSQLiteGenerationJobs(rows)
 }
 
 func (r *SQLiteProductionRepository) GetGenerationJob(ctx context.Context, generationJobID string) (domain.GenerationJob, error) {
-	job, err := scanGenerationJob(r.db.QueryRowContext(ctx, sqliteGetGenerationJobSQL, generationJobID))
+	job, err := scanSQLiteGenerationJob(r.db.QueryRowContext(ctx, sqliteGetGenerationJobSQL, generationJobID))
 	if err == sql.ErrNoRows {
 		return domain.GenerationJob{}, domain.ErrNotFound
 	}
@@ -164,7 +164,7 @@ func (r *SQLiteProductionRepository) CreateGenerationJob(ctx context.Context, pa
 		return domain.GenerationJob{}, sqliteMapFK(err)
 	}
 
-	job, err := scanGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobByRequestKeySQL, params.RequestKey))
+	job, err := scanSQLiteGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobByRequestKeySQL, params.RequestKey))
 	if err != nil {
 		return domain.GenerationJob{}, err
 	}
@@ -216,7 +216,92 @@ func sqliteAdvanceJobTx(ctx context.Context, tx *sql.Tx, params AdvanceGeneratio
 	if err != nil {
 		return domain.GenerationJob{}, err
 	}
-	return scanGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobSQL, params.ID))
+	return scanSQLiteGenerationJob(tx.QueryRowContext(ctx, sqliteGetGenerationJobSQL, params.ID))
+}
+
+func scanSQLiteWorkflowRun(row rowScanner) (domain.WorkflowRun, error) {
+	var (
+		run       domain.WorkflowRun
+		createdAt string
+		updatedAt string
+	)
+	if err := row.Scan(
+		&run.ID,
+		&run.ProjectID,
+		&run.EpisodeID,
+		&run.Status,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	var err error
+	if run.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	if run.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.WorkflowRun{}, err
+	}
+	return run, nil
+}
+
+func scanSQLiteGenerationJobs(rows *sql.Rows) ([]domain.GenerationJob, error) {
+	jobs := make([]domain.GenerationJob, 0)
+	for rows.Next() {
+		job, err := scanSQLiteGenerationJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
+func scanSQLiteGenerationJob(row rowScanner) (domain.GenerationJob, error) {
+	var (
+		job            domain.GenerationJob
+		paramsPayload  []byte
+		providerTaskID string
+		resultAssetID  string
+		createdAt      string
+		updatedAt      string
+	)
+	if err := row.Scan(
+		&job.ID,
+		&job.ProjectID,
+		&job.EpisodeID,
+		&job.WorkflowRunID,
+		&job.Provider,
+		&job.Model,
+		&job.TaskType,
+		&job.Status,
+		&job.Prompt,
+		&paramsPayload,
+		&providerTaskID,
+		&resultAssetID,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.GenerationJob{}, err
+	}
+	if len(paramsPayload) > 0 {
+		if err := json.Unmarshal(paramsPayload, &job.Params); err != nil {
+			return domain.GenerationJob{}, err
+		}
+	}
+	if job.Params == nil {
+		job.Params = map[string]any{}
+	}
+	job.ProviderTaskID = providerTaskID
+	job.ResultAssetID = resultAssetID
+	var err error
+	if job.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.GenerationJob{}, err
+	}
+	if job.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.GenerationJob{}, err
+	}
+	return job, nil
 }
 
 func (r *SQLiteProductionRepository) CompleteGenerationJobWithResult(ctx context.Context, params CompleteGenerationJobWithResultParams) (domain.GenerationJob, domain.Asset, error) {
@@ -383,7 +468,7 @@ func sqliteCreateStoryAnalysisTx(ctx context.Context, tx *sql.Tx, params CreateS
 		}
 		return domain.StoryAnalysis{}, err
 	}
-	return scanStoryAnalysis(tx.QueryRowContext(ctx, sqliteGetStoryAnalysisSQL, params.ID))
+	return scanSQLiteStoryAnalysis(tx.QueryRowContext(ctx, sqliteGetStoryAnalysisSQL, params.ID))
 }
 
 func (r *SQLiteProductionRepository) ListStoryAnalyses(ctx context.Context, episodeID string) ([]domain.StoryAnalysis, error) {
@@ -392,15 +477,68 @@ func (r *SQLiteProductionRepository) ListStoryAnalyses(ctx context.Context, epis
 		return nil, err
 	}
 	defer rows.Close()
-	return scanStoryAnalyses(rows)
+	return scanSQLiteStoryAnalyses(rows)
 }
 
 func (r *SQLiteProductionRepository) GetStoryAnalysis(ctx context.Context, analysisID string) (domain.StoryAnalysis, error) {
-	analysis, err := scanStoryAnalysis(r.db.QueryRowContext(ctx, sqliteGetStoryAnalysisSQL, analysisID))
+	analysis, err := scanSQLiteStoryAnalysis(r.db.QueryRowContext(ctx, sqliteGetStoryAnalysisSQL, analysisID))
 	if err == sql.ErrNoRows {
 		return domain.StoryAnalysis{}, domain.ErrNotFound
 	}
 	return analysis, err
+}
+
+func scanSQLiteStoryAnalyses(rows *sql.Rows) ([]domain.StoryAnalysis, error) {
+	analyses := make([]domain.StoryAnalysis, 0)
+	for rows.Next() {
+		analysis, err := scanSQLiteStoryAnalysis(rows)
+		if err != nil {
+			return nil, err
+		}
+		analyses = append(analyses, analysis)
+	}
+	return analyses, rows.Err()
+}
+
+func scanSQLiteStoryAnalysis(row rowScanner) (domain.StoryAnalysis, error) {
+	var (
+		analysis                          domain.StoryAnalysis
+		themes, characters, scenes, props []byte
+		outline, agentOutputs             []byte
+		createdAt, updatedAt              string
+	)
+	if err := row.Scan(
+		&analysis.ID,
+		&analysis.ProjectID,
+		&analysis.EpisodeID,
+		&analysis.StorySourceID,
+		&analysis.WorkflowRunID,
+		&analysis.GenerationJobID,
+		&analysis.Version,
+		&analysis.Status,
+		&analysis.Summary,
+		&themes,
+		&characters,
+		&scenes,
+		&props,
+		&outline,
+		&agentOutputs,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.StoryAnalysis{}, err
+	}
+	if err := decodeStoryAnalysisSeeds(&analysis, themes, characters, scenes, props, outline, agentOutputs); err != nil {
+		return domain.StoryAnalysis{}, err
+	}
+	var err error
+	if analysis.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.StoryAnalysis{}, err
+	}
+	if analysis.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.StoryAnalysis{}, err
+	}
+	return analysis, nil
 }
 
 func (r *SQLiteProductionRepository) SaveStoryMap(ctx context.Context, params SaveStoryMapParams) (StoryMap, error) {
