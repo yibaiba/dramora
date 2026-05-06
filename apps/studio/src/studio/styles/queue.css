@@ -72,15 +72,15 @@
 }
 
 .queue-notification.notification-success {
-  background: #e8f5e9;
-  color: #2e7d32;
-  border: 1px solid #c8e6c9;
+  background: rgba(52, 211, 153, 0.12);
+  color: #bbf7d0;
+  border: 1px solid rgba(52, 211, 153, 0.24);
 }
 
 .queue-notification.notification-error {
-  background: #ffebee;
-  color: #c62828;
-  border: 1px solid #ffcdd2;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fecaca;
+  border: 1px solid rgba(248, 113, 113, 0.24);
 }
 
 .notification-close {

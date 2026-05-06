@@ -8786,20 +8786,20 @@ p {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface-glass-strong);
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  border: 2px solid rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--accent);
 }
 
 .lora-slider::-moz-range-thumb {
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--surface-glass-strong);
   cursor: pointer;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-  border: 2px solid rgba(0, 0, 0, 0.1);
+  border: 2px solid var(--accent);
 }
 
 .lora-value {
