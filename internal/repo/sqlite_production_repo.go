@@ -844,6 +844,111 @@ func scanSQLiteShotPromptPack(row rowScanner) (domain.ShotPromptPack, error) {
 	return item, nil
 }
 
+func scanSQLiteTimeline(row rowScanner) (domain.Timeline, error) {
+	var (
+		item                 domain.Timeline
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.EpisodeID,
+		&item.Status,
+		&item.Version,
+		&item.DurationMS,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.Timeline{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.Timeline{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.Timeline{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteTimelineTracks(rows *sql.Rows) ([]domain.TimelineTrack, error) {
+	items := make([]domain.TimelineTrack, 0)
+	for rows.Next() {
+		item, err := scanSQLiteTimelineTrack(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteTimelineTrack(row rowScanner) (domain.TimelineTrack, error) {
+	var (
+		item                 domain.TimelineTrack
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.TimelineID,
+		&item.Kind,
+		&item.Name,
+		&item.Position,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.TimelineTrack{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.TimelineTrack{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.TimelineTrack{}, err
+	}
+	return item, nil
+}
+
+func scanSQLiteTimelineClips(rows *sql.Rows) ([]domain.TimelineClip, error) {
+	items := make([]domain.TimelineClip, 0)
+	for rows.Next() {
+		item, err := scanSQLiteTimelineClip(rows)
+		if err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func scanSQLiteTimelineClip(row rowScanner) (domain.TimelineClip, error) {
+	var (
+		item                 domain.TimelineClip
+		createdAt, updatedAt string
+	)
+	if err := row.Scan(
+		&item.ID,
+		&item.TimelineID,
+		&item.TrackID,
+		&item.AssetID,
+		&item.Kind,
+		&item.StartMS,
+		&item.DurationMS,
+		&item.TrimStartMS,
+		&createdAt,
+		&updatedAt,
+	); err != nil {
+		return domain.TimelineClip{}, err
+	}
+	var err error
+	if item.CreatedAt, err = parseSQLiteTime(createdAt); err != nil {
+		return domain.TimelineClip{}, err
+	}
+	if item.UpdatedAt, err = parseSQLiteTime(updatedAt); err != nil {
+		return domain.TimelineClip{}, err
+	}
+	return item, nil
+}
+
 func (r *SQLiteProductionRepository) SaveStoryMap(ctx context.Context, params SaveStoryMapParams) (StoryMap, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -1051,7 +1156,7 @@ func (r *SQLiteProductionRepository) LockAsset(ctx context.Context, assetID stri
 }
 
 func (r *SQLiteProductionRepository) GetEpisodeTimeline(ctx context.Context, episodeID string) (domain.Timeline, error) {
-	timeline, err := scanTimeline(r.db.QueryRowContext(ctx, sqliteGetEpisodeTimelineSQL, episodeID))
+	timeline, err := scanSQLiteTimeline(r.db.QueryRowContext(ctx, sqliteGetEpisodeTimelineSQL, episodeID))
 	if err == sql.ErrNoRows {
 		return domain.Timeline{}, domain.ErrNotFound
 	}
@@ -1062,7 +1167,7 @@ func (r *SQLiteProductionRepository) GetEpisodeTimeline(ctx context.Context, epi
 }
 
 func (r *SQLiteProductionRepository) GetTimelineByID(ctx context.Context, timelineID string) (domain.Timeline, error) {
-	timeline, err := scanTimeline(r.db.QueryRowContext(ctx, sqliteGetTimelineByIDSQL, timelineID))
+	timeline, err := scanSQLiteTimeline(r.db.QueryRowContext(ctx, sqliteGetTimelineByIDSQL, timelineID))
 	if err == sql.ErrNoRows {
 		return domain.Timeline{}, domain.ErrNotFound
 	}
@@ -1079,7 +1184,7 @@ func (r *SQLiteProductionRepository) SaveEpisodeTimeline(ctx context.Context, pa
 	if err != nil {
 		return domain.Timeline{}, sqliteMapFK(err)
 	}
-	return scanTimeline(r.db.QueryRowContext(ctx, sqliteGetTimelineByEpisodeForUpdateSQL, params.EpisodeID))
+	return scanSQLiteTimeline(r.db.QueryRowContext(ctx, sqliteGetTimelineByEpisodeForUpdateSQL, params.EpisodeID))
 }
 
 func (r *SQLiteProductionRepository) SaveEpisodeTimelineGraph(ctx context.Context, params SaveEpisodeTimelineGraphParams) (domain.Timeline, error) {
@@ -1095,7 +1200,7 @@ func (r *SQLiteProductionRepository) SaveEpisodeTimelineGraph(ctx context.Contex
 	if err != nil {
 		return domain.Timeline{}, sqliteMapFK(err)
 	}
-	timeline, err := scanTimeline(tx.QueryRowContext(ctx, sqliteGetTimelineByEpisodeForUpdateSQL, params.EpisodeID))
+	timeline, err := scanSQLiteTimeline(tx.QueryRowContext(ctx, sqliteGetTimelineByEpisodeForUpdateSQL, params.EpisodeID))
 	if err != nil {
 		return domain.Timeline{}, err
 	}
@@ -1113,7 +1218,7 @@ func (r *SQLiteProductionRepository) SaveEpisodeTimelineGraph(ctx context.Contex
 		if err != nil {
 			return domain.Timeline{}, err
 		}
-		track, err := scanTimelineTrack(tx.QueryRowContext(ctx,
+		track, err := scanSQLiteTimelineTrack(tx.QueryRowContext(ctx,
 			`SELECT id, timeline_id, kind, name, position, created_at, updated_at FROM timeline_tracks WHERE id = ?`, tp.ID))
 		if err != nil {
 			return domain.Timeline{}, err
@@ -1127,7 +1232,7 @@ func (r *SQLiteProductionRepository) SaveEpisodeTimelineGraph(ctx context.Contex
 			if err != nil {
 				return domain.Timeline{}, sqliteMapFK(err)
 			}
-			clip, err := scanTimelineClip(tx.QueryRowContext(ctx,
+			clip, err := scanSQLiteTimelineClip(tx.QueryRowContext(ctx,
 				`SELECT id, timeline_id, track_id, COALESCE(asset_id, ''), kind, start_ms, duration_ms, trim_start_ms, created_at, updated_at FROM timeline_clips WHERE id = ?`, cp.ID))
 			if err != nil {
 				return domain.Timeline{}, err
@@ -1195,7 +1300,7 @@ func (r *SQLiteProductionRepository) hydrateTimeline(ctx context.Context, timeli
 		return domain.Timeline{}, err
 	}
 	defer trackRows.Close()
-	tracks, err := scanTimelineTracks(trackRows)
+	tracks, err := scanSQLiteTimelineTracks(trackRows)
 	if err != nil {
 		return domain.Timeline{}, err
 	}
@@ -1205,7 +1310,7 @@ func (r *SQLiteProductionRepository) hydrateTimeline(ctx context.Context, timeli
 		return domain.Timeline{}, err
 	}
 	defer clipRows.Close()
-	clips, err := scanTimelineClips(clipRows)
+	clips, err := scanSQLiteTimelineClips(clipRows)
 	if err != nil {
 		return domain.Timeline{}, err
 	}

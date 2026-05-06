@@ -131,6 +131,48 @@ func TestProductionServiceSeedEpisodeProductionSQLite(t *testing.T) {
 	if len(workspace.StoryboardShots) == 0 || workspace.StoryboardShots[0].PromptPack == nil {
 		t.Fatalf("expected workspace prompt pack summary, got %+v", workspace.StoryboardShots)
 	}
+
+	assets, err := productionRepo.ListAssetsByEpisode(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("list assets: %v", err)
+	}
+	if len(assets) == 0 {
+		t.Fatal("expected seeded assets before saving timeline")
+	}
+
+	savedTimeline, err := productionService.SaveEpisodeTimeline(ctx, SaveTimelineInput{
+		EpisodeID:  episode.ID,
+		DurationMS: 3000,
+		Tracks: []SaveTimelineTrackInput{{
+			Kind:     "video",
+			Name:     "主轨",
+			Position: 0,
+			Clips: []SaveTimelineClipInput{{
+				AssetID:     assets[0].ID,
+				Kind:        "asset",
+				StartMS:     0,
+				DurationMS:  3000,
+				TrimStartMS: 0,
+			}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("save episode timeline: %v", err)
+	}
+	if len(savedTimeline.Tracks) != 1 || len(savedTimeline.Tracks[0].Clips) != 1 {
+		t.Fatalf("expected timeline graph in save response, got %+v", savedTimeline)
+	}
+
+	timeline, err := productionService.GetEpisodeTimeline(ctx, episode.ID)
+	if err != nil {
+		t.Fatalf("get episode timeline: %v", err)
+	}
+	if len(timeline.Tracks) != 1 || len(timeline.Tracks[0].Clips) != 1 {
+		t.Fatalf("expected hydrated timeline graph, got %+v", timeline)
+	}
+	if timeline.Tracks[0].Clips[0].AssetID != assets[0].ID {
+		t.Fatalf("expected timeline clip asset %q, got %+v", assets[0].ID, timeline.Tracks[0].Clips[0])
+	}
 }
 
 func TestProductionServiceProcessesQueuedGenerationJobsNoop(t *testing.T) {
